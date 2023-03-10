@@ -5,6 +5,7 @@ using StatsBase
 import SymbolicUtils
 import Base.:*
 import Base.:+
+import Base.:/
 import Base.:(==)
 import Base.:-
 import DataStructures
@@ -68,7 +69,7 @@ println(F)
 
 J=Tensor("J",[i=>upper, j=>upper, l=>lower, l=>lower])
 K=Tensor("K",[i=>upper, j=>upper, k=>lower, k=>lower])
-bb=2*K-1*K -1*K
+bb=2*K-1*K -1/2*K
 println(bb)
 
 get_free_indices(J)
