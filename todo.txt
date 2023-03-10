@@ -1,8 +1,8 @@
 
-
+calc indices on bigger obejects!
 
 add coords
-add metric
+
 add symmetric and antisymmetric components
 add levi civita tensor
 add derivatives

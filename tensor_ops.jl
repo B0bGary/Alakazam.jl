@@ -16,23 +16,58 @@ function pop_metric(T::TensorSuperType) # makes all indices on the object go to 
         index=T.indices[pos]
         if !in_default_pos(index)
             spare=get_unused_indices(T,index[1].index_set)
-            println(spare)
+            # println(spare)
             dummy=pop!(spare) => index[1].index_set.default_position == upper ? lower : upper
             metric=Metric("η",[index, dummy]) 
-            tensor=metric *tensor
-            println(new_index_pattern[pos])
-            println(dummy => index[1].index_set.default_position)
+            tensor=tensor*metric
+            # println(new_index_pattern[pos])
+            # println(dummy => index[1].index_set.default_position)
             new_index_pattern[pos]= dummy[1] => index[1].index_set.default_position
         end
     end
     T.indices=new_index_pattern
-    println(tensor)
+    # println(tensor)
     return tensor* T
 
 end
 
 
+function contract_metrics(T::TensorExpression) 
+    for k in eachindex(T.summands) 
+        # println(k)
+        # println(T.summands)
+        summand =T.summands[k] 
+        metrics= filter( y -> typeof(y) == Metric, summand[2].terms)
+        non_metrics= filter( y -> typeof(y) != Metric, summand[2].terms)
+        # println(metrics) 
+        for metric in metrics
+            flag=false
+            index2=metric.indices[2][1]
+            for tens in non_metrics
+                if flag
+                    break
+                end
+                for indpairnum in eachindex(tens.indices)
+                    if flag
+                        break
+                    end
+                    if tens.indices[indpairnum][1]==index2
+                        tens.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                        flag=true
+                    end
+                end
+            end
+        end
+        T.summands[k][2].terms=non_metrics
+    end
+    return T
 
+end
+
+# function contract_metrics(T::Tensor) term
+#     contract
+
+# end
 
 
 

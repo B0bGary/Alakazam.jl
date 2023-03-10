@@ -75,8 +75,15 @@ println(bb)
 
 get_free_indices(J)
 
+println("Here's a tensor")
 println(J)
-pop_metric(J)
+println("Here's me popping out the metric")
+B=pop_metric(J)
+println(B)
+println("Here's me contracting the metric")
+println(contract_metrics(B))
+println("cash money")
+
 
 # println(bb.summands[1][2])
 # println(bb.summands[2][2])
