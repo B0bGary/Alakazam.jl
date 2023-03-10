@@ -1,4 +1,4 @@
-SymorNum = Union{SymbolicUtils.Symbolic,Number}
+
 
 mutable struct IndexSet
    name::String

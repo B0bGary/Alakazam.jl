@@ -1,7 +1,7 @@
 include("indices.jl")
 include("custom_exceptions.jl")
-include("tensor_ops.jl")
 
+SymorNum = Union{SymbolicUtils.Symbolic,Number}
 
 mutable struct Tensor
     name::String
@@ -52,7 +52,7 @@ mutable struct TensorTerm
     function TensorExpression(num::SymorNum, T::Tensor)
         merge_sum(new([num=>TensorTerm(T)]))
     end
-    function TensorExpression(vec::Vector{Pair{SymorNum,Tensor}})
+    function TensorExpression(vec::Vector{Pair{T,Tensor}}) where {T<:SymorNum}
         merge_sum(new([v[1]=>TensorTerm(v[2]) for v in vec]))
     end
     function TensorExpression(T::Tensor)
@@ -61,26 +61,16 @@ mutable struct TensorTerm
     function TensorExpression(T::TensorTerm)
         merge_sum(new([1 => T]))
     end
+    function TensorExpression(p::Pair{T ,TensorTerm}) where {T<:SymorNum}
+        merge_sum(new([p]))
+    end
+    function TensorExpression(v::Vector{Pair{T ,TensorTerm}}) where {T<:SymorNum}
+        merge_sum(new(v))
+    end
+    function TensorExpression(p::Pair{T ,Tensor}) where {T<:SymorNum}
+        merge_sum(new([p[1]=>TensorTerm(p[2])]))
+    end
 end
-
-
-
-
-
-
-
-
-
-# function Base.show(io::IO, P::Vector{Pair{Index, IndexPosition}})
-# print(io, p for p in P)
-# end
-
-
-
- 
-
-
-
 
 # function get_dummies_positional(T::TensorExpression)
 #     dum::Set{Pair{Index, IndexPosition}}=Set()

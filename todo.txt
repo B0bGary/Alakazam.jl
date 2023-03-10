@@ -1,6 +1,6 @@
 
 
-addition and subtraction etc of tensors
+ subtraction etc of tensors
 
 
 add coords

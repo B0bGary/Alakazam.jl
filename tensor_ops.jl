@@ -20,7 +20,7 @@ function +(A::Tensor, B::Tensor)
   
 end
 
-function+(A::Tensor, B::TensorExpression)
+function +(A::Tensor, B::TensorExpression)
     if get_free_indices(A)==get_free_indices(B)
         return TensorExpression(TensorExpression(A),B)
     else
@@ -47,12 +47,51 @@ end
 
 ##############################################################################################################################
 
+#subtraction
+
+-(A::Tensor, B::Tensor)= -1*B+ A
+-(A::Tensor, B::TensorExpression)=A+(-1*B)
+-(A::TensorExpression, B::Tensor)= A+(-1*B)
+-(A::TensorExpression, B::TensorExpression)= A+(-1*B)
+
+# function -(A::Tensor, B::TensorExpression)
+#     if get_free_indices(A)==get_free_indices(B)
+#         return TensorExpression(TensorExpression(A),B)
+#     else
+#         throw(FreeIndexMismatch())
+#     end
+# end
+
+# function -(A::TensorExpression, B::Tensor)
+#     if get_free_indices(A)==get_free_indices(B)
+#         return TensorExpression(A,TensorExpression(B))
+#     else
+#         throw(FreeIndexMismatch())
+#     end
+# end
+
+# function -(A::TensorExpression, B::TensorExpression)
+    
+#     if get_free_indices(A)==get_free_indices(B)
+#         return TensorExpression(A,B)
+#     else
+#         throw(FreeIndexMismatch())
+#     end
+# end
+
+
+
+##############################################################################################################################
+
 #multiplication
 
-*(N::SymorNum, B::Tensor)= TensorExpression([N => B])
-*(B::Tensor, N::SymorNum)= TensorExpression([N => B])
+*(N::SymorNum, B::Tensor)= TensorExpression(N, B)
+*(B::Tensor, N::SymorNum)= TensorExpression(N, B)
+function *(B::TensorExpression, N::SymorNum)
+    return TensorExpression([convert(SymorNum,N)*summand[1] => summand[2]   for summand in B.summands])
+end
 
-
+*(N::SymorNum, B::TensorExpression,) = *(B,convert(SymorNum,N))
 
 ##############################################################################################################################
 
@@ -103,7 +142,7 @@ function get_free_indices(T::TensorTerm)
 end
 
 function get_free_indices(T::TensorExpression)
-    return setdiff(T.summands[1].indices,get_dummies_positional(T.summands[1]))#all tensors should have matching free indices in a sum already
+    return setdiff(T.summands[1][2].indices,get_dummies_positional(T.summands[1][2]))#all tensors should have matching free indices in a sum already
 end
 
 ##############################################################################################################################
@@ -154,7 +193,7 @@ function get_dummies(T::TensorTerm)
        ordered_counts[pair] += 1
    end
     duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    println(duplicates)
+    # println(duplicates)
     # for ind in T.indices
     #     if cind 
     return collect(keys(duplicates))
@@ -185,7 +224,7 @@ function rename_dummies(T::Tensor)
                 end
             end
         end
-        println(replacements)
+        # println(replacements)
         for p in replacements
             T.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in T.indices ]
         end
@@ -224,7 +263,7 @@ function rename_dummies(T::TensorTerm)
                 end
             end
         end
-        println(replacements)
+        # println(replacements)
         for p in replacements
             for t in T.terms
             t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices ]
@@ -258,9 +297,9 @@ function merge_sum(TEx::TensorExpression)
                 # println(new_merged[i][1])
                 # println(summand[2])
                 new_merged[i]=(new_merged[i][1]+summand[1] => summand[2])
-                # println("sum is")
-                # println(new_merged[i])
-                # println(new_merged) #not editting in place apparaently....
+                #  println("sum is")
+                #  println(new_merged[i])
+                #  println(new_merged) #not editting in place apparaently....
                 found=true
                 break
             end
@@ -272,8 +311,8 @@ function merge_sum(TEx::TensorExpression)
     end
 
     TEx.summands=new_merged
-    #print(TEx.summands)
-    return TEx
+    TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
+    return isempty(TEx.summands)  ?  0 :  TEx
 end
 
 

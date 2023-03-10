@@ -6,6 +6,7 @@ import SymbolicUtils
 import Base.:*
 import Base.:+
 import Base.:(==)
+import Base.:-
 import DataStructures
 include("indices.jl")
 include("custom_exceptions.jl")
@@ -67,7 +68,7 @@ println(F)
 
 J=Tensor("J",[i=>upper, j=>upper, l=>lower, l=>lower])
 K=Tensor("K",[i=>upper, j=>upper, k=>lower, k=>lower])
-bb=J+K
+bb=2*K-1*K -1*K
 println(bb)
 
 get_free_indices(J)
