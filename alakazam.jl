@@ -14,6 +14,7 @@ include("custom_exceptions.jl")
 include("tensor_term.jl")
 include("tensor_ops.jl")
 include("metric.jl")
+include("operator.jl")
 
 flavour_indices=IndexSet("flavour")
 spacetime_indices=IndexSet("spacetime")
@@ -84,6 +85,8 @@ println("Here's me contracting the metric")
 println(contract_metrics(B))
 println("cash money")
 
+
+O=Operator("O",J,[i=>upper, j=>upper, l=>lower, l=>lower])
 
 # println(bb.summands[1][2])
 # println(bb.summands[2][2])
