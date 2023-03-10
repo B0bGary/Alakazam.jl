@@ -1,6 +1,24 @@
 include("tensor_term.jl")
 
 
+
+
+##############################################################################################################################
+##############################################################################################################################
+
+### metric ops
+
+function pop_metric(T::TensorSuperType) # makes all indices on the object go to the default position according to the index set
+
+
+end
+
+
+
+
+
+
+
 ##############################################################################################################################
 ##############################################################################################################################
 
@@ -11,7 +29,7 @@ include("tensor_term.jl")
 
 #addition
 
-function +(A::Tensor, B::Tensor)
+function +(A::TensorSuperType, B::TensorSuperType)
     if get_free_indices(A)==get_free_indices(B)
         return TensorExpression([A,B])
     else
@@ -20,7 +38,7 @@ function +(A::Tensor, B::Tensor)
   
 end
 
-function +(A::Tensor, B::TensorExpression)
+function +(A::TensorSuperType, B::TensorExpression)
     if get_free_indices(A)==get_free_indices(B)
         return TensorExpression(TensorExpression(A),B)
     else
@@ -28,7 +46,7 @@ function +(A::Tensor, B::TensorExpression)
     end
 end
 
-function +(A::TensorExpression, B::Tensor)
+function +(A::TensorExpression, B::TensorSuperType)
     if get_free_indices(A)==get_free_indices(B)
         return TensorExpression(A,TensorExpression(B))
     else
@@ -49,12 +67,12 @@ end
 
 #subtraction
 
--(A::Tensor, B::Tensor)= -1*B+ A
--(A::Tensor, B::TensorExpression)=A+(-1*B)
--(A::TensorExpression, B::Tensor)= A+(-1*B)
+-(A::TensorSuperType, B::TensorSuperType)= -1*B+ A
+-(A::TensorSuperType, B::TensorExpression)=A+(-1*B)
+-(A::TensorExpression, B::TensorSuperType)= A+(-1*B)
 -(A::TensorExpression, B::TensorExpression)= A+(-1*B)
 
-# function -(A::Tensor, B::TensorExpression)
+# function -(A::TensorSuperType, B::TensorExpression)
 #     if get_free_indices(A)==get_free_indices(B)
 #         return TensorExpression(TensorExpression(A),B)
 #     else
@@ -62,7 +80,7 @@ end
 #     end
 # end
 
-# function -(A::TensorExpression, B::Tensor)
+# function -(A::TensorExpression, B::TensorSuperType)
 #     if get_free_indices(A)==get_free_indices(B)
 #         return TensorExpression(A,TensorExpression(B))
 #     else
@@ -85,8 +103,8 @@ end
 
 #multiplication
 
-*(N::SymorNum, B::Tensor)= TensorExpression(N, B)
-*(B::Tensor, N::SymorNum)= TensorExpression(N, B)
+*(N::SymorNum, B::TensorSuperType)= TensorExpression(N, B)
+*(B::TensorSuperType, N::SymorNum)= TensorExpression(N, B)
 function *(B::TensorExpression, N::SymorNum)
     return TensorExpression([convert(SymorNum,N)*summand[1] => summand[2]   for summand in B.summands])
 end
@@ -100,7 +118,7 @@ end
 
 #division
 
-/(B::Tensor, N::SymorNum)= *(1/N, B)
+/(B::TensorSuperType, N::SymorNum)= *(1/N, B)
 /( B::TensorExpression,N::SymorNum)= *(1/N, B)
 
 ##############################################################################################################################
@@ -111,7 +129,7 @@ function ==(a::TensorTerm, b::TensorTerm)
     return a.terms==b.terms
 end
 
-function ==(a::Vector{Tensor}, b::Vector{Tensor})
+function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
     if length(a)!=length(b)
         return false
     end
@@ -123,7 +141,7 @@ function ==(a::Vector{Tensor}, b::Vector{Tensor})
     return true
 end
 
-function ==(a::Tensor, b::Tensor)
+function ==(a::TensorSuperType, b::TensorSuperType)
     if a.name==b.name && a.indices==b.indices
         return true
     else 
@@ -143,7 +161,7 @@ end
 
 #finding free indices
 
-function get_free_indices(T::Tensor)
+function get_free_indices(T::TensorSuperType)
     return setdiff(T.indices,get_dummies_positional(T))
 end
 
@@ -159,7 +177,7 @@ end
 
 #finding dummie indices
 
-function get_dummies_positional(T::Tensor)
+function get_dummies_positional(T::TensorSuperType)
     dum::Set{Pair{Index, IndexPosition}}=Set()
     for d in get_dummies(T)
         push!(dum, d=>upper)
@@ -180,7 +198,7 @@ end
 
 
  #returns a set of dummie indices that are used in summation
- function get_dummies(T::Tensor)
+ function get_dummies(T::TensorSuperType)
 
     temp=[ind[1] for ind in T.indices]
    # println(temp)
@@ -213,7 +231,7 @@ end
 
 
 
-function rename_dummies(T::Tensor)
+function rename_dummies(T::TensorSuperType)
     dummies=get_dummies(T) #returns all the dummies attached to the tensor
     all_indices::OrderedSet{Index}=OrderedSet([i[1] for i in T.indices]) #set of all the indices attached to the tensor
     index_sets::OrderedSet{IndexSet}=OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
@@ -332,7 +350,7 @@ end
 #gradings
 
 
-function grading(T::Tensor)
+function grading(T::TensorSuperType)
     grade=0
     for  (ind, pos) in T.indices
         grade=grade+ind.grading
@@ -362,7 +380,7 @@ end
 
 # printing and display
 
-function Base.show(io::IO, T::Tensor)
+function Base.show(io::IO, T::TensorSuperType)
     print(io, T.name)
     if !isempty(T.indices)
         lowers=""

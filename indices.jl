@@ -1,10 +1,17 @@
 
 
+
+struct IndexPosition
+   position::Bool
+   #0 for upper index, 1 for lower index
+end
+
 mutable struct IndexSet
    name::String
    indices::Vector
-   function IndexSet(name::String, indices::Vector=[])
-      return new(name, indices)
+   default_position::IndexPosition
+   function IndexSet(name::String, indices::Vector=[], default_position::IndexPosition=upper)
+      return new(name, indices, default_position)
    end
 end
 
@@ -30,10 +37,7 @@ struct Coordinate
    index_set::IndexSet
 end
 
-struct IndexPosition
-   position::Bool
-   #0 for upper index, 1 for lower index
-end
+
 
 upper=IndexPosition(0)
 lower=IndexPosition(1)

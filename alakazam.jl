@@ -13,6 +13,7 @@ include("indices.jl")
 include("custom_exceptions.jl")
 include("tensor_term.jl")
 include("tensor_ops.jl")
+include("metric.jl")
 
 flavour_indices=IndexSet("flavour")
 spacetime_indices=IndexSet("spacetime")
