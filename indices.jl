@@ -32,6 +32,14 @@ mutable struct Index
 end
 
 
+
+
+function in_default_pos(i::Pair{Index,IndexPosition})
+   return i[2]==i[1].index_set.default_position
+
+end
+
+
 struct Coordinate
    name::String
    index_set::IndexSet

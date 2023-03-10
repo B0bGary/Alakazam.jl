@@ -74,6 +74,10 @@ bb=2*K-1*K -1/2*K
 println(bb)
 
 get_free_indices(J)
+
+println(J)
+pop_metric(J)
+
 # println(bb.summands[1][2])
 # println(bb.summands[2][2])
 

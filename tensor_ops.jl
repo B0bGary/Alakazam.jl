@@ -9,7 +9,25 @@ include("tensor_term.jl")
 ### metric ops
 
 function pop_metric(T::TensorSuperType) # makes all indices on the object go to the default position according to the index set
-
+    tensor=1
+    new_index_pattern=T.indices
+    
+    for pos in eachindex(T.indices)
+        index=T.indices[pos]
+        if !in_default_pos(index)
+            spare=get_unused_indices(T,index[1].index_set)
+            println(spare)
+            dummy=pop!(spare) => index[1].index_set.default_position == upper ? lower : upper
+            metric=Metric("η",[index, dummy]) 
+            tensor=metric *tensor
+            println(new_index_pattern[pos])
+            println(dummy => index[1].index_set.default_position)
+            new_index_pattern[pos]= dummy[1] => index[1].index_set.default_position
+        end
+    end
+    T.indices=new_index_pattern
+    println(tensor)
+    return tensor* T
 
 end
 
@@ -111,7 +129,25 @@ end
 
 *(N::SymorNum, B::TensorExpression,) = *(B,convert(SymorNum,N))
 
+function *(T::TensorSuperType, TEx::TensorExpression)
+    return TensorExpression([sum[1] => T*sum[2] for sum in TEx.summands])
+end
 
+
+function *(TEx::TensorExpression,T::TensorSuperType)
+    return TensorExpression([sum[1] => sum[2]*T for sum in TEx.summands])
+end
+
+
+# *(TEx::TensorExpression,T::TensorSuperType)=*(T,TEx)
+
+function *(T::TensorSuperType, TEx::TensorTerm)
+    return TensorTerm(vcat(T,TEx.terms))
+end
+
+function *( TEx::TensorTerm , T::TensorSuperType)
+    return TensorTerm(vcat(TEx.terms,T))
+end
 
 
 ##############################################################################################################################
@@ -157,6 +193,17 @@ end
 #indices
 
 ##############################################################################################################################
+
+
+#get unused indices
+
+function get_unused_indices(T::TensorSuperType,IS::IndexSet)
+    # println(Set(i[1] for i in T.indices))
+    # println(IS.indices)
+    return setdiff(IS.indices,Set(i[1] for i in T.indices))
+end
+
+
 
 
 #finding free indices
