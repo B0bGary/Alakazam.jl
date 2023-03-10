@@ -15,6 +15,7 @@ include("tensor_term.jl")
 include("tensor_ops.jl")
 include("metric.jl")
 include("operator.jl")
+include("operator_ops.jl")
 
 flavour_indices=IndexSet("flavour")
 spacetime_indices=IndexSet("spacetime")
@@ -86,7 +87,10 @@ println(contract_metrics(B))
 println("cash money")
 
 
-O=Operator("O",J,[i=>upper, j=>upper, l=>lower, l=>lower])
+O=Operator("O",J,[a=>upper, b=>lower])
+
+O=Operator("O",J*K,[a=>upper, b=>lower])
+product_rule(O)
 
 # println(bb.summands[1][2])
 # println(bb.summands[2][2])

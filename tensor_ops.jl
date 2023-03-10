@@ -180,6 +180,10 @@ function *(T::TensorSuperType, TEx::TensorTerm)
     return TensorTerm(vcat(T,TEx.terms))
 end
 
+function *(T1::TensorSuperType, T2::TensorSuperType)
+    return TensorTerm([T1, T2])
+end
+
 function *( TEx::TensorTerm , T::TensorSuperType)
     return TensorTerm(vcat(TEx.terms,T))
 end

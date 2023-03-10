@@ -22,33 +22,3 @@ mutable struct Operator <:TensorSuperType
  end
 
 
-
- function Base.show(io::IO, T::Operator)
-    print(io, T.name)
-    if !isempty(T.indices)
-        lowers=""
-        uppers=""
-        lowersempt::Bool=1
-        uppersempt::Bool=1
-        for (ind, pos) in T.indices
-            if pos.position==0
-                uppers=uppers*ind.name
-                uppersempt=0
-                lowers=lowers * "*"
-            else
-                uppers=uppers * "*"
-                lowersempt=0
-                lowers=lowers * ind.name 
-            end
-        end
-        if !uppersempt
-            print(io, "^{"*uppers*"}")
-        end
-        if !lowersempt
-            print(io, "_{"*lowers*"}")
-        end
-    end
-    print(io,"[[")
-    print(io, T.operand)
-    print(io,"]]")
-end
