@@ -4,9 +4,13 @@ using Revise
 using StatsBase
 import SymbolicUtils
 import Base.:*
+import Base.:+
+import Base.:(==)
 import DataStructures
 include("indices.jl")
+include("custom_exceptions.jl")
 include("tensor_term.jl")
+include("tensor_ops.jl")
 
 flavour_indices=IndexSet("flavour")
 spacetime_indices=IndexSet("spacetime")
@@ -60,6 +64,15 @@ println(J.indices)
 println(F)
 rename_dummies(F)
 println(F)
+
+J=Tensor("J",[i=>upper, j=>upper, l=>lower, l=>lower])
+K=Tensor("K",[i=>upper, j=>upper, k=>lower, k=>lower])
+bb=J+K
+println(bb)
+
+get_free_indices(J)
+# println(bb.summands[1][2])
+# println(bb.summands[2][2])
 
 #eps=Tensor("eps",[k l],[])
 # C=A*B

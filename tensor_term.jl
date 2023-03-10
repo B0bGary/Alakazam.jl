@@ -1,6 +1,6 @@
 include("indices.jl")
-
-
+include("custom_exceptions.jl")
+include("tensor_ops.jl")
 
 
 mutable struct Tensor
@@ -13,7 +13,6 @@ mutable struct Tensor
  end
 
 
- 
 mutable struct TensorTerm
     terms::Vector{Tensor} 
     indices::Vector{Pair{Index, IndexPosition}}
@@ -27,115 +26,47 @@ mutable struct TensorTerm
         end
         new(terms,inds)
     end
+    function TensorTerm(term::Tensor)
+        new([term], term.indices)
+    end
  end
 
-
- #returns a set of dummie indices that are used in summation
-function get_dummies(T::Tensor)
-
-    temp=[ind[1] for ind in T.indices]
-   # println(temp)
-   ordered_counts = OrderedDict((pair, 0) for pair in temp)
-   for pair in temp
-       ordered_counts[pair] += 1
-   end
-    duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    # for ind in T.indices
-    #     if cind 
-    return collect(keys(duplicates))
-end
-
-function get_dummies(T::TensorTerm)
-
-    temp=[ind[1] for ind in T.indices]
-   # println(temp)
-   ordered_counts = OrderedDict((pair, 0) for pair in temp)
-   for pair in temp
-       ordered_counts[pair] += 1
-   end
-    duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    println(duplicates)
-    # for ind in T.indices
-    #     if cind 
-    return collect(keys(duplicates))
-end
-
-
-
-function rename_dummies(T::Tensor)
-    dummies=get_dummies(T) #returns all the dummies attached to the tensor
-    all_indices::OrderedSet{Index}=OrderedSet([i[1] for i in T.indices]) #set of all the indices attached to the tensor
-    index_sets::OrderedSet{IndexSet}=OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
-    for set in index_sets #for each type of dummie index
-
-        replacements::Vector{Pair}=[] #dummie replacements to make
-        inset=OrderedSet(filter(a -> a.index_set==set ,all_indices)) # all indices on our tensor that are of the specified index type
-        
-        remain = OrderedSet(filter(x -> !(x in inset), OrderedSet(set.indices)))
-       # remain=setdiff(OrderedSet(set.indices),inset) # possible indices to replace our dummies that aren't already used on the tensor
-        dumset=filter(d -> d.index_set==set ,dummies)  #dummie indices to replace of the appropriate type
-        for d in dumset #attempt to replace each dummie index
-            for r in remain #check candidates
-                if first_element(set.indices, d, r)!=d # if the dummie doesn't come first lexographically (or in your specified order)
-                    push!(replacements, d => r)
-                    delete!(remain, r)
-                    break
-                end
-            end
-        end
-        println(replacements)
-        for p in replacements
-            T.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in T.indices ]
-        end
-    #     for (x, y) in T.indices
-    #         (x,y)=(x == p[1] ? p[2] : x), y for p in replacements 
-    #    # T.indices = [Pair((x == p[1] ? p[2] : x), y) for p in replacements for (x, y) in T.indices ]
+ 
+ mutable struct TensorExpression
+    summands::Vector{Pair{SymorNum, TensorTerm}}
+    function TensorExpression(summand::TensorTerm)
+        merge_sum(new(Vector((1,summand))))
+    end
+    function TensorExpression(summands::Vector{TensorTerm})
+        merge_sum(new(Vector((1,summand) for summand in summands)))
+    end
+    function TensorExpression(summands::Vector{Tensor})
+        merge_sum(new([1=> TensorTerm(summand) for summand in summands]))
+    end
+    function TensorExpression(exp::TensorExpression, T::Tensor)
+        merge_sum(new([exp.summands; [1=>TensorExpression(T)]]))
+    end
+    function TensorExpression(exp::TensorExpression, T::TensorExpression)
+        merge_sum(new([exp.summands; T.summands]))
+    end
+    function TensorExpression(num::SymorNum, T::Tensor)
+        merge_sum(new([num=>TensorTerm(T)]))
+    end
+    function TensorExpression(vec::Vector{Pair{SymorNum,Tensor}})
+        merge_sum(new([v[1]=>TensorTerm(v[2]) for v in vec]))
+    end
+    function TensorExpression(T::Tensor)
+        merge_sum(new([1=> TensorTerm(T)]))
+    end
+    function TensorExpression(T::TensorTerm)
+        merge_sum(new([1 => T]))
     end
 end
 
-function rename_dummies(T::TensorTerm)
-    dummies=get_dummies(T) #returns all the dummies attached to the tensor
-    # println("dummies")
-    # println(dummies)
-    all_indices::OrderedSet{Index}=OrderedSet([i[1] for t in T.terms for i in t.indices ]) #set of all the indices attached to the tensor
-    index_sets::OrderedSet{IndexSet}=OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
-    for set in index_sets #for each type of dummie index
 
-        replacements::Vector{Pair}=[] #dummie replacements to make
-        inset=OrderedSet(filter(a -> a.index_set==set ,all_indices)) # all indices on our tensor that are of the specified index type
-        remain = OrderedSet(filter(x -> !(x in inset), OrderedSet(set.indices)))
-        #remain=setdiff(OrderedSet(set.indices),inset) # possible indices to replace our dummies that aren't already used on the tensor
-        dumset=filter(d -> d.index_set==set ,dummies)  #dummie indices to replace of the appropriate type
-        for d in dumset #attempt to replace each dummie index
-            for r in remain #check candidates
-                if first_element(set.indices, d, r)!=d # if the dummie doesn't come first lexographically (or in your specified order)
-                    push!(replacements, d => r)
-                    delete!(remain, r)
-                    break
-                end
-            end
-        end
-        println(replacements)
-        for p in replacements
-            for t in T.terms
-            t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices ]
-            end
-        end
-    #     for (x, y) in T.indices
-    #         (x,y)=(x == p[1] ? p[2] : x), y for p in replacements 
-    #    # T.indices = [Pair((x == p[1] ? p[2] : x), y) for p in replacements for (x, y) in T.indices ]
-    end
-end
 
-function first_element(arr, elem1, elem2)
-    idx1 = findfirst(x -> x == elem1, arr)
-    idx2 = findfirst(x -> x == elem2, arr)
-    if idx1 == nothing || (idx2 != nothing && idx2 < idx1)
-        return elem2
-    else
-        return elem1
-    end
-end
+
+
 
 
 
@@ -146,59 +77,19 @@ end
 
 
 
- function Base.show(io::IO, T::Tensor)
-    print(io, T.name)
-    if !isempty(T.indices)
-        lowers=""
-        uppers=""
-        lowersempt::Bool=1
-        uppersempt::Bool=1
-        for (ind, pos) in T.indices
-            if pos.position==0
-                uppers=uppers*ind.name
-                uppersempt=0
-                lowers=lowers * "*"
-            else
-                uppers=uppers * "*"
-                lowersempt=0
-                lowers=lowers * ind.name 
-            end
-        end
-        if !uppersempt
-            print(io, "^{"*uppers*"}")
-        end
-        if !lowersempt
-            print(io, "_{"*lowers*"}")
-        end
-    end
-end
-
- function Base.show(io::IO, T::TensorTerm)
-    for tens in T.terms
-        print(io, tens)
-    end
- end
+ 
 
 
- function grading(T::Tensor)
-    grade=0
-    for  (ind, pos) in T.indices
-        grade=grade+ind.grading
-    end
 
-    return grade%2
- end
 
- function grading(T::TensorTerm)
-    grade=0
-    for  tens in T.terms
-        grade=grade+grading(tens)
-    end
-
-    return grade%2
-
-end
-
+# function get_dummies_positional(T::TensorExpression)
+#     dum::Set{Pair{Index, IndexPosition}}=Set()
+#     for d in get_dummies(T.summands[1]) 
+#         push!(dum, d=>upper)
+#         push!(dum, d=>lower)
+#     end
+#     return dum
+# end
 
 
 

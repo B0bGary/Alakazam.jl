@@ -1,0 +1,8 @@
+
+
+addition and subtraction etc of tensors
+
+
+add coords
+add metric
+add symmetric and antisymmetric components
