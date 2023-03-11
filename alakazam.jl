@@ -25,6 +25,7 @@ include("operator.jl")
 include("operator_ops.jl")
 include("derivative.jl")
 include("derivative_ops.jl")
+include("kronecker.jl")
 
 flavour_indices=IndexSet("flavour",2)
 spinor_indices=IndexSet("spinor",2)
@@ -114,6 +115,9 @@ bb=2*K-1*K -1/2*K
 # println(bb)
 
 # get_free_indices(J)
+println("---------------------------------")
+println("Metrics")
+
 
 println("Here's a tensor")
 println(J)
@@ -162,3 +166,60 @@ println("Applying derivative")
 D=apply_derivative(D)
 println(D)
 
+println("---------------------------------")
+println("Kroncker")
+δ=KroneckerDelta([i=>lower, j=>upper])
+println("Have a delta")
+println(δ)
+println("lets eliminate it from expression")
+H=Tensor("H",[j=>upper, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[i=>upper, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[i=>lower, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[j=>lower, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+
+δ=KroneckerDelta([i=>upper, j=>lower])
+println("Have a delta")
+println(δ)
+println("lets eliminate it from expression")
+H=Tensor("H",[j=>upper, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[i=>upper, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[i=>lower, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)
+println("lets eliminate it from expression")
+H=Tensor("H",[j=>lower, k=>upper, k=>lower, β=>lower],x)
+exp=δ*H
+println(exp)
+exp=eliminate_kronecker(exp)
+println(exp)

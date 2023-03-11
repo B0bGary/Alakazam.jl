@@ -33,15 +33,21 @@ end
 
 
 function contract_metrics(T::TensorExpression) 
+    # println("running function")
+
     for k in eachindex(T.summands) 
         # println(k)
         # println(T.summands)
         summand =T.summands[k] 
-        metrics= filter( y -> typeof(y) == Metric, summand[2].terms)
-        non_metrics= filter( y -> typeof(y) != Metric, summand[2].terms)
+        metrics= filter( y -> typeof(y) <: MetricSuperType, summand[2].terms)
+        non_metrics= filter( y -> ! (typeof(y) <: MetricSuperType), summand[2].terms)
+        uncontr_mets=Vector{TensorSuperType}()
         # println(metrics) 
+        sign=1 #for antisym metrics (spinor)
+
         for metric in metrics
             flag=false
+            index1=metric.indices[1][1]
             index2=metric.indices[2][1]
             for tens in non_metrics
                 if flag
@@ -51,14 +57,65 @@ function contract_metrics(T::TensorExpression)
                     if flag
                         break
                     end
-                    if tens.indices[indpairnum][1]==index2
-                        tens.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
-                        flag=true
+                    if tens.indices[indpairnum][1]==index2 #tensor has an index matching the 2nd index of the metric
+                        #some complicated logic to make sure indices go to the right position
+
+                        # this should let you contract Kronckers and metrics in a consistent way
+                        met_pos1=metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
+                        met_pos2=metric.indices[2][2].position 
+                        # println(met_pos1)
+                        # println(met_pos2)
+                        sumind=(met_pos1+met_pos2)%2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
+                        if sumind==0
+                            tens.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                        else
+                            # println("doing this one")
+                            # println(tens.indices[indpairnum][2])
+                            if (tens.indices[indpairnum][2].position+met_pos2)%2==0 # if tensor index position is same as 2nd metric pos 
+                            tens.indices[indpairnum]=metric.indices[1][1] => tens.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+                            else
+                                tens.indices[indpairnum]=metric.indices[1][1] => tens.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                            end
+                        end 
+                        #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                        flag=true #this term has been contracted, break
+                    elseif tens.indices[indpairnum][1]==index1
+                    #some complicated logic to make sure indices go to the right position
+                        sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))#if contracting with antisym, pick up a minus
+                        # println("symmetric?")
+                        # println(typeof(metric)<:SymMetricSuperType)
+                        # println(sign)
+                        met_pos1=metric.indices[1][2].position
+                        met_pos2=metric.indices[2][2].position
+                        # println(met_pos1)
+                        # println(met_pos2)
+                        sumind=(met_pos1+met_pos2)%2
+                        if sumind==0
+                            tens.indices[indpairnum]=metric.indices[2][1] => metric.indices[2][2] # raise/lower
+                        else
+                            # println("doing this one")
+                            # println(tens.indices[indpairnum][2])
+                            if (tens.indices[indpairnum][2].position+met_pos1)%2==0
+                                tens.indices[indpairnum]=metric.indices[2][1] => tens.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+                            else
+                                tens.indices[indpairnum]=metric.indices[2][1] => tens.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                            end
+                        end 
+                        #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                        flag=true #this term has been contracted, break
                     end
                 end
+            
             end
+            if !flag
+                push!(uncontr_mets,metric)
+            end
+            
         end
-        T.summands[k][2].terms=non_metrics
+        T.summands[k][2].terms=vcat(uncontr_mets, non_metrics)
+        # println(T.summands[k][1])
+        # println(T.summands[k][1]*sign)
+        T.summands[k]=T.summands[k][1]*sign => T.summands[k][2]
     end
     return T
 
@@ -68,6 +125,32 @@ end
 #     contract
 
 # end
+
+
+##############################################################################################################################
+##############################################################################################################################
+
+### KroneckerDelta
+
+
+##############################################################################################################################
+
+#elim kronecker
+function eliminate_kronecker(T::TensorTerm)
+   eliminate_kronecker(TensorExpression(T)) 
+end
+
+
+function eliminate_kronecker(T::TensorExpression) 
+    contract_metrics(T)
+end
+
+
+
+
+
+
+
 
 
 
