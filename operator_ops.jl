@@ -5,7 +5,7 @@ include("operator.jl")
 
 # graded leibniz
 
-function product_rule(O::Operator)
+function product_rule(O::LeibnizOperatorSuperType)
     new_summand=Nothing
     # println("operator is")
     # println(O)
@@ -14,7 +14,7 @@ function product_rule(O::Operator)
         grad=0 #initialise grading
         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
             grd=(-1)^(grad*grading(O))
-            operator_on_tensor=Operator(O.name,summand[2].terms[tensorind],O.operator_indices) #operator on nth term
+            operator_on_tensor=typeof(O)(O.name,summand[2].terms[tensorind],O.operator_indices) #operator on nth term
             # println("this is the op on a tens")
             # println(operator_on_tensor)
             # println("help")
@@ -54,7 +54,7 @@ end
 # printing and display
 
 
-function Base.show(io::IO, T::Operator)
+function Base.show(io::IO, T::OperatorSuperType)
     print(io, T.name)
     # println(io, T.operator_indices)
     # println(io, T.operand_indices)

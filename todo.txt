@@ -1,7 +1,10 @@
+eachindex()
+
+
+
 
 calc indices on bigger obejects!
 
-add coords
 
 add symmetric and antisymmetric components
 add levi civita tensor

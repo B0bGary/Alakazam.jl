@@ -1,7 +1,11 @@
 include("tensor_term.jl")
 
+abstract type OperatorSuperType <: TensorSuperType end
 
-mutable struct Operator <:TensorSuperType
+abstract type LeibnizOperatorSuperType <: OperatorSuperType end
+
+
+mutable struct Operator <:OperatorSuperType
     name::String
     operand::TensorExpression
     operator_indices::Vector{Pair{Index, IndexPosition}}
