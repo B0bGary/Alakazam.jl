@@ -1,3 +1,10 @@
+# import Pkg; 
+# Pkg.add("Symbolics")
+# Pkg.add("OrderedCollections")
+# Pkg.add("Revise")
+# Pkg.add("StatsBase")
+# Pkg.add("SymbolicUtils")
+# Pkg.add("DataStructures")
 using Symbolics
 using OrderedCollections
 using Revise
@@ -20,7 +27,7 @@ include("operator_ops.jl")
 flavour_indices=IndexSet("flavour")
 spacetime_indices=IndexSet("spacetime")
 
-i=Index("i",flavour_indices)
+i=Index("i",flavour_indices,1)
 j=Index("j",flavour_indices)
 k=Index("k",flavour_indices,0)
 l=Index("l",flavour_indices)
@@ -30,7 +37,7 @@ p=Index("p",flavour_indices)
 q=Index("q",flavour_indices)
 
 
-a=Index("a",spacetime_indices)
+a=Index("a",spacetime_indices,1)
 b=Index("b",spacetime_indices)
 c=Index("c",spacetime_indices)
 d=Index("d",spacetime_indices)
@@ -58,22 +65,22 @@ K=Tensor("K",[n=>lower, m=>upper, m=>lower])
 F=TensorTerm([J,K])
 
 println(F)
-println(F.indices)
-println(J.indices)
+# println(F.indices)
+# println(J.indices)
 
 # println(get_dummies(J))
 # println(J)
 # rename_dummies(J)
 # println(J)
 
-println(F)
-rename_dummies(F)
-println(F)
+# println(F)
+# rename_dummies(F)
+# println(F)
 
 J=Tensor("J",[i=>upper, j=>upper, l=>lower, l=>lower])
 K=Tensor("K",[i=>upper, j=>upper, k=>lower, k=>lower])
 bb=2*K-1*K -1/2*K
-println(bb)
+# println(bb)
 
 get_free_indices(J)
 
@@ -88,10 +95,16 @@ println("cash money")
 
 
 O=Operator("O",J,[a=>upper, b=>lower])
+println("first op is ")
+println(O)
 
 O=Operator("O",J*K,[a=>upper, b=>lower])
-product_rule(O)
-
+println("2nd op is ")
+println(O)
+println("doing prod ")
+ex=product_rule(O)
+typeof(ex)
+println(ex)
 # println(bb.summands[1][2])
 # println(bb.summands[2][2])
 

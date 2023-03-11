@@ -505,8 +505,11 @@ end
         print(io, tens[1]==1 ? "" : tens[1]==-1 ? "-" : tens[1])
         print(io, tens[1]==1 ? "" : tens[1]==-1 ? "" : "*")
         print(io,tens[2])
-        if peek(it)!=nothing
-            print(io, "+")
+        next=peek(it)
+        if next!==nothing
+            if next[1] >=0
+                print(io, "+")
+            end
         end
     end
  end

@@ -16,8 +16,8 @@ mutable struct Operator <:TensorSuperType
         
         new(name, TensorExpression(operand), operator_indices, operand.indices, vcat(operator_indices, operand.indices))
     end
-    function Operator(name::String, operand::TensorTerm, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}())
-        new(name, TensorExpression(operand), operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+    function Operator(name::String, operand::TensorTerm, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) 
+       new(name, TensorExpression(operand), operator_indices, operand.indices, vcat(operator_indices, operand.indices))
     end
  end
 

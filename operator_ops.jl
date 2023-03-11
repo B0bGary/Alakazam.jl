@@ -7,16 +7,18 @@ include("operator.jl")
 
 function product_rule(O::Operator)
     new_summand=Nothing
+    # println("operator is")
+    # println(O)
     for summandind= eachindex(O.operand.summands) #for each sum term in the expression
-        summand=O.operand.summands[summandind] 
-        grad=0
-        for tensorind in eachindex(summand[2].terms)# for each tensor in the term (tensorterm)
+        summand=O.operand.summands[summandind] #get the summand (tensor term)
+        grad=0 #initialise grading
+        for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
             grd=(-1)^(grad*grading(O))
-            operator_on_tensor=Operator(O.name,summand[2].terms[tensorind],O.operand_indices) #operator on nth term
-            println(operator_on_tensor)
-            println("help")
+            operator_on_tensor=Operator(O.name,summand[2].terms[tensorind],O.operator_indices) #operator on nth term
+            # println("this is the op on a tens")
+            # println(operator_on_tensor)
+            # println("help")
             new_prod=1
-            
             for indsss in eachindex(summand[2].terms)
                 if indsss!= tensorind
                new_prod=new_prod*summand[2].terms[indsss]
@@ -25,7 +27,7 @@ function product_rule(O::Operator)
                 end
             end
             # new_prod=[t  where t=summand[2].terms]
-            println(new_prod)
+            # println(new_prod)
             # new_prod.terms[tensorind]=operator_on_tensor
             if new_summand==Nothing
                 new_summand=grd*summand[1]*new_prod #adding the new term to the leibniz expanded version of the summand
@@ -54,13 +56,16 @@ end
 
 function Base.show(io::IO, T::Operator)
     print(io, T.name)
+    # println(io, T.operator_indices)
+    # println(io, T.operand_indices)
+    # println(io, T.indices)
     if !isempty(T.operator_indices)
         lowers=""
         uppers=""
         lowersempt::Bool=1
         uppersempt::Bool=1
-        println("oper inds")
-        println(T.operator_indices)
+        # println("oper inds")
+        # println(T.operator_indices)
         for (ind, pos) in T.operator_indices
             if pos.position==0
                 uppers=uppers*ind.name
