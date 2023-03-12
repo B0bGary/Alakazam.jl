@@ -124,9 +124,16 @@ test_delta = 0
 test_met = 0
 test_deriv = 0
 test_contract =0 
-test_replace =1
+test_replace =0
+test_newtimes =1
 
 order=[]
+
+if test_newtimes==1
+
+    println(J)
+    println(J × J)
+end
 
 
 if test_replace==1

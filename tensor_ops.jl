@@ -406,6 +406,72 @@ function *(TEx::TensorTerm, T::TensorSuperType)
     return update_indices(TensorTerm(vcat(TEx.terms, copy(T))))
 end
 
+##############################################################################################################################
+
+#smart times, basically appends a tensor so that all of its indices are free. useful if you want to mutliply something without doing contractions
+
+function ×(T1::TensorSuperType, T2::TensorSuperType)
+    T2=copy(T2)
+    t1inds=OrderedSet{Index}()
+    t2inds=OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
+    # t2ok=Set{Index}()
+    for inds in T1.indices
+        push!(t1inds, inds[1])
+    end
+    for inds in eachindex(T2.indices)
+        if  T2.indices[inds][1] in t1inds #if theres a repeated indice
+            push!(t2inds, inds => T2.indices[inds][1] ) # which index to replace
+        else
+            # push!(t2ok,T2.indices[inds][1])# index doesnt need to be replaced
+        end
+    end
+    # we now have all the indices we need to replace and where they are on the tensor
+    sets=get_index_sets(T2) #Set{IndexSet}()
+    avail=Dict{IndexSet, OrderedSet{Index}}() #pairs of index sets, with the unused indices
+    for set in sets
+        a=OrderedSet{Index}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
+        push!(avail, set=> a) #ones we can replace with
+    end
+    # println(avail)
+    # println(T2.indices)
+    dummie_matchup=Dict{Index,Index}()
+
+    t2dums=get_dummies(T2)
+    
+    for ind in t2inds # for each we need to replace (vec pos => index)
+        # println(avail[ind[2].index_set])
+        # println(ind)
+        if ind[2] in t2dums
+           
+            if ind[2] in keys(dummie_matchup)
+                nind=pop!(dummie_matchup,ind[2])
+            # println(nind)
+            T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
+            else
+                nind=popfirst!(avail[ind[2].index_set])
+                push!(dummie_matchup, ind[2] => nind)
+                T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
+            end
+        else
+            nind=popfirst!(avail[ind[2].index_set])
+            # println(nind)
+            T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2] #should replace
+        end
+        
+    end
+    # println(T2.indices)
+
+    # # avail=intersect(get_unused_indices(T1), get_unused_indices
+ 
+    ############### still need to handle dummies
+
+    # sets=get_index_sets(T2)
+    # for set in sets
+    #     unused_inds=get_unused_indices(T)
+
+    return T1*T2
+end
+
 
 ##############################################################################################################################
 
@@ -461,7 +527,7 @@ function update_indices(T::TensorTerm)
             push!(inds, i)
         end
     end
-    println(inds)
+    # println(inds)
     T.indices=inds
     ordered_counts = OrderedDict((pair[1], 0) for pair in T.indices)
     # println(ordered_counts)
@@ -522,7 +588,7 @@ end
 #finding dummie indices
 
 function get_dummies_positional(T::TensorSuperType)
-    dum::Set{Pair{Index,IndexPosition}} = Set()
+    dum::OrderedSet{Pair{Index,IndexPosition}} = Set()
     for d in get_dummies(T)
         push!(dum, d => upper)
         push!(dum, d => lower)
@@ -531,7 +597,7 @@ function get_dummies_positional(T::TensorSuperType)
 end
 
 function get_dummies_positional(T::TensorTerm)
-    dum::Set{Pair{Index,IndexPosition}} = Set()
+    dum::OrderedSet{Pair{Index,IndexPosition}} = Set()
     for d in get_dummies(T)
         push!(dum, d => upper)
         push!(dum, d => lower)
@@ -539,6 +605,15 @@ function get_dummies_positional(T::TensorTerm)
     return dum
 end
 
+
+function get_index_sets(T::TensorSuperType)
+    temp = [ind[1] for ind in T.indices]
+    out=OrderedSet{IndexSet}()
+    for t in temp
+        push!(out,t.index_set)
+    end
+    return out
+end
 
 
 #returns a set of dummie indices that are used in summation
