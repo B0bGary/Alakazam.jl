@@ -12,6 +12,7 @@ using StatsBase
 import SymbolicUtils
 import Base.:*
 import Base.:+
+import Base.:copy
 import Base.:/
 import Base.:(==)
 import Base.:-
@@ -120,11 +121,26 @@ bb = 2 * K - 1 * K - 1 / 2 * K
 
 test_eps = 0
 test_delta = 0
-test_met = 1
+test_met = 0
 test_deriv = 0
 
 
-exp= EpsilonTensor([α => upper, k => upper, k => lower, β => lower])
+ex2=EpsilonTensor([ γ => upper, β => upper]) * KroneckerDelta([ γ => lower, α => upper])*J
+# println(ex2)
+# println(get_free_indices(ex2))
+ exp= EpsilonTensor([α => upper, β => upper])*J +ex2
+# ######## something is broken...
+println(exp)
+#  println(get_free_indices(exp))
+# println(ex2)
+# println(get_free_indices(ex2))
+ exp=eliminate_epsilon(exp) ############### its editing in place!!!!! noooooooo
+ println(exp)
+ exp=eliminate_kronecker(exp)
+
+# println(exp)
+# exp=eliminate_epsilon(exp)
+println(exp)
 
 if test_eps == 1
 

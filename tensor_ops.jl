@@ -53,6 +53,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             index1 = metric.indices[1][1]
             index2 = metric.indices[2][1]
             for tens in non_metrics #try to contract with each other tensor
+                # println(tens)
+                if typeof(metric)<:EpsilonTensorSuperType && typeof(tens)<:MetricSuperType
+                    # println("cant contract kronecker")
+                    continue
+                end
+                # println("not a kronecker")
                 if flag # terminat if contracted
                     break
                 end
@@ -181,7 +187,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         # println(T.summands[k][1]*sign)
         T.summands[k] = T.summands[k][1] * sign => T.summands[k][2]
     end
-    return T
+    return merge_sum(T)
 
 end
 
@@ -233,7 +239,7 @@ function eliminate_epsilon(T::TensorExpression)
 end
 
 function contact_eps(T::TensorExpression)
-
+    return T
 end
 
 
@@ -282,6 +288,40 @@ function +(A::TensorExpression, B::TensorExpression)
     end
 end
 
+
+function +(A::TensorTerm, B::TensorExpression)
+
+    if get_free_indices(A) == get_free_indices(B)
+        return TensorExpression(TensorExpression(A), B)
+    else
+        throw(FreeIndexMismatch())
+    end
+end
+
++(A::TensorExpression, B::TensorTerm)= +(B,A)
+
+function +(A::TensorTerm, B::TensorTerm)
+
+    if get_free_indices(A) == get_free_indices(B)
+        return TensorExpression(A)+TensorExpression(B)
+    else
+        throw(FreeIndexMismatch())
+    end
+end
+
++(A::TensorSuperType, B::TensorTerm)= +(B,A)
+
+function +(A::TensorTerm, B::TensorSuperType)
+
+    if get_free_indices(A) == get_free_indices(B)
+        return TensorExpression(A)+TensorExpression(B)
+    else
+        println(get_free_indices(A))
+        println(get_free_indices(B))
+        throw(FreeIndexMismatch())
+    end
+end
+
 ##############################################################################################################################
 
 #subtraction
@@ -322,36 +362,36 @@ end
 
 #multiplication
 
-*(N::SymorNum, B::TensorSuperType) = TensorExpression(N, B)
-*(B::TensorSuperType, N::SymorNum) = TensorExpression(N, B)
+*(N::SymorNum, B::TensorSuperType) = TensorExpression(N, copy(B))
+*(B::TensorSuperType, N::SymorNum) = TensorExpression(N, copy(B))
 function *(B::TensorExpression, N::SymorNum)
-    return TensorExpression([convert(SymorNum, N) * summand[1] => summand[2] for summand in B.summands])
+    return update_indices(TensorExpression([convert(SymorNum, N) * summand[1] => summand[2] for summand in B.summands]))
 end
 
 *(N::SymorNum, B::TensorExpression,) = *(B, convert(SymorNum, N))
 
 function *(T::TensorSuperType, TEx::TensorExpression)
-    return TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands])
+    return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
 
 function *(TEx::TensorExpression, T::TensorSuperType)
-    return TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands])
+    return update_indices(TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands]))
 end
 
 
 # *(TEx::TensorExpression,T::TensorSuperType)=*(T,TEx)
 
 function *(T::TensorSuperType, TEx::TensorTerm)
-    return TensorTerm(vcat(T, TEx.terms))
+    return TensorTerm(vcat(copy(T), TEx.terms))
 end
 
 function *(T1::TensorSuperType, T2::TensorSuperType)
-    return TensorTerm([T1, T2])
+    return TensorTerm([copy(T1), copy(T2)])
 end
 
 function *(TEx::TensorTerm, T::TensorSuperType)
-    return TensorTerm(vcat(TEx.terms, T))
+    return TensorTerm(vcat(TEx.terms, copy(T)))
 end
 
 
@@ -400,6 +440,23 @@ end
 ##############################################################################################################################
 
 
+#update indices
+
+function update_indices(T::TensorExpression)
+for summand in T.summands
+    inds=[]
+    for t in summand[2].terms
+        for i in t.indices
+            push!(inds, i)
+        end
+    end
+    summand[2].indices=inds
+end
+return T
+end
+
+
+
 #get unused indices
 
 function get_unused_indices(T::TensorSuperType, IS::IndexSet)
@@ -414,15 +471,21 @@ end
 #finding free indices
 
 function get_free_indices(T::TensorSuperType)
-    return setdiff(T.indices, get_dummies_positional(T))
+    return Set(setdiff(T.indices, get_dummies_positional(T)))
 end
 
 function get_free_indices(T::TensorTerm)
-    return setdiff(T.indices, get_dummies_positional(T))
+    # println("doing this one")
+    # println(T.indices)
+    d=get_dummies_positional(T)
+    # # println(d)
+    # # println("free")
+    # println(Set(intersect(T.indices,d)))
+    return Set(setdiff(T.indices,d))
 end
 
 function get_free_indices(T::TensorExpression)
-    return setdiff(T.summands[1][2].indices, get_dummies_positional(T.summands[1][2]))#all tensors should have matching free indices in a sum already
+    return Set(setdiff(T.summands[1][2].indices, get_dummies_positional(T.summands[1][2])))#all tensors should have matching free indices in a sum already
 end
 
 ##############################################################################################################################
@@ -465,7 +528,6 @@ function get_dummies(T::TensorSuperType)
 end
 
 function get_dummies(T::TensorTerm)
-
     temp = [ind[1] for ind in T.indices]
     # println(temp)
     ordered_counts = OrderedDict((pair, 0) for pair in temp)
@@ -473,10 +535,39 @@ function get_dummies(T::TensorTerm)
         ordered_counts[pair] += 1
     end
     duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    # println(duplicates)
     # for ind in T.indices
     #     if cind 
     return collect(keys(duplicates))
+    # temp = [ind[1] for ind in T.indices]
+    # # println(temp)
+    # # println(size(temp))
+    # # if size(temp)[1] == 8
+    # #     println(temp[2])
+    # #     println(temp[8])
+    # # println(temp[2]==temp[8])
+    # # end
+    # # name_pairs = OrderedDict((pair.name, pair) for pair in temp)
+    # ordered_counts = OrderedDict((pair.name, 0) for pair in temp)
+    # # println("name pairs")
+    # # println(name_pairs)
+    # for pair in temp
+    #     ordered_counts[pair.name] += 1
+    # end
+    # # println(ordered_counts)
+    # duplicates = filter(kv -> kv[2] == 2, ordered_counts)
+    # # #  println(duplicates)
+    # # # for ind in T.indices
+    # # #     if cind 
+    # # # println("has dummies")
+    # # names=collect(keys(duplicates))
+    # # println(names) # these are the dummies
+    # # inds=[]
+    # # for name in names # had to do some complicated stuff since sometimes dummies arent recognised, i think due to the way structs are compared?
+    # #     push!(inds, name_pairs[name])
+    # # end
+    # # # filter(kv -> names[kv[1]] != Nothing, name_pairs) #?????????? want to get all indices from the name
+    # # println(collect(values(inds))) #dummie indices
+    # return collect(keys(duplicates))
 end
 
 
@@ -681,6 +772,26 @@ function Base.show(io::IO, T::TensorExpression)
 end
 
 
+##############################################################################################################################
+##############################################################################################################################
+
+# copying
+
+function copy(T::TensorSuperType)
+    return typeof(T)(T.name,copy(T.indices),T.function_of)
+end
+function copy(V::Vector{Pair{Index,IndexPosition}})
+    return [pair[1] => pair[2] for pair in V]
+end
+function copy(T::MetricSuperType)
+    return typeof(T)(T.name,copy(T.indices))
+end
+function copy(T::KroneckerSuperType)
+    return typeof(T)(copy(T.indices))
+end
+function copy(T::EpsilonTensorSuperType)
+    return typeof(T)(copy(T.indices))
+end
 
 ##############################################################################################################################
 ##############################################################################################################################
