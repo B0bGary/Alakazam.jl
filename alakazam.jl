@@ -123,24 +123,42 @@ test_eps = 0
 test_delta = 0
 test_met = 0
 test_deriv = 0
+test_contract =0 
+test_replace =1
+
+order=[]
 
 
-ex2=EpsilonTensor([ γ => upper, β => upper]) * KroneckerDelta([ γ => lower, α => upper])*J
-# println(ex2)
-# println(get_free_indices(ex2))
- exp= EpsilonTensor([α => upper, β => upper])*J +ex2
-# ######## something is broken...
-println(exp)
-#  println(get_free_indices(exp))
-# println(ex2)
-# println(get_free_indices(ex2))
- exp=eliminate_epsilon(exp) ############### its editing in place!!!!! noooooooo
- println(exp)
- exp=eliminate_kronecker(exp)
+if test_replace==1
 
-# println(exp)
-# exp=eliminate_epsilon(exp)
-println(exp)
+    ex2=EpsilonTensor([ γ => upper, β => upper]) * KroneckerDelta([ γ => lower, α => upper])*J
+    println(ex2)
+   # ex2=replace(ex2, J,K)
+    println(ex2)
+end
+
+
+
+if test_contract==1
+
+    ex2=EpsilonTensor([ γ => upper, β => upper]) * KroneckerDelta([ γ => lower, α => upper])*J
+    # println(ex2)
+    # println(get_free_indices(ex2))
+     exp= EpsilonTensor([ μ => upper, ν => upper]) * (EpsilonTensor([α => upper, β => upper])*J) +(ex2)*EpsilonTensor([ μ => upper, ν => upper])
+    # ######## something is broken...
+    println(exp)
+    #  println(get_free_indices(exp))
+    # println(ex2)
+    # println(get_free_indices(ex2))
+     exp=eliminate_epsilon(exp) ############### its editing in place!!!!! noooooooo
+     println(exp)
+     exp=eliminate_kronecker(exp)
+    
+    # println(exp)
+    # exp=eliminate_epsilon(exp)
+    println(exp)
+    
+end
 
 if test_eps == 1
 

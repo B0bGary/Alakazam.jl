@@ -1,4 +1,8 @@
 include("tensor_term.jl")
+include("kronecker.jl")
+include("epsilon_tensor.jl")
+include("metric.jl")
+
 
 
 ##############################################################################################################################
@@ -376,22 +380,30 @@ end
 
 
 function *(TEx::TensorExpression, T::TensorSuperType)
-    return update_indices(TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands]))
+
+    for summandind in eachindex(TEx.summands)
+        println(TEx.summands[summandind])
+        TEx.summands[summandind]=TEx.summands[summandind][1] => TEx.summands[summandind][2]*T
+        println(TEx.summands[summandind])
+    end
+    #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
+    println(TEx)
+    return update_indices(TEx)
 end
 
 
 # *(TEx::TensorExpression,T::TensorSuperType)=*(T,TEx)
 
 function *(T::TensorSuperType, TEx::TensorTerm)
-    return TensorTerm(vcat(copy(T), TEx.terms))
+    return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
 end
 
 function *(T1::TensorSuperType, T2::TensorSuperType)
-    return TensorTerm([copy(T1), copy(T2)])
+    return update_indices(TensorTerm([copy(T1), copy(T2)]))
 end
 
 function *(TEx::TensorTerm, T::TensorSuperType)
-    return TensorTerm(vcat(TEx.terms, copy(T)))
+    return update_indices(TensorTerm(vcat(TEx.terms, copy(T))))
 end
 
 
@@ -442,15 +454,32 @@ end
 
 #update indices
 
-function update_indices(T::TensorExpression)
-for summand in T.summands
+function update_indices(T::TensorTerm)
     inds=[]
-    for t in summand[2].terms
+    for t in T.terms
         for i in t.indices
             push!(inds, i)
         end
     end
-    summand[2].indices=inds
+    println(inds)
+    T.indices=inds
+    ordered_counts = OrderedDict((pair[1], 0) for pair in T.indices)
+    # println(ordered_counts)
+    for pair in T.indices
+        ordered_counts[pair[1]] += 1
+    end
+    # println(ordered_counts)
+    duplicates = filter(kv -> kv[2] > 2, ordered_counts)
+    # println(duplicates)
+    if !isempty(duplicates)
+        throw(OverusedIndices())
+    end
+    return T
+end
+
+function update_indices(T::TensorExpression)
+for summand in T.summands
+    update_indices(summand[2])
 end
 return T
 end
@@ -770,6 +799,73 @@ function Base.show(io::IO, T::TensorExpression)
         end
     end
 end
+
+
+
+##############################################################################################################################
+##############################################################################################################################
+
+# sorting
+
+function sort_exp(TEx::TensorExpression, Order::Vector{T} where {T<:TensorSuperType})
+    for summand in TEx.summands
+
+        
+
+    end
+    return TEx
+end
+
+
+
+##############################################################################################################################
+##############################################################################################################################
+
+# replacements and substitutions
+
+
+function substitute(TEx::TensorExpression, pattern::String, repeat::Bool=true)
+
+
+end
+
+
+function replace(T::TensorTerm, old_T::TensorSuperType, new_T::TensorSuperType, repeat::Bool=true)
+    replace(TensorExpression(T), old_T, new_T, repeat)
+end
+
+function replace(TEx::TensorExpression, old_T::TensorSuperType, new_T::TensorSuperType, repeat::Bool=true)
+    for k in eachindex(TEx.summands)
+        # println(k)
+        # println(T.summands)
+        summand = TEx.summands[k]
+        matches = []
+        for tind in eachindex(summand[2].terms)
+            if summand[2].terms[tind]== old_T
+            push!(matches, tind)
+            end
+        end
+        # matches = filter(y -> y==old_T, summand[2].terms)
+        # non_metrics = filter(y -> !(typeof(y) <: typ), summand[2].terms)
+        # uncontr_mets = Vector{TensorSuperType}()
+        # # println(metrics) 
+        # sign = 1 #for antisym metrics (spinor)
+        if repeat
+            for match in matches
+                summand[2].terms[match]=new_T
+            end
+        else
+            if !isempty(matches)
+                summand[2].terms[1]=new_T
+            end
+        end 
+    end
+    return update_indices(TEx)
+end
+
+
+
+
 
 
 ##############################################################################################################################

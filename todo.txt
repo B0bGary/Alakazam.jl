@@ -1,9 +1,13 @@
 eachindex()
 
 
+crash if too many repeated indices
 
 
-calc indices on bigger obejects!
+add sort order
+substitutions
+
+calc indices on bigger obejects! - think this is done??
 
 
 add symmetric and antisymmetric components
