@@ -367,15 +367,28 @@ end
 #multiplication
 
 *(N::SymorNum, B::TensorSuperType) = TensorExpression(N, copy(B))
+*(N::SymorNum, B::TensorTerm) = TensorExpression(N => B)
 *(B::TensorSuperType, N::SymorNum) = TensorExpression(N, copy(B))
+*(B::TensorTerm, N::SymorNum) = TensorExpression(N => B)
+
 function *(B::TensorExpression, N::SymorNum)
     return update_indices(TensorExpression([convert(SymorNum, N) * summand[1] => summand[2] for summand in B.summands]))
 end
 
-*(N::SymorNum, B::TensorExpression,) = *(B, convert(SymorNum, N))
+*(N::SymorNum, B::TensorExpression) = *(B, convert(SymorNum, N))
+
 
 function *(T::TensorSuperType, TEx::TensorExpression)
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
+end
+
+
+function *(T::TensorTerm, TEx::TensorExpression)
+    return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
+end
+
+function *(TEx::TensorExpression,T::TensorTerm)
+    return update_indices(TensorExpression([sum[1] =>  sum[2] *T for sum in TEx.summands]))
 end
 
 
@@ -398,6 +411,10 @@ function *(T::TensorSuperType, TEx::TensorTerm)
     return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
 end
 
+function *(T::TensorTerm, TEx::TensorTerm)
+    return update_indices(TensorTerm(vcat(T.terms, TEx.terms)))
+end
+
 function *(T1::TensorSuperType, T2::TensorSuperType)
     return update_indices(TensorTerm([copy(T1), copy(T2)]))
 end
@@ -410,7 +427,65 @@ end
 
 #smart times, basically appends a tensor so that all of its indices are free. useful if you want to mutliply something without doing contractions
 
-function ×(T1::TensorSuperType, T2::TensorSuperType)
+# function ×(T1::TensorTerm, T2::TensorSuperType)
+
+
+# end
+function ×( T2::SymorNum, N::Union{TensorExpression,TensorTerm,TensorSuperType} ) 
+    N × T2
+end
+
+function ×( T2::Union{TensorExpression,TensorTerm,TensorSuperType}, N::SymorNum) 
+    # T2*N 
+    throw(OperatorPrecedenceError())
+end
+
+
+function ×( T2::TensorExpression, T1::TensorExpression) 
+
+    vec=[]
+    for summand2 in T2.summands
+        for summand1 in T1.summands
+            push!(vec, summand2[1]*summand1[1] => summand2[2] × summand1[2] )
+        end
+    end
+    T2.summands=vec
+    return T2
+end
+
+
+function ×( T2::TensorExpression, T1::Union{TensorSuperType,TensorTerm}) 
+
+    (-1)^((grading(T1)*grading(T2))%2)*(T1 × T2)
+end
+
+function ×( T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression) 
+   
+    for summandin in eachindex(T1.summands)
+        t=(T2 × T1.summands[summandin][2])
+        println(t)
+        T1.summands[summandin]=T1.summands[summandin][1] => t
+    end
+    return T1
+
+end
+
+function ×(T1::TensorTerm, T2::TensorTerm) 
+    
+    for term in T2.terms
+        T1=T1 × term
+    end
+    return T1
+end
+
+
+
+function ×( T2::TensorSuperType, T1::TensorTerm) 
+    return (-1)^((grading(T1)*grading(T2))%2)*TensorExpression(T1 × T2)
+
+end
+
+function ×(T1::Union{TensorTerm, TensorSuperType}, T2::TensorSuperType) 
     T2=copy(T2)
     t1inds=OrderedSet{Index}()
     t2inds=OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
@@ -441,6 +516,7 @@ function ×(T1::TensorSuperType, T2::TensorSuperType)
     for ind in t2inds # for each we need to replace (vec pos => index)
         # println(avail[ind[2].index_set])
         # println(ind)
+
         if ind[2] in t2dums
            
             if ind[2] in keys(dummie_matchup)
@@ -448,27 +524,23 @@ function ×(T1::TensorSuperType, T2::TensorSuperType)
             # println(nind)
             T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
             else
+                if isempty(avail[ind[2].index_set])
+                    throw(OutOfIndices) 
+                 end
                 nind=popfirst!(avail[ind[2].index_set])
                 push!(dummie_matchup, ind[2] => nind)
                 T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
             end
         else
+            if isempty(avail[ind[2].index_set])
+               throw(OutOfIndices) 
+            end
             nind=popfirst!(avail[ind[2].index_set])
             # println(nind)
             T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2] #should replace
         end
         
     end
-    # println(T2.indices)
-
-    # # avail=intersect(get_unused_indices(T1), get_unused_indices
- 
-    ############### still need to handle dummies
-
-    # sets=get_index_sets(T2)
-    # for set in sets
-    #     unused_inds=get_unused_indices(T)
-
     return T1*T2
 end
 
@@ -560,8 +632,18 @@ function get_unused_indices(T::TensorSuperType, IS::IndexSet)
     return setdiff(IS.indices, Set(i[1] for i in T.indices))
 end
 
+function get_unused_indices(T::TensorTerm, IS::IndexSet)
+    # println(Set(i[1] for i in T.indices))
+    # println(IS.indices)
+    return setdiff(IS.indices, Set(i[1] for i in T.indices))
+end
 
 
+function get_unused_indices(T::TensorExpression, IS::IndexSet)
+    # println(Set(i[1] for i in T.indices))
+    # println(IS.indices)
+    return setdiff(IS.indices, Set(i[1] for i in T.terms[1].indices))
+end
 
 #finding free indices
 
@@ -606,7 +688,7 @@ function get_dummies_positional(T::TensorTerm)
 end
 
 
-function get_index_sets(T::TensorSuperType)
+function get_index_sets(T::Union{TensorSuperType,TensorTerm})
     temp = [ind[1] for ind in T.indices]
     out=OrderedSet{IndexSet}()
     for t in temp
@@ -617,7 +699,7 @@ end
 
 
 #returns a set of dummie indices that are used in summation
-function get_dummies(T::TensorSuperType)
+function get_dummies(T::Union{TensorSuperType,TensorTerm})
 
     temp = [ind[1] for ind in T.indices]
     # println(temp)
@@ -631,48 +713,48 @@ function get_dummies(T::TensorSuperType)
     return collect(keys(duplicates))
 end
 
-function get_dummies(T::TensorTerm)
-    temp = [ind[1] for ind in T.indices]
-    # println(temp)
-    ordered_counts = OrderedDict((pair, 0) for pair in temp)
-    for pair in temp
-        ordered_counts[pair] += 1
-    end
-    duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    # for ind in T.indices
-    #     if cind 
-    return collect(keys(duplicates))
-    # temp = [ind[1] for ind in T.indices]
-    # # println(temp)
-    # # println(size(temp))
-    # # if size(temp)[1] == 8
-    # #     println(temp[2])
-    # #     println(temp[8])
-    # # println(temp[2]==temp[8])
-    # # end
-    # # name_pairs = OrderedDict((pair.name, pair) for pair in temp)
-    # ordered_counts = OrderedDict((pair.name, 0) for pair in temp)
-    # # println("name pairs")
-    # # println(name_pairs)
-    # for pair in temp
-    #     ordered_counts[pair.name] += 1
-    # end
-    # # println(ordered_counts)
-    # duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    # # #  println(duplicates)
-    # # # for ind in T.indices
-    # # #     if cind 
-    # # # println("has dummies")
-    # # names=collect(keys(duplicates))
-    # # println(names) # these are the dummies
-    # # inds=[]
-    # # for name in names # had to do some complicated stuff since sometimes dummies arent recognised, i think due to the way structs are compared?
-    # #     push!(inds, name_pairs[name])
-    # # end
-    # # # filter(kv -> names[kv[1]] != Nothing, name_pairs) #?????????? want to get all indices from the name
-    # # println(collect(values(inds))) #dummie indices
-    # return collect(keys(duplicates))
-end
+# function get_dummies(T::TensorTerm)
+#     temp = [ind[1] for ind in T.indices]
+#     # println(temp)
+#     ordered_counts = OrderedDict((pair, 0) for pair in temp)
+#     for pair in temp
+#         ordered_counts[pair] += 1
+#     end
+#     duplicates = filter(kv -> kv[2] == 2, ordered_counts)
+#     # for ind in T.indices
+#     #     if cind 
+#     return collect(keys(duplicates))
+#     # temp = [ind[1] for ind in T.indices]
+#     # # println(temp)
+#     # # println(size(temp))
+#     # # if size(temp)[1] == 8
+#     # #     println(temp[2])
+#     # #     println(temp[8])
+#     # # println(temp[2]==temp[8])
+#     # # end
+#     # # name_pairs = OrderedDict((pair.name, pair) for pair in temp)
+#     # ordered_counts = OrderedDict((pair.name, 0) for pair in temp)
+#     # # println("name pairs")
+#     # # println(name_pairs)
+#     # for pair in temp
+#     #     ordered_counts[pair.name] += 1
+#     # end
+#     # # println(ordered_counts)
+#     # duplicates = filter(kv -> kv[2] == 2, ordered_counts)
+#     # # #  println(duplicates)
+#     # # # for ind in T.indices
+#     # # #     if cind 
+#     # # # println("has dummies")
+#     # # names=collect(keys(duplicates))
+#     # # println(names) # these are the dummies
+#     # # inds=[]
+#     # # for name in names # had to do some complicated stuff since sometimes dummies arent recognised, i think due to the way structs are compared?
+#     # #     push!(inds, name_pairs[name])
+#     # # end
+#     # # # filter(kv -> names[kv[1]] != Nothing, name_pairs) #?????????? want to get all indices from the name
+#     # # println(collect(values(inds))) #dummie indices
+#     # return collect(keys(duplicates))
+# end
 
 
 
@@ -815,7 +897,7 @@ end
 
 function grading(T::TensorExpression)
     grade = 0
-    for tens in T.summands[1].terms # should be same grading for everything in sum since they have matching free indices
+    for tens in T.summands[1][2].terms # should be same grading for everything in sum since they have matching free indices
         grade = grade + grading(tens)
     end
     return grade % 2
@@ -947,6 +1029,11 @@ end
 ##############################################################################################################################
 
 # copying
+
+
+function copy(T::TensorTerm)
+    return typeof(T)([copy(t) for t in T.terms])
+end
 
 function copy(T::TensorSuperType)
     return typeof(T)(T.name,copy(T.indices),T.function_of)

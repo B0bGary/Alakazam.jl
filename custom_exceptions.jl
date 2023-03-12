@@ -8,3 +8,10 @@ end
 struct OverusedIndices <: Exception
     #println("One or more free indices in the expression is already used as a dummy index pair.")
 end
+
+
+struct OperatorPrecedenceError <: Exception
+end
+
+struct OutOfIndices <: Exception
+end

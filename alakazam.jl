@@ -44,6 +44,8 @@ m = Index("m", flavour_indices)
 n = Index("n", flavour_indices)
 p = Index("p", flavour_indices)
 q = Index("q", flavour_indices)
+r = Index("r", flavour_indices)
+s = Index("s", flavour_indices)
 
 ic = Index("̄i", flavour_conj_indices, 0)
 jc = Index("̄j", flavour_conj_indices)
@@ -133,6 +135,13 @@ if test_newtimes==1
 
     println(J)
     println(J × J)
+    println(J × (J × J))
+    println(J  × (J × (J × J)))
+
+    println((J  × J) × (J × J))
+    println(1*(J  × J × J) × (J × J))
+    println(1*(J  × J) × (1*(J × J)))
+    println((J  × J) × (1*(J × J)))
 end
 
 
