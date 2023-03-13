@@ -86,6 +86,10 @@ mutable struct TensorTerm
     function TensorExpression(p::Pair{N ,T}) where {N<:SymorNum} where {T<:TensorSuperType} 
         merge_sum(new([p[1]=>TensorTerm(p[2])]))
     end
+
+    function TensorExpression()
+        new([0=> TensorTerm(Tensor(""))])
+    end
 end
 
 # function get_dummies_positional(T::TensorExpression)

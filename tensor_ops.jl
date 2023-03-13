@@ -268,7 +268,7 @@ function +(A::TensorSuperType, B::TensorSuperType)
 end
 
 function +(A::TensorSuperType, B::TensorExpression)
-    if get_free_indices(A) == get_free_indices(B)
+    if  isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
         throw(FreeIndexMismatch())
@@ -276,7 +276,7 @@ function +(A::TensorSuperType, B::TensorExpression)
 end
 
 function +(A::TensorExpression, B::TensorSuperType)
-    if get_free_indices(A) == get_free_indices(B)
+    if  isZeroTens(A) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, TensorExpression(B))
     else
         throw(FreeIndexMismatch())
@@ -284,8 +284,11 @@ function +(A::TensorExpression, B::TensorSuperType)
 end
 
 function +(A::TensorExpression, B::TensorExpression)
-
-    if get_free_indices(A) == get_free_indices(B)
+    # println(A)
+    # println(B)
+    # println(isZeroTens(A))
+    # println(isZeroTens(B))
+    if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
         throw(FreeIndexMismatch())
@@ -295,7 +298,7 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if get_free_indices(A) == get_free_indices(B)
+    if  isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
         throw(FreeIndexMismatch())
@@ -320,11 +323,23 @@ function +(A::TensorTerm, B::TensorSuperType)
     if get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A)+TensorExpression(B)
     else
-        println(get_free_indices(A))
-        println(get_free_indices(B))
+        # println(get_free_indices(A))
+        # println(get_free_indices(B))
         throw(FreeIndexMismatch())
     end
 end
+
+
+# function +(N::SymorNum, T::TensorExpression)
+
+
+
+#     if get_free_indices(A) == get_free_indices(B)
+#         return TensorExpression(TensorExpression(A), B)
+#     else
+#         throw(FreeIndexMismatch())
+#     end
+# end
 
 ##############################################################################################################################
 
@@ -395,12 +410,12 @@ end
 function *(TEx::TensorExpression, T::TensorSuperType)
 
     for summandind in eachindex(TEx.summands)
-        println(TEx.summands[summandind])
+        # println(TEx.summands[summandind])
         TEx.summands[summandind]=TEx.summands[summandind][1] => TEx.summands[summandind][2]*T
-        println(TEx.summands[summandind])
+        # println(TEx.summands[summandind])
     end
     #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
-    println(TEx)
+    # println(TEx)
     return update_indices(TEx)
 end
 
@@ -460,13 +475,21 @@ function ×( T2::TensorExpression, T1::Union{TensorSuperType,TensorTerm})
 end
 
 function ×( T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression) 
-   
+   new_terms=TensorExpression()
+   T1=rename_dummies(T1)
+#    println(T1)
+#    println(T2)
+#    println("^in func")
     for summandin in eachindex(T1.summands)
         t=(T2 × T1.summands[summandin][2])
-        println(t)
-        T1.summands[summandin]=T1.summands[summandin][1] => t
+        new_terms+= (T1.summands[summandin][1]* t)
+        # println(t)
+        # println("poo poo")
+        # println(T1.summands[summandin])
+        # T1.summands[summandin]=T1.summands[summandin][1] => t
     end
-    return T1
+
+    return new_terms
 
 end
 
@@ -486,6 +509,10 @@ function ×( T2::TensorSuperType, T1::TensorTerm)
 end
 
 function ×(T1::Union{TensorTerm, TensorSuperType}, T2::TensorSuperType) 
+    # println("crash func")
+    # println(T1)
+    # println(typeof(T1)) #some different behaviour between tensor and tensor term. tensor works..
+    # println(T2)
     T2=copy(T2)
     t1inds=OrderedSet{Index}()
     t2inds=OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
@@ -541,6 +568,9 @@ function ×(T1::Union{TensorTerm, TensorSuperType}, T2::TensorSuperType)
         end
         
     end
+    # println("before crash") #same dummies
+    # println(T1)
+    # println(T2)
     return T1*T2
 end
 
@@ -830,6 +860,16 @@ function rename_dummies(T::TensorTerm)
         #         (x,y)=(x == p[1] ? p[2] : x), y for p in replacements 
         #    # T.indices = [Pair((x == p[1] ? p[2] : x), y) for p in replacements for (x, y) in T.indices ]
     end
+    update_indices(T)
+    return T
+end
+
+function rename_dummies(T::TensorExpression)
+    for term in T.summands
+        term= term[1] => rename_dummies(term[2])
+    end
+    update_indices(T)
+    return T
 end
 
 
@@ -910,30 +950,7 @@ end
 # printing and display
 
 function Base.show(io::IO, T::TensorSuperType)
-    print(io, T.name)
-    if !isempty(T.indices)
-        lowers = ""
-        uppers = ""
-        lowersempt::Bool = 1
-        uppersempt::Bool = 1
-        for (ind, pos) in T.indices
-            if pos.position == 0
-                uppers = uppers * ind.name
-                uppersempt = 0
-                lowers = lowers * "*"
-            else
-                uppers = uppers * "*"
-                lowersempt = 0
-                lowers = lowers * ind.name
-            end
-        end
-        if !uppersempt
-            print(io, "^{" * uppers * "}")
-        end
-        if !lowersempt
-            print(io, "_{" * lowers * "}")
-        end
-    end
+    print(io,tens2string(T))
 end
 
 function Base.show(io::IO, T::TensorTerm)
@@ -983,8 +1000,52 @@ end
 
 function substitute(TEx::TensorExpression, pattern::String, repeat::Bool=true)
 
+    #first step: parse terms to a string, that points back to position in term
+
+
 
 end
+
+
+function term2stringpos(Term::TensorTerm)
+    out=Vector{Pair{String, Integer}}
+    for tind in eachindex(Term.terms)
+        push!(out, tens2string(Term.terms[tind]) => tind)
+    end
+   return out
+end
+
+
+function tens2string(T::TensorSuperType)
+    out=T.name
+    if !isempty(T.indices)
+        lowers = ""
+        uppers = ""
+        lowersempt::Bool = 1
+        uppersempt::Bool = 1
+        for (ind, pos) in T.indices
+            if pos.position == 0
+                uppers = uppers * ind.name
+                uppersempt = 0
+                lowers = lowers * "*"
+            else
+                uppers = uppers * "*"
+                lowersempt = 0
+                lowers = lowers * ind.name
+            end
+        end
+        if !uppersempt
+            out*="^{" * uppers * "}"
+        end
+        if !lowersempt
+            out*="_{" * lowers * "}"
+        end
+    end
+
+
+end
+
+
 
 
 function replace(T::TensorTerm, old_T::TensorSuperType, new_T::TensorSuperType, repeat::Bool=true)
@@ -1055,6 +1116,24 @@ end
 ##############################################################################################################################
 
 # utils
+
+
+function isZeroTens(T::TensorExpression)
+    if length(T.summands)==1 && T.summands[1][1]==0
+        return true
+    else
+        return false
+    end
+end
+
+# function isZeroTens(T::TEx)
+#     if length(T.summands)==1 && T.summands[1][1]==0
+#         return true
+#     else
+#         return false
+#     end
+# end
+
 
 
 function first_element(arr, elem1, elem2)

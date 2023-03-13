@@ -135,13 +135,18 @@ if test_newtimes==1
 
     println(J)
     println(J × J)
-    println(J × (J × J))
-    println(J  × (J × (J × J)))
+     ex2=(J + K)
+    # println(J)
+    # println("sum:")
+    # println(ex2)
+    #  println(J × ex2)
+     println(ex2 × ex2)
+    # println(J  × (J × (J × J)))
 
-    println((J  × J) × (J × J))
-    println(1*(J  × J × J) × (J × J))
-    println(1*(J  × J) × (1*(J × J)))
-    println((J  × J) × (1*(J × J)))
+    # println((J  × J) × (J × J))
+    # println(1*(J  × J × J) × (J × J))
+    # println(1*(J  × J) × (1*(J × J)))
+    # println((J  × J) × (1*(J × J)))
 end
 
 
