@@ -24,6 +24,27 @@ mutable struct Tensor<:TensorSuperType
     end
  end
 
+ 
+mutable struct DummyPatternTensor<:TensorSuperType
+    name::String
+    indices::Vector{Pair{Index, IndexPosition}}
+    function_of::Vector{Coordinate}
+
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
+        function_of::Vector{Coordinate}=Vector{Coordinate}()) #lets you have scalars with no indices
+        new(name, indices,function_of)
+    end
+
+    # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
+    #     function_of::Coordinate=nothing) #lets you have scalars with no indices
+    #     new(name, indices,[function_of])
+    # end
+
+    # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
+    #     new(name, indices,[])
+    # end
+ end
+
 
 
 

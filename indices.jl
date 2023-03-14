@@ -1,4 +1,5 @@
 
+abstract type IndexSuperType end
 
 
 struct IndexPosition
@@ -16,12 +17,28 @@ mutable struct IndexSet
    end
 end
 
-mutable struct Index
+mutable struct Index<:IndexSuperType
    name::String
    index_set::IndexSet
    grading::Int
 
  function Index(name::String,index_set::IndexSet, grading::Int=0)
+   temp=new(name,index_set,grading)
+   push!(index_set.indices,temp)
+   return temp
+ end
+
+ function Index(name::String, grading::Int=0)
+   new(name,IndexSet(""),grading)
+ end
+end
+
+mutable struct DummyPatternIndex<:IndexSuperType
+   name::String
+   index_set::IndexSet
+   grading::Int
+
+ function DummyPatternIndex(name::String,index_set::IndexSet, grading::Int=0)
    temp=new(name,index_set,grading)
    push!(index_set.indices,temp)
    return temp

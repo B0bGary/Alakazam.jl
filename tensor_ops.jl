@@ -950,7 +950,7 @@ end
 # printing and display
 
 function Base.show(io::IO, T::TensorSuperType)
-    print(io,tens2string(T))
+    print(io,tens2str(T))
 end
 
 function Base.show(io::IO, T::TensorTerm)
@@ -999,24 +999,37 @@ end
 
 
 function substitute(TEx::TensorExpression, pattern::String, repeat::Bool=true)
+    pattern=strip(pattern) #remove spaces
 
     #first step: parse terms to a string, that points back to position in term
+    #convert pattern to regex
+
+    for summand in TEx.summands
+        string=term2strpos(summand[2])
+
+    end
 
 
 
 end
 
+function pattern2regex(pattern::String)
+    # example "?D^{?i*}_{*?\alpha}[[\theta^{?j*}_{*?\beta}]]: \delta^{?j*}_{*?i} \delta^{?\alpha *}_{*?\beta}"
+    reg=""
 
-function term2stringpos(Term::TensorTerm)
-    out=Vector{Pair{String, Integer}}
+    return reg
+end
+
+function term2strpos(Term::TensorTerm)
+    out=Vector{Pair{String, Int64}}()
     for tind in eachindex(Term.terms)
-        push!(out, tens2string(Term.terms[tind]) => tind)
+        push!(out, tens2str(Term.terms[tind]) => tind)
     end
    return out
 end
 
 
-function tens2string(T::TensorSuperType)
+function tens2str(T::TensorSuperType)
     out=T.name
     if !isempty(T.indices)
         lowers = ""
@@ -1117,6 +1130,14 @@ end
 
 # utils
 
+function hasIndices(T::TensorSuperType)
+    return length(T.indices)!=0
+end
+
+function hasIndices(T::TensorTerm)
+    return length(T.indices)!=0
+end
+
 
 function isZeroTens(T::TensorExpression)
     if length(T.summands)==1 && T.summands[1][1]==0
@@ -1145,3 +1166,99 @@ function first_element(arr, elem1, elem2)
         return elem1
     end
 end
+
+
+# letters = OrderedSet{Char}()
+
+# # Latin uppercase letters
+# for i in 65:90
+#     println(push!(letters, Char(i)))
+# end
+
+# # Latin lowercase letters
+# for i in 97:122
+#     push!(letters, Char(i))
+# end
+
+# # Latin dotted uppercase letters
+# for i in 0x1E00:0x1E5F
+#     push!(letters, Char(i))
+# end
+
+# # Latin dotted lowercase letters
+# for i in 0x1E60:0x1E9B
+#     push!(letters, Char(i))
+# end
+
+# # Latin barred uppercase letters
+# for i in 0x1E80:0x1EF9
+#     push!(letters, Char(i))
+# end
+
+# # Latin barred lowercase letters
+# for i in 0x1EFB:0x1F00
+#     push!(letters, Char(i))
+# end
+
+# # Greek uppercase letters
+# for i in 0x391:0x3A9
+#     push!(letters, Char(i))
+# end
+
+# # Greek lowercase letters
+# for i in 0x3B1:0x3C9
+#     push!(letters, Char(i))
+# end
+
+# # Greek dotted uppercase letters
+# for i in 0x1F00:0x1F08
+#     push!(letters, Char(i))
+# end
+
+# # Greek dotted lowercase letters
+# for i in 0x1F10:0x1F16
+#     push!(letters, Char(i))
+# end
+
+# # Greek barred uppercase letters
+# for i in 0x1F08:0x1F0F
+#     push!(letters, Char(i))
+# end
+
+# # Greek barred lowercase letters
+# for i in 0x1F18:0x1F1E
+#     push!(letters, Char(i))
+# end
+
+# # # Hebrew letters
+# # for i in 0x5D0:0x5EA
+# #     push!(letters, Char(i))
+# # end
+
+# # # Hebrew dotted letters
+# # for i in 0xFB1D:0xFB36
+# #     push!(letters, Char(i))
+# # end
+
+# # # Hebrew barred letters
+# # for i in 0xFB4D:0xFB4F
+# #     push!(letters, Char(i))
+# # end
+
+# # # Hebrew final letters
+# # for i in 0x5DA:0x5EA
+# #     push!(letters, Char(i))
+# # end
+
+# # # Hebrew final dotted letters
+# # for i in 0xFB3E:0xFB3F
+# #     push!(letters, Char(i))
+# # end
+
+# # # Hebrew final barred letters
+# # push!(letters, Char(0xFB40))
+# # push!(letters, Char(0xFB41))
+
+# # Display the set of letters
+# println(contains(letters,̅θ)
+# println(letters)

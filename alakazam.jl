@@ -28,6 +28,7 @@ include("derivative.jl")
 include("derivative_ops.jl")
 include("kronecker.jl")
 include("epsilon_tensor.jl")
+include("tensor_replacements.jl")
 
 flavour_indices = IndexSet("flavour", 2)
 spinor_indices = IndexSet("spinor", 2)
@@ -127,9 +128,37 @@ test_met = 0
 test_deriv = 0
 test_contract =0 
 test_replace =0
-test_newtimes =1
+test_newtimes =0
+test_strings=0
+test_rep2=1
+
+
+if test_rep2==1
+    dum=parse_pattern2tensor("?A^{i**}_{*jk}")
+    println(dum)
+    println(typeof(dum))
+
+    # println(J)
+    # out=sub_tensor(J,DummyTensor(),K)
+    # println(out)
+
+
+end
+
+
+
+
+
 
 order=[]
+
+
+if test_strings==1
+
+    println(term2strpos(K × J))
+
+end
+
 
 if test_newtimes==1
 
