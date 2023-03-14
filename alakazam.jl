@@ -134,7 +134,7 @@ test_rep2=1
 
 
 if test_rep2==1
-    dum=parse_pattern2tensor("?A^{i**}_{*jk}")
+    dum=parse_pattern2tensor("?A^{?i**}_{*jk}")
     println(dum)
     println(typeof(dum))
 

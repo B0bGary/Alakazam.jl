@@ -43,10 +43,24 @@ function parse_pattern2tensor(pattern::String)
                     while string(peek(it)[1]) != "}"
                         # println("while")
                         if length(tensor.indices) < ind #if not already an index
+
+                            if string(peek(it)[1])=="?"
+                                iterate(it)
+                                push!(tensor.indices, DummyPatternIndex(string(iterate(it)[1])) => upper)
+                            else
+
                             push!(tensor.indices, Index(string(iterate(it)[1])) => upper)
+
+                            end
                             
                         elseif string(peek(it)[1]) != "*" #if already, and current value is not a *
+                            if string(peek(it)[1])=="?"
+                                iterate(it)
+                                tensor.indices[ind]= DummyPatternIndex(string(iterate(it)[1])) => upper
+                            else
+
                             tensor.indices[ind]= Index(string(iterate(it)[1])) => upper
+                            end
                         else
                             iterate(it)
                         end
@@ -70,12 +84,23 @@ function parse_pattern2tensor(pattern::String)
                         # println(tensor.indices)
                         # println(length(tensor.indices))
                         if length(tensor.indices) < ind #if not already an index, stops out ofbounds error. add new index
+                          if string(peek(it)[1])=="?"
+                                iterate(it)
+                                push!(tensor.indices, DummyPatternIndex(string(iterate(it)[1])) => lower)
+                            else
+
                             push!(tensor.indices, Index(string(iterate(it)[1])) => lower)
-                            # println("kill ma")
-                        elseif string(peek(it)[1]) != "*" #if there's already an index and the next thing isnt a placeholder
-                            # println("poo")
-                            # println(tensor.indices)
+
+                            end
+                            
+                        elseif string(peek(it)[1]) != "*" #if already, and current value is not a *
+                            if string(peek(it)[1])=="?"
+                                iterate(it)
+                                tensor.indices[ind]= DummyPatternIndex(string(iterate(it)[1])) => lower
+                            else
+
                             tensor.indices[ind]= Index(string(iterate(it)[1])) => lower
+                            end
                         else
                             # println(peek(it))
                             iterate(it) # removes * 

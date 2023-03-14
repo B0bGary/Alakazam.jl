@@ -15,6 +15,9 @@ mutable struct IndexSet
    function IndexSet(name::String, range::Int=1, indices::Vector=[], default_position::IndexPosition=upper)
       return new(name, range, indices, default_position)
    end
+   function IndexSet(name::String, indices::Vector=[], default_position::IndexPosition=upper)
+      return new(name, 0, indices, default_position)
+   end
 end
 
 mutable struct Index<:IndexSuperType
@@ -44,7 +47,7 @@ mutable struct DummyPatternIndex<:IndexSuperType
    return temp
  end
 
- function Index(name::String, grading::Int=0)
+ function DummyPatternIndex(name::String, grading::Int=0)
    new(name,IndexSet("",[]),grading)
  end
 end

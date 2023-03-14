@@ -6,20 +6,20 @@ abstract type TensorSuperType end
 
 mutable struct Tensor<:TensorSuperType
     name::String
-    indices::Vector{Pair{Index, IndexPosition}}
+    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
 
-    function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}()) #lets you have scalars with no indices
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} where I<:IndexSuperType =Vector{Pair{D, IndexPosition}}() ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}()) where {D<:IndexSuperType}#lets you have scalars with no indices
         new(name, indices,function_of)
     end
 
-    function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
-        function_of::Coordinate=nothing) #lets you have scalars with no indices
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} where I<:IndexSuperType =Vector{Pair{D, IndexPosition}}() ,
+        function_of::Coordinate=nothing) where {D<:IndexSuperType} #lets you have scalars with no indices
         new(name, indices,[function_of])
     end
 
-    function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} where I<:IndexSuperType =Vector{Pair{D, IndexPosition}}() ) where {D<:IndexSuperType}#lets you have scalars with no indices
         new(name, indices,[])
     end
  end
@@ -27,13 +27,16 @@ mutable struct Tensor<:TensorSuperType
  
 mutable struct DummyPatternTensor<:TensorSuperType
     name::String
-    indices::Vector{Pair{Index, IndexPosition}}
+    indices::Vector{Pair{I, IndexPosition}}  where {I<:IndexSuperType}=Vector{Pair{D, IndexPosition}}() where {D<:IndexSuperType}
     function_of::Vector{Coordinate}
 
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}}  where I<:IndexSuperType =Vector{Pair{D, IndexPosition}}() ,
         function_of::Vector{Coordinate}=Vector{Coordinate}()) #lets you have scalars with no indices
         new(name, indices,function_of)
     end
+
+ end
+
 
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
     #     function_of::Coordinate=nothing) #lets you have scalars with no indices
@@ -43,9 +46,6 @@ mutable struct DummyPatternTensor<:TensorSuperType
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
     #     new(name, indices,[])
     # end
- end
-
-
 
 
  
