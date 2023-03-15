@@ -134,10 +134,16 @@ test_rep2=1
 
 
 if test_rep2==1
-    dum=parse_pattern2tensor("?A^{?i**}_{*jk}")
+    dum=parse_pattern2tensor("?A^{?i**}_{*j?k}")
     println(dum)
     println(typeof(dum))
+    println(dum.indices)
 
+    K=Tensor("K", [i => upper, j => lower, j => lower])
+    J=Tensor("J", [i => upper, j => lower, k => lower])
+    println(K)
+    out=sub_tensor(K,dum,J)
+    println(out)
     # println(J)
     # out=sub_tensor(J,DummyTensor(),K)
     # println(out)

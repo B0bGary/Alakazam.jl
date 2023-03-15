@@ -1030,7 +1030,12 @@ end
 
 
 function tens2str(T::TensorSuperType)
-    out=T.name
+    out=""
+    if typeof(T)==DummyPatternTensor
+        out*="?"
+    end
+
+    out*=T.name
     if !isempty(T.indices)
         lowers = ""
         uppers = ""
@@ -1038,12 +1043,18 @@ function tens2str(T::TensorSuperType)
         uppersempt::Bool = 1
         for (ind, pos) in T.indices
             if pos.position == 0
+                if typeof(ind)==DummyPatternIndex
+                    uppers *= "?"
+                end
                 uppers = uppers * ind.name
                 uppersempt = 0
                 lowers = lowers * "*"
             else
                 uppers = uppers * "*"
                 lowersempt = 0
+                if typeof(ind)==DummyPatternIndex
+                    lowers *= "?"
+                end
                 lowers = lowers * ind.name
             end
         end

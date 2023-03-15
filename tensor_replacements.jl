@@ -94,9 +94,10 @@ function parse_pattern2tensor(pattern::String)
                             end
                             
                         elseif string(peek(it)[1]) != "*" #if already, and current value is not a *
-                            if string(peek(it)[1])=="?"
+                            if string(peek(it)[1])=="?" #next index is a dummy, won't need exact match in replacement
                                 iterate(it)
                                 tensor.indices[ind]= DummyPatternIndex(string(iterate(it)[1])) => lower
+                                # println( tensor.indices[ind])
                             else
 
                             tensor.indices[ind]= Index(string(iterate(it)[1])) => lower
@@ -133,12 +134,66 @@ end
 
 function sub_tensor(exp::TensorSuperType, pattern::TensorSuperType, rep::TensorSuperType)
 
-    if !hasIndices(pattern) && !hasIndices(exp)
+    if !hasIndices(pattern) && !hasIndices(exp) # if neither have indices, both scalars so do scalar replacement
         if typeof(pattern) <: DummyPatternTensor || exp.name == pattern.name
+            println("No indices, names match or dummy")
             return rep
         end
+        println("No indices, names dont match")
         return exp
     elseif hasIndices(pattern) && hasIndices(exp)
+        if typeof(pattern) <: DummyPatternTensor || exp.name == pattern.name #both have indices, names match or one is a dummy
+            pat_ind=pattern.indices
+            exp_ind=exp.indices
+            if pat_ind==exp_ind #indices match, ez money
+                println("Has indices, names match or dummy, and indices all match")
+                return rep
+            else
+                # println(pat_ind)
+                # println(exp_ind)
+                pi_it=Iterators.Stateful(pat_ind)
+                ei_it=Iterators.Stateful(exp_ind)
+                # println(pi_it)
+                # println(ei_it)
+
+                temp_dummy=Dict{DummyPatternIndex, Index}()
+
+                for indp in pi_it
+                    # println(ei_it)
+                    inde=iterate(ei_it)[1]
+                    println(inde[1])
+                    println(indp[1])
+                    println(typeof(indp[1]))
+                    println(typeof(inde[1]))
+                    if indp[2]!=inde[2]
+                        println("upper/lower dont match")
+                        return exp
+                    elseif indp[1]==inde[1]
+                        println("Index matches")
+                        #if names match, good, continue
+                    elseif typeof(indp[1])<:DummyPatternIndex
+                        println("dummy found")
+                        if get(temp_dummy,indp[1],nothing)==nothing #if dummy isnt already assigned a val in match
+                            temp_dummy[indp[1]]=inde[1]
+                        elseif temp_dummy[indp[1]]!=inde[1] #dummy doesnt match
+                            println("Has indices, names match or dummy, dummy indices dont match the dummy pattern")
+                            return exp #dummy indice pattern didnt match
+                        end
+
+                    else
+                        println("Has indices, non-dummy index doesnt match")
+                        return exp #didnt match
+                    end
+
+                end
+                #everything matched!
+                println("Has indices, names match or dummy, and indices all match or dummy pattern matches")
+                return rep
+            end
+
+        end 
+        println("Has indices, names dont match")
+        return exp 
 
     end
 

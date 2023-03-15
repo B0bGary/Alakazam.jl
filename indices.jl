@@ -83,6 +83,10 @@ upper=IndexPosition(0)
 lower=IndexPosition(1)
 
 
+function ==(a::Index, b::Index)
+   return a.name==b.name && a.grading==b.grading # index set ....  would cause issues since index set is a vecot. would have to use name but good for now
+end
+
 
 
 function Base.show(io::IO, C::Coordinate)
@@ -109,7 +113,10 @@ function Base.show(io::IO, C::Vector{Coordinate})
 end
 
 
-function Base.show(io::IO, I::Index)
+function Base.show(io::IO, I::IndexSuperType)
+      if typeof(I)==DummyPatternIndex
+         print(io, "?")
+      end
        print(io, I.name)
 end
 
