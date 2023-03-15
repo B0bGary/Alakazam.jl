@@ -135,20 +135,22 @@ test_rep2=1
 
 if test_rep2==1
     # defining patterns to swap indices
-    dum=parse_pattern2tensor("?A^{i**}_{*?l?m}")
+    dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")
     rep=parse_pattern2tensor("?A^{i**}_{*?m?l}")
 
-
-    println(dum)
     println(typeof(dum))
-    println(dum.indices)
+    println(dum)
 
-    K=Tensor("K", [i => upper, j => lower, k => lower])
-    J=Tensor("J", [i => upper, j => lower, k => lower])
-    println(K)
+    # println(dum)
+    # println(typeof(dum))
+    # println(dum.indices)
 
-    out=sub_tensor(K,dum,rep) # should map to Kikj
-    println(out)
+    # K=Tensor("K", [i => upper, j => lower, k => lower])
+    # J=Tensor("J", [i => upper, j => lower, k => lower])
+    # println(K)
+
+    # out=sub_tensor(K,dum,rep) # should map to Kikj
+    # println(out)
     # println(J)
     # out=sub_tensor(J,DummyTensor(),K)
     # println(out)

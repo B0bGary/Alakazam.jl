@@ -4,6 +4,19 @@ include("custom_exceptions.jl")
 SymorNum = Union{SymbolicUtils.Symbolic,Number}
 abstract type TensorSuperType end
 
+
+mutable struct DummyPatternTensor<:TensorSuperType
+    name::String
+    indices::Vector{Pair{I, IndexPosition}}  where {I<:IndexSuperType}
+    function_of::Vector{Coordinate}
+
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}() )  #lets you have scalars with no indices
+        new(name, indices,function_of)
+    end
+
+ end
+
 mutable struct Tensor<:TensorSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
@@ -28,17 +41,7 @@ mutable struct Tensor<:TensorSuperType
  end
 
  
-mutable struct DummyPatternTensor<:TensorSuperType
-    name::String
-    indices::Vector{Pair{I, IndexPosition}}  where {I<:IndexSuperType}
-    function_of::Vector{Coordinate}
 
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
-        function_of::Vector{Coordinate}=Vector{Coordinate}() )  #lets you have scalars with no indices
-        new(name, indices,function_of)
-    end
-
- end
 
 
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
@@ -55,7 +58,7 @@ mutable struct DummyPatternTensor<:TensorSuperType
 
 mutable struct TensorTerm
     terms::Vector{T} where {T<:TensorSuperType}
-    indices::Vector{Pair{Index, IndexPosition}}
+    indices::Vector{Pair{IndexSuperType, IndexPosition}}
     function TensorTerm(terms::Vector{T} where {T<:TensorSuperType})
         inds=[]
         for t in terms

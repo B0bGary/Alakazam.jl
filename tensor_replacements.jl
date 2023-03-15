@@ -1,13 +1,34 @@
 
 
+
+function sub_tensor(exp::TensorTerm,pattern::TensorTerm,rep::TensorTerm)
+
+
+
+    return exp
+end
+
+
+# function parse_pattern2tenterm(pattern::String)
+
+
+#returns a tensor term
 function parse_pattern2tensor(pattern::String)
+    pattern=strip(pattern)#remove spaces
     it = Iterators.Stateful(pattern)
     # # println(it)
     #add a way user can do custom patterns, eg \eps for eps tensor, \delta for delta func etc. some sort of vector containg possible presets (or a tree!)
+    #else itll always output as a default tensor
+    tensor_term = Vector{TensorSuperType}() #array of tensors
     tensor = []
 
+
+    # need to : make many tensors, put them all in a tensor term
+
+
     #Construct the tensor
-    for char in it
+    for char in it #should only get here at the start of a tensor if valid syntax!!!!!!!!!!
+        
         # # println("starting loop")
         # # println(char)
         if string(char) == "?"
@@ -126,10 +147,14 @@ function parse_pattern2tensor(pattern::String)
             end
 
         end
+        push!(tensor_term,copy(tensor))#adds a copy
     end
-    return tensor
+
+    return TensorTerm(tensor_term) #should construct a term out of our set of patterns
 
 end
+
+
 
 
 function sub_tensor(exp::TensorSuperType, pattern::TensorSuperType, rep::TensorSuperType)
