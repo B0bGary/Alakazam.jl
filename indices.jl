@@ -87,6 +87,10 @@ function ==(a::Index, b::Index)
    return a.name==b.name && a.grading==b.grading # index set ....  would cause issues since index set is a vecot. would have to use name but good for now
 end
 
+function ==(a::DummyPatternIndex, b::DummyPatternIndex)
+   return a.name==b.name && a.grading==b.grading # index set ....  would cause issues since index set is a vecot. would have to use name but good for now
+end
+
 
 
 function Base.show(io::IO, C::Coordinate)

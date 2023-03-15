@@ -15,3 +15,6 @@ end
 
 struct OutOfIndices <: Exception
 end
+
+struct InvalidReplacementPattern <: Exception
+end

@@ -22,6 +22,9 @@ mutable struct Tensor<:TensorSuperType
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
         new(name, indices,[])
     end
+    function Tensor(T::DummyPatternTensor) #
+        new(T.name,T.indices,T.function_of)
+    end
  end
 
  
