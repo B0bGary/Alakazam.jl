@@ -1,4 +1,25 @@
 
+function term2histogram(term::TensorTerm)
+    pat=H{TensorSuperType, Pair{Number, Vector{Number}}}() # tensor, (counts, [positions in expression]) #dont check indices yet
+    #some sort of dictionary with repeated elements, constant time access etc after hashing
+
+    for ind in eachindex(term.terms)
+        if pat[ind] #if already in, increase the count  and reference the position in the old term
+
+        else
+            #add new element to the structure
+        end
+
+
+    end
+
+    #go through and make key the number of occurances
+
+
+    return pat
+end
+
+
 
 
 function sub_tensor(exp::TensorTerm,pattern::TensorTerm,rep::TensorTerm, repeat::Bool=true)
@@ -6,7 +27,27 @@ function sub_tensor(exp::TensorTerm,pattern::TensorTerm,rep::TensorTerm, repeat:
     temp_dummy_tensor = Dict{String,TensorSuperType}() # keeps track of matches in a dummy pattern
     temp_dummy:=Dict{String,Index}()
 
-    matches:=Dict{Number,Number}; # pairs where pattern matched a tensor
+    exp_hist=term2histogram(exp)
+    pat_hist=term2histogram(pattern)
+
+
+    # go through the pattern and find mathces in the expression. if the names dont match, break and return exp no replacements
+
+    #should construct a possible replacement. if it doesnt work when matching indices, should go to the next possible replacement etc 
+    #else, if the names match, check the indices 
+
+    #so should have a mapping ie ?A?B C and DCF => ?A - D, ?B - F, C-C, then check indicies. if indices work, use temp_dummy etc to construct
+    #the replacement with the correct dummies
+    
+    #how can I loop through all possible matches? get max key, compare, slowly iterate through. once 
+
+
+
+    matches:=Dict{Number,Number}; 
+    
+    
+    
+    # pairs where pattern matched a tensor
     # i think that the keys should be exp, values are the expression. that way we can look through the keys and replace with the pattern replacements.
     # it will also make sure we dont have double-ups, can't replace the same tensor twice
     # use ints as key values so we can extract them directly from the original array
