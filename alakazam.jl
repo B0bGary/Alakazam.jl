@@ -115,7 +115,7 @@ F = TensorTerm([J, K])
 # println(F)
 
 J = Tensor("J", [i => upper, k => upper, j => lower, β => lower], x)
-K = Tensor("K", [i => upper, j => upper, j => lower, β => lower], θ)
+K = Tensor("K", [n => upper, m => upper, m => lower, α => lower], θ)
 bb = 2 * K - 1 * K - 1 / 2 * K
 # println(bb)
 
@@ -139,8 +139,8 @@ if test_rep2==1
     println(term2histogram(F*H))
     println(term2histogram(F*H× F))
 
-    a=term2histogram(J*J) #exp
-    b=term2histogram(TensorTerm(J)) #pat
+    a=term2histogram(J*J*K) #exp
+    b=term2histogram(J*K*J) #pat
     println(patt_match(b,a))
 
     # dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")

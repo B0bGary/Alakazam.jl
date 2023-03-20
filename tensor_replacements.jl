@@ -100,14 +100,14 @@ end
 
 
 #dynamic prog attempt
-function patt_match(pat::OrderedDict{Number,Vector{Pair{String,Vector{Number}}}}, exp::OrderedDict{Number,Vector{Pair{String,Vector{Number}}}})
+function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number, exp::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number)
 
 
     #dict are of form  [#occurances => [tensorname =>[postions],  tensorname =>[postions]], ]
 
     if length(pat) == 1 #if only one thing in the pattern   ---- No, this is only one type of frequency
         println(first(pat)[2])
-
+        (pkeys, pvalues) = first(pat)
         #####all of this works!!!!!! if single tensor left in pattern!!   
         if length(first(pat)[2]) == 1 #if only one type of tensor in the pattern
 
@@ -115,7 +115,7 @@ function patt_match(pat::OrderedDict{Number,Vector{Pair{String,Vector{Number}}}}
 
             # if first(pat)[1]==1 #if only needs to match once only one thing left to match
 
-            (pkeys, pvalues) = first(pat)
+            
 
             #handles the case where only one this etc
             if length(exp) == 1
@@ -168,6 +168,82 @@ function patt_match(pat::OrderedDict{Number,Vector{Pair{String,Vector{Number}}}}
             end
             println(looper)
             for (ekey, evalue) in looper
+            #recall, ekey=#num occurances
+                #eval= vector,  [tensorname =>[postions],  tensorname =>[postions], ...]
+
+                ########## loop through evalues?
+
+                for eval in evalue
+
+                # run the loop until we find a match. 
+                # take the first item of the pattern, try and match it with this expression term. 
+                # try and match remainder of pattern with remainder of expression term
+
+                #freqyency with first item in the pattern
+                check=patt_match(OrderedDict(first(pat)[1] => [first(pat)[2][1]]) , OrderedDict(ekey=>[eval])) #single expression term
+
+                if check[1] #if it's a match
+                    #construct remaining terms
+                    exp2=copy(exp)
+                    pat2=copy(pat)
+
+                    #remove the first item from patt
+                    rem=first(pat)[2]
+                    popfirst!(rem) #removes first item, wont have errors since we know more than one thing
+                    push!(pat2, first(pat)[1]=> rem)
+
+                    # remexp=first(exp)[ekey]
+                    # popfirst!(remexp) #removes first item, wont have errors since we know more than one thing
+                    # push!(pat2, first(pat)[1]=> rem)
+
+
+#??????????????????????????????    pls check this lol idk anymore man
+println("do ti")
+println(eval)
+
+                    println(evalue)
+                    # println(filter!(p1=>p2 -> p1 != eval[1], evalue))
+
+                     push!(exp2, ekey => filter!(x -> x[1] != eval[1], evalue))#remove tensor of this name
+                    if ekey-pkeys[1]>=1
+                        # vnew=
+                        println(exp2[ekey-pkeys[1]])
+                        println(eval[1])
+                    push!(exp2, (ekey-pkeys[1]) => push!(exp2[ekey-pkeys[1]], eval[1]=> eval[2][pkeys:end])) #decrements occ of tensor 
+                    end        
+                #    push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
+    ######################
+                   
+
+                    #remove freqency of patt from exp
+
+
+                    #return match of the remaining. effectively, we're peeling off one term at a time. we can then add mimo by saving things that dont match
+                    out= patt_match(pat2,exp2)
+                    if out[1]==true
+                        return (true, vcat(check[2], out[2]))
+                    else
+                        # 
+                        continue
+                    end
+
+                else
+                    continue #else, look at the next term in the expression
+                end
+
+                end
+
+
+                return  (false, [-1 => -1]) #no match
+
+
+                #(will be more complex once we use wildcards)
+
+
+                                # decremement 
+               
+
+                
                #for each term in the expression
                
                
@@ -272,11 +348,26 @@ function patt_match(pat::OrderedDict{Number,Vector{Pair{String,Vector{Number}}}}
     else  #if multiple things to match in the pattern
         #use short circuit eval
 
+        outs=[]
 
+        for (pkeys, pvalues) in pat #if multiple freqencies
 
+           out= patt_match(OrderedDict(pkeys => pvalues), exp)        
+             
 
+           if out[1]==false
+            return (false, [-1=>-1])
+           else
+            if isempty(outs)
+                outs=(true,out[2])
+            else
+            outs=(true, vcat(outs[2], out[2]))
+            end
+           end
 
+        end
 
+        return outs
 
     end
 
