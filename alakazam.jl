@@ -139,9 +139,13 @@ if test_rep2==1
     println(term2histogram(F*H))
     println(term2histogram(F*H× F))
 
-    a=term2histogram(J*J*K) #exp
-    b=term2histogram(J*K*J) #pat
-    println(patt_match(b,a))
+    J2 = Tensor("J", [i => upper, l => upper, j => lower, β => lower], x)
+
+    exp1=J*J*K
+    pat1=J*K*J2
+    # a=term2histogram(J*J*K) #exp
+    # b=term2histogram(J*K*J) #pat
+    println(patt_match(term2histogram(pat1),term2histogram(exp1),pat1,exp1))
 
     # dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")
     # rep=parse_pattern2tensor("?A^{i**}_{*?m?l}")

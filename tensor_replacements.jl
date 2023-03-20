@@ -100,7 +100,8 @@ end
 
 
 #dynamic prog attempt
-function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number, exp::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number)
+function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number, exp::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number,
+    tensorpatt::TensorTerm, tensorexp::TensorTerm)
 
 
     #dict are of form  [#occurances => [tensorname =>[postions],  tensorname =>[postions]], ]
@@ -134,11 +135,42 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                         println(pvalues[1][1])
                         println(eval[1])
                         if pvalues[1][1] == eval[1]#names match
-                            println("names match")
+                            println("names matchfdgsdfggdf")
                             match = []
+
+                            #check indices
+                            #check_index_match
+
                             #construct the match pairings
-                            for i in 1:pkeys[1]
-                                push!(match, pvalues[1][2][i] => eval[2][i])
+                            # for i in 1:pkeys[1] #match with x many terms
+                            #     push!(match, pvalues[1][2][i] => eval[2][i])
+                            # end
+
+                            #check if indices match
+
+                            j=1
+                            println(ekey)
+                            for i in 1:ekey #match with x many terms
+                                # println(ekey)
+                                println(tensorpatt.terms[pvalues[1][2][j]].indices)
+                                println(tensorexp.terms[eval[2][i]].indices)
+                                if check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt,tensorexp)
+                                    println("indices match")
+                                    push!(match, pvalues[1][2][j] => eval[2][i])
+                                    j+=1
+                                    if j>pkeys[1] #if matched with all
+                                        println("breaking")
+                                        break
+                                    end
+
+                                else
+                                    println("indices dont match")
+                                end
+                            end
+                            if j<=pkeys[1]
+                                println(j)
+                                println(pkeys[1])
+                                return (false, [-1=>-1])
                             end
 
 
@@ -180,7 +212,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                 # try and match remainder of pattern with remainder of expression term
 
                 #freqyency with first item in the pattern
-                check=patt_match(OrderedDict(first(pat)[1] => [first(pat)[2][1]]) , OrderedDict(ekey=>[eval])) #single expression term
+                check=patt_match(OrderedDict(first(pat)[1] => [first(pat)[2][1]]) , OrderedDict(ekey=>[eval]), tensorpatt,tensorexp) #single expression term
 
                 if check[1] #if it's a match
                     #construct remaining terms
@@ -219,7 +251,7 @@ println(eval)
 
 
                     #return match of the remaining. effectively, we're peeling off one term at a time. we can then add mimo by saving things that dont match
-                    out= patt_match(pat2,exp2)
+                    out= patt_match(pat2,exp2, tensorpatt,tensorexp)
                     if out[1]==true
                         return (true, vcat(check[2], out[2]))
                     else
@@ -352,7 +384,7 @@ println(eval)
 
         for (pkeys, pvalues) in pat #if multiple freqencies
 
-           out= patt_match(OrderedDict(pkeys => pvalues), exp)        
+           out= patt_match(OrderedDict(pkeys => pvalues), exp, tensorpatt,tensorexp)        
              
 
            if out[1]==false
@@ -375,6 +407,11 @@ println(eval)
 end
 
 
+
+function check_index_match(loc_pat::Number, loc_exp::Number, pat::TensorTerm,exp::TensorTerm)
+
+    return pat.terms[loc_pat].indices == exp.terms[loc_exp].indices
+end
 
 
 function sub_tensor(exp::TensorTerm, pattern::TensorTerm, rep::TensorTerm, repeat::Bool=true)
