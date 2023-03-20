@@ -136,18 +136,38 @@ test_rep2=1
 if test_rep2==1
     # defining patterns to swap indices
     H=DummyPatternTensor("?H")
-    println(term2histogram(F*H))
-    println(term2histogram(F*H× F))
+    # println(term2histogram(F*H))
+    # println(term2histogram(F*H× F))
 
+    J = Tensor("F", [i => upper, k => upper, j => lower, β => lower], x)
+    K = Tensor("K", [n => upper, m => upper, m => lower, α => lower], θ)
     H=DummyPatternTensor("?H",K.indices)
+    J2 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, DummyPatternIndex("γ") => lower], x)
+    J3 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, μ => lower], x)
 
-    J2 = Tensor("J", [p => upper, l => upper, q => lower, α => lower], x)
-
-    exp1=J*J*K*J2
-    pat1=J2*H
+    println("Consider the tensor expression:")
+    exp1=K*J*J
+    println(exp1)
+    println("Now, suppose we want to replace tensors of the form")
+    
+    pat1=TensorTerm(J2)
+    println(pat1)
+    println("where '?' denotes that the next character is a wildcard")
+    println("Then, suppose that we want to replace such matching tensors with an expression")
+    rep= TensorTerm(J3)
+    println(rep)
     # a=term2histogram(J*J*K) #exp
     # b=term2histogram(J*K*J) #pat
-    println(patt_match(term2histogram(pat1),term2histogram(exp1),pat1,exp1))
+    # println(term2histogram(pat1))
+    # println(term2histogram(exp1))
+    # println(patt_match(term2histogram(pat1),term2histogram(exp1),pat1,exp1))
+    println("Then, our pattern matching algorithm yields:")
+
+    outt=substitute_terms(exp1,pat1,rep)
+    println(outt)
+    # tens=outt.summands[1][2].terms[1]
+    # println(tens)
+    # println(typeof(tens))
 
     # dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")
     # rep=parse_pattern2tensor("?A^{i**}_{*?m?l}")

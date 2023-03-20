@@ -15,6 +15,13 @@ mutable struct DummyPatternTensor<:TensorSuperType
         new(name, indices,function_of)
     end
 
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}() )  #lets you have scalars with no indices
+        new(name, indices,[])
+    end
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}(),function_of::Coordinate=Coordinate("",Vector{IndexSet}()) )  #lets you have scalars with no indices
+        new(name, indices,[function_of])
+    end
+
  end
 
 mutable struct Tensor<:TensorSuperType

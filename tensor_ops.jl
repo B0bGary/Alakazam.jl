@@ -1032,7 +1032,7 @@ end
 function tens2str(T::TensorSuperType)
     out=""
     if typeof(T)==DummyPatternTensor
-        out*="?"
+        # out*="?"
     end
 
     out*=T.name
