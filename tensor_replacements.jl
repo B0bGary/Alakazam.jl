@@ -47,7 +47,8 @@ end
 
 
 
-
+######################################################################################################
+#######################################################################################################################
 function sub_tensor(exp::TensorTerm, pattern::TensorTerm, rep::TensorTerm, repeat::Bool=true)
 
     #lets do no indices version first
@@ -97,12 +98,33 @@ function sub_tensor(exp::TensorTerm, pattern::TensorTerm, rep::TensorTerm, repea
     return exp
 
 end
+########################################################################################################################################
+
+
+function match_dummy_logic(dummy_matching::Dict{String,String},dummy_name::String, exp_name::String)
+    dummy=copy(dummy_matching)
+    if get(dummy, dummy_name, nothing) == nothing #if dummy isnt already assigned a val in match
+        dummy[dummy_name] = exp_name
+
+    elseif dummy[dummy_name] != exp_name #dummy doesnt match
+
+        return (false, dummy) #dummy tensor name pattern
+    end
+
+    return (true, dummy)
+
+end
+
+
+
+
+
 
 
 #dynamic prog attempt
-function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number, exp::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where N<:Number,
-    tensorpatt::TensorTerm, tensorexp::TensorTerm)
-
+function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where {N<:Number}, exp::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} where {N<:Number},
+    tensorpatt::TensorTerm, tensorexp::TensorTerm, dummy_matching::Dict{String,String}=Dict{String,String}())
+    #list of potential dummies is included, by default its empty
 
     #dict are of form  [#occurances => [tensorname =>[postions],  tensorname =>[postions]], ]
 
@@ -116,7 +138,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
 
             # if first(pat)[1]==1 #if only needs to match once only one thing left to match
 
-            
+
 
             #handles the case where only one this etc
             if length(exp) == 1
@@ -134,8 +156,28 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                         println("occurs less")
                         println(pvalues[1][1])
                         println(eval[1])
-                        if pvalues[1][1] == eval[1]#names match
-                            println("names matchfdgsdfggdf")
+
+                        pdummy = false
+                        println(pvalues[1][1][1])
+                        if pvalues[1][1][1] == '?'
+                            pdummy = true
+                            println("dummy found")
+                        end
+
+                        if pdummy || pvalues[1][1] == eval[1]#names match
+                            dummy_temp=dummy_matching
+                            if pdummy
+                
+                                out = match_dummy_logic(dummy_matching, pvalues[1][1], eval[1])
+                                if out[1] == false
+                                    continue
+                                else
+                                    dummy_temp = out[2]
+                                end
+                            end
+                            println(dummy_matching)
+
+                            println("names match")
                             match = []
 
                             #check indices
@@ -148,17 +190,17 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
 
                             #check if indices match
 
-                            j=1
+                            j = 1
                             println(ekey)
                             for i in 1:ekey #match with x many terms
                                 # println(ekey)
                                 println(tensorpatt.terms[pvalues[1][2][j]].indices)
                                 println(tensorexp.terms[eval[2][i]].indices)
-                                if check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt,tensorexp)
+                                if check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp)
                                     println("indices match")
                                     push!(match, pvalues[1][2][j] => eval[2][i])
-                                    j+=1
-                                    if j>pkeys[1] #if matched with all
+                                    j += 1
+                                    if j > pkeys[1] #if matched with all
                                         println("breaking")
                                         break
                                     end
@@ -167,10 +209,14 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                                     println("indices dont match")
                                 end
                             end
-                            if j<=pkeys[1]
+                            if j <= pkeys[1]
                                 println(j)
                                 println(pkeys[1])
-                                return (false, [-1=>-1])
+                                if !pdummy 
+                                return (false, [-1 => -1])
+                                else
+                                    continue
+                                end
                             end
 
 
@@ -178,6 +224,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                             # if patt_match(exp2)
 
                             #needs to loop over all n matches
+                            dummy_matching=dummy_temp
                             return (true, match) #found the match #found the match
                         end
                     end
@@ -187,7 +234,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
             end
             return (false, [-1 => -1]) #no match
 
-        
+
         else
 
             ##now for multiple things left in the pattern of this frequency
@@ -200,87 +247,91 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
             end
             println(looper)
             for (ekey, evalue) in looper
-            #recall, ekey=#num occurances
+                #recall, ekey=#num occurances
                 #eval= vector,  [tensorname =>[postions],  tensorname =>[postions], ...]
 
                 ########## loop through evalues?
 
                 for eval in evalue
 
-                # run the loop until we find a match. 
-                # take the first item of the pattern, try and match it with this expression term. 
-                # try and match remainder of pattern with remainder of expression term
+                    # run the loop until we find a match. 
+                    # take the first item of the pattern, try and match it with this expression term. 
+                    # try and match remainder of pattern with remainder of expression term
 
-                #freqyency with first item in the pattern
-                check=patt_match(OrderedDict(first(pat)[1] => [first(pat)[2][1]]) , OrderedDict(ekey=>[eval]), tensorpatt,tensorexp) #single expression term
+                    #freqyency with first item in the pattern
+                    check = patt_match(OrderedDict(first(pat)[1] => [first(pat)[2][1]]), OrderedDict(ekey => [eval]), tensorpatt, tensorexp) #single expression term
 
-                if check[1] #if it's a match
-                    #construct remaining terms
-                    exp2=copy(exp)
-                    pat2=copy(pat)
+                    if check[1] #if it's a match
+                        #construct remaining terms
+                        exp2 = copy(exp)
+                        pat2 = copy(pat)
 
-                    #remove the first item from patt
-                    rem=first(pat)[2]
-                    popfirst!(rem) #removes first item, wont have errors since we know more than one thing
-                    push!(pat2, first(pat)[1]=> rem)
+                        #remove the first item from patt
+                        rem = first(pat)[2]
+                        popfirst!(rem) #removes first item, wont have errors since we know more than one thing
+                        push!(pat2, first(pat)[1] => rem)
 
-                    # remexp=first(exp)[ekey]
-                    # popfirst!(remexp) #removes first item, wont have errors since we know more than one thing
-                    # push!(pat2, first(pat)[1]=> rem)
-
-
-#??????????????????????????????    pls check this lol idk anymore man
-println("do ti")
-println(eval)
-
-                    println(evalue)
-                    # println(filter!(p1=>p2 -> p1 != eval[1], evalue))
-
-                     push!(exp2, ekey => filter!(x -> x[1] != eval[1], evalue))#remove tensor of this name
-                    if ekey-pkeys[1]>=1
-                        # vnew=
-                        println(exp2[ekey-pkeys[1]])
-                        println(eval[1])
-                    push!(exp2, (ekey-pkeys[1]) => push!(exp2[ekey-pkeys[1]], eval[1]=> eval[2][pkeys:end])) #decrements occ of tensor 
-                    end        
-                #    push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
-    ######################
-                   
-
-                    #remove freqency of patt from exp
+                        # remexp=first(exp)[ekey]
+                        # popfirst!(remexp) #removes first item, wont have errors since we know more than one thing
+                        # push!(pat2, first(pat)[1]=> rem)
 
 
-                    #return match of the remaining. effectively, we're peeling off one term at a time. we can then add mimo by saving things that dont match
-                    out= patt_match(pat2,exp2, tensorpatt,tensorexp)
-                    if out[1]==true
-                        return (true, vcat(check[2], out[2]))
+                        #??????????????????????????????    pls check this lol idk anymore man
+                        println("do ti")
+                        println(eval)
+
+                        println(evalue)
+                        # println(filter!(p1=>p2 -> p1 != eval[1], evalue))
+
+                        push!(exp2, ekey => filter!(x -> x[1] != eval[1], evalue))#remove tensor of this name
+                        if ekey - pkeys[1] >= 1
+                            # vnew=
+                            if get(exp2,ekey-pkeys[1],nothing)==nothing
+                                push!(exp2, (ekey - pkeys[1]) => [ eval[1] => eval[2][pkeys:end]])
+                            else
+                            println(exp2[ekey-pkeys[1]])
+                            println(eval[1])
+                            push!(exp2, (ekey - pkeys[1]) => push!(exp2[ekey-pkeys[1]], eval[1] => eval[2][pkeys:end])) #decrements occ of tensor 
+                            end
+                        end
+                        #    push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
+                        ######################
+
+
+                        #remove freqency of patt from exp
+
+
+                        #return match of the remaining. effectively, we're peeling off one term at a time. we can then add mimo by saving things that dont match
+                        out = patt_match(pat2, exp2, tensorpatt, tensorexp)
+                        if out[1] == true
+                            return (true, vcat(check[2], out[2]))
+                        else
+                            # 
+                            continue
+                        end
+
                     else
-                        # 
-                        continue
+                        continue #else, look at the next term in the expression
                     end
 
-                else
-                    continue #else, look at the next term in the expression
-                end
-
                 end
 
 
-                return  (false, [-1 => -1]) #no match
+                return (false, [-1 => -1]) #no match
 
 
                 #(will be more complex once we use wildcards)
 
 
-                                # decremement 
-               
+                # decremement 
 
-                
-               #for each term in the expression
-               
-               
-               #this is where we want to use recursion
-               # return patt_match(first_term in_pattern, exp term) * patt_match(rest_of_terms_in_pattern, rest_of_exp)
+
+
+                #for each term in the expression
+
+
+                #this is where we want to use recursion
+                # return patt_match(first_term in_pattern, exp term) * patt_match(rest_of_terms_in_pattern, rest_of_exp)
                 #can defs use mimo here
 
 
@@ -293,109 +344,25 @@ println(eval)
         end
 
 
-
-            # else #needs to match more than once #frequency not equal to 1
-                
-            #         (pkeys, pvalues)=first(pat)
-                   
-            #         #handles the case where only one this etc
-            #         if length(exp)==1
-            #             looper= [first(exp)]
-            #             println("this one used")
-            #         else
-            #             looper= zip(keys(exp), values(exp))
-            #         end
-            #         println(looper)
-            #         for (ekey , evalue) in looper
-            #             if pkeys[1]<=ekey #if occ in pat is less than occ in exp
-    
-            #                 #need to loop over evals!
-            #                 for eval in evalue
-            #                     println("occurs less but many times")
-            #                     println(pvalues[1][1])
-            #                     println(eval[1])
-            #                     if pvalues[1][1]==eval[1]#names match
-            #                         println("names match")
-
-
-                                    
-
-            #                         # return (true, [pvalues[1][2][1] => eval[2][1]]) #found the match
-            #                     end
-            #                 end
-                            
-            #             end
-            #             continue #else, just keep going
-            #         end
-            #         return (false, [-1=>-1]) #no match
-
-                    
-
-
-
-
-                
-
-            # else #needs to match more than once #frequency not equal to 1
-            #     quant=pat[1][1] #number of times symbol occurs in the pattern
-            #     println("pattern is")
-            #     println(pat)
-            #     (pkeys, pvalues)=zip(keys(pat), values(pat))
-            #     for (ekey , evalue) in zip(keys(exp), values(exp))
-            #         if pkeys[1]<=ekey #if occ in pat is less than occ in exp
-            #             if pvalues[1][1]==evalue[1]#names match
-
-
-            #                 #only needed if not the last match
-
-            #                 #create copy of exp
-            #                 # exp2=copy(exp)
-            #                 # pat2=copy(pat)
-            #                 # # decremement 
-            #                 # push!(exp2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
-            #                 # push!(exp2, ekey-pkeys[1] => push!(exp2[ekey-pkeys[1]]), evalue[1]=> evalue[2][2:end]) #decrements occ of tensor
-                            
-            #                 # push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
-
-            #                 match=[]
-            #                 #construct the match pairings
-            #                 for i in 1:pkeys[1]
-            #                     push!(match, pvalues[2][i] => evalue[2][i])
-            #                 end
-
-
-            #                 # #feed new back into method with quantity decreased by counts
-            #                 # if patt_match(exp2)
-
-            #                     #needs to loop over all n matches
-            #                 return (true, match) #found the match
-            #             end
-            #         end
-            #         continue #else, just keep going
-            #     end
-            #     return (false, [-1=>-1]) #no match
-
-
-
     else  #if multiple things to match in the pattern
         #use short circuit eval
 
-        outs=[]
+        outs = []
 
         for (pkeys, pvalues) in pat #if multiple freqencies
 
-           out= patt_match(OrderedDict(pkeys => pvalues), exp, tensorpatt,tensorexp)        
-             
+            out = patt_match(OrderedDict(pkeys => pvalues), exp, tensorpatt, tensorexp)
 
-           if out[1]==false
-            return (false, [-1=>-1])
-           else
-            if isempty(outs)
-                outs=(true,out[2])
+
+            if out[1] == false
+                return (false, [-1 => -1])
             else
-            outs=(true, vcat(outs[2], out[2]))
+                if isempty(outs)
+                    outs = (true, out[2])
+                else
+                    outs = (true, vcat(outs[2], out[2]))
+                end
             end
-           end
 
         end
 
@@ -408,7 +375,7 @@ end
 
 
 
-function check_index_match(loc_pat::Number, loc_exp::Number, pat::TensorTerm,exp::TensorTerm)
+function check_index_match(loc_pat::Number, loc_exp::Number, pat::TensorTerm, exp::TensorTerm)
 
     return pat.terms[loc_pat].indices == exp.terms[loc_exp].indices
 end
@@ -797,3 +764,91 @@ function sub_tensor(exp::TensorSuperType, pattern::TensorSuperType, rep::TensorS
     return false
 
 end
+
+
+
+
+
+
+
+# else #needs to match more than once #frequency not equal to 1
+
+#         (pkeys, pvalues)=first(pat)
+
+#         #handles the case where only one this etc
+#         if length(exp)==1
+#             looper= [first(exp)]
+#             println("this one used")
+#         else
+#             looper= zip(keys(exp), values(exp))
+#         end
+#         println(looper)
+#         for (ekey , evalue) in looper
+#             if pkeys[1]<=ekey #if occ in pat is less than occ in exp
+
+#                 #need to loop over evals!
+#                 for eval in evalue
+#                     println("occurs less but many times")
+#                     println(pvalues[1][1])
+#                     println(eval[1])
+#                     if pvalues[1][1]==eval[1]#names match
+#                         println("names match")
+
+
+
+
+#                         # return (true, [pvalues[1][2][1] => eval[2][1]]) #found the match
+#                     end
+#                 end
+
+#             end
+#             continue #else, just keep going
+#         end
+#         return (false, [-1=>-1]) #no match
+
+
+
+
+
+
+
+
+# else #needs to match more than once #frequency not equal to 1
+#     quant=pat[1][1] #number of times symbol occurs in the pattern
+#     println("pattern is")
+#     println(pat)
+#     (pkeys, pvalues)=zip(keys(pat), values(pat))
+#     for (ekey , evalue) in zip(keys(exp), values(exp))
+#         if pkeys[1]<=ekey #if occ in pat is less than occ in exp
+#             if pvalues[1][1]==evalue[1]#names match
+
+
+#                 #only needed if not the last match
+
+#                 #create copy of exp
+#                 # exp2=copy(exp)
+#                 # pat2=copy(pat)
+#                 # # decremement 
+#                 # push!(exp2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
+#                 # push!(exp2, ekey-pkeys[1] => push!(exp2[ekey-pkeys[1]]), evalue[1]=> evalue[2][2:end]) #decrements occ of tensor
+
+#                 # push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
+
+#                 match=[]
+#                 #construct the match pairings
+#                 for i in 1:pkeys[1]
+#                     push!(match, pvalues[2][i] => evalue[2][i])
+#                 end
+
+
+#                 # #feed new back into method with quantity decreased by counts
+#                 # if patt_match(exp2)
+
+#                     #needs to loop over all n matches
+#                 return (true, match) #found the match
+#             end
+#         end
+#         continue #else, just keep going
+#     end
+#     return (false, [-1=>-1]) #no match
+

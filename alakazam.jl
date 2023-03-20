@@ -139,10 +139,12 @@ if test_rep2==1
     println(term2histogram(F*H))
     println(term2histogram(F*H× F))
 
-    J2 = Tensor("J", [i => upper, l => upper, j => lower, β => lower], x)
+    H=DummyPatternTensor("?H",K.indices)
 
-    exp1=J*J*K
-    pat1=J*K*J2
+    J2 = Tensor("J", [p => upper, l => upper, q => lower, α => lower], x)
+
+    exp1=J*J*K*J2
+    pat1=J2*H
     # a=term2histogram(J*J*K) #exp
     # b=term2histogram(J*K*J) #pat
     println(patt_match(term2histogram(pat1),term2histogram(exp1),pat1,exp1))
