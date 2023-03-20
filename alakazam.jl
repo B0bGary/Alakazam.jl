@@ -96,7 +96,7 @@ x = Coordinate("x", spacetime_indices)
 # grading(K)
 
 
-J = Tensor("J", [n => upper, j => upper, j => lower, g => upper, p => upper, p => lower, e => upper, f => upper, q => lower, q => upper, g => lower, f => lower])
+J = Tensor("J", [n => upper, j => upper, j => lower, g => upper, p => upper])
 K = Tensor("K", [n => lower, m => upper, m => lower])
 
 F = TensorTerm([J, K])
@@ -114,7 +114,7 @@ F = TensorTerm([J, K])
 # rename_dummies(F)
 # println(F)
 
-J = Tensor("J", [i => upper, k => upper, k => lower, β => lower], x)
+J = Tensor("J", [i => upper, k => upper, j => lower, β => lower], x)
 K = Tensor("K", [i => upper, j => upper, j => lower, β => lower], θ)
 bb = 2 * K - 1 * K - 1 / 2 * K
 # println(bb)
@@ -135,11 +135,19 @@ test_rep2=1
 
 if test_rep2==1
     # defining patterns to swap indices
-    dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")
-    rep=parse_pattern2tensor("?A^{i**}_{*?m?l}")
+    H=DummyPatternTensor("?H")
+    println(term2histogram(F*H))
+    println(term2histogram(F*H× F))
 
-    println(typeof(dum))
-    println(dum)
+    a=term2histogram(J*J) #exp
+    b=term2histogram(TensorTerm(J)) #pat
+    println(patt_match(b,a))
+
+    # dum=parse_pattern2tensor("?A^{i**}_{*?l?m}?B_{mn}")
+    # rep=parse_pattern2tensor("?A^{i**}_{*?m?l}")
+
+    # println(typeof(dum))
+    # println(dum)
 
     # println(dum)
     # println(typeof(dum))
