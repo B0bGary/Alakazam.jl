@@ -151,11 +151,11 @@ if test_rep2==1
     println(exp1)
     println("Now, suppose we want to replace tensors of the form")
     
-    pat1=J*J
+    pat1=J*J2
     println(pat1)
     println("where '?' denotes that the next character is a wildcard")
     println("Then, suppose that we want to replace such matching tensors with an expression")
-    rep= TensorTerm(J3)
+    rep= TensorTerm(J2)
     println(rep)
     # a=term2histogram(J*J*K) #exp
     # b=term2histogram(J*K*J) #pat

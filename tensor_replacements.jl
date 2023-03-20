@@ -175,61 +175,6 @@ end
 
 
 
-
-######################################################################################################
-#######################################################################################################################
-function sub_tensor(exp::TensorTerm, pattern::TensorTerm, rep::TensorTerm, repeat::Bool=true)
-
-    #lets do no indices version first
-
-    exp_hist = term2histogram(exp)
-    pat_hist = term2histogram(pattern)
-
-
-    dummy_matches = Vector{Pair{Number,Number}}() # dummy in pos x matches expression pos y
-
-    exps = zip(keys(exp_hist), values(exp_hist))
-
-
-    flag_no_match = true
-    # for each term in pattern, try and find match in the expression. if can't find, then return exp
-    for (pkey, pvalue) in zip(keys(pat_hist), values(pat_hist))
-
-        for (ekey, evalue) in exps
-
-            if ekey >= pkey
-                #possible match, expression has more of this symbol than pattern
-                for ptens in pvalue #loop through TensorSuperType pairs
-                    for etens in evalue
-                        if ptens[1][1] == "?"#if pattern is a dummy
-
-                        end
-                    end
-
-
-                end
-
-            end
-
-
-
-        end
-        #if loop through all with no matches, then break
-        if flag_no_match
-            break
-        end
-
-
-
-    end
-
-
-    return exp
-
-end
-########################################################################################################################################
-
-
 function match_dummy_logic(dummy_matching::Dict{String,String}, dummy_name::String, exp_name::String)
     dummy = copy(dummy_matching)
     if get(dummy, dummy_name, nothing) == nothing #if dummy isnt already assigned a val in match
@@ -290,44 +235,26 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                         #println(pvalues[1][1][1])
                         if pvalues[1][1][1] == '?'
                             pdummy = true
-                            #println("dummy found")
+                            println("dummy found")
                         end
 
                         if pdummy || pvalues[1][1] == eval[1]#names match
                             dummy_temp = dummy_matching
                             dumindtemp = dummy_index_matching
                             if pdummy
-
+                                println("dummy in patter")
                                 out = match_dummy_logic(dummy_temp, pvalues[1][1], eval[1])
                                 if out[1] == false
                                     continue
                                 else
                                     dummy_temp = out[2]
+                                    println(dummy_temp)
                                 end
                             end
                             #println(dummy_matching)
 
                             #println("names match")
                             match = []
-
-                            #check indices
-                            #check_index_match
-
-                            #construct the match pairings
-                            # for i in 1:pkeys[1] #match with x many terms
-                            #     push!(match, pvalues[1][2][i] => eval[2][i])
-                            # end
-
-                            #check if indices match
-
-
-                            ############## add dummy index check
-
-
-
-
-
-
 
                             j = 1
 
@@ -357,6 +284,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                                 #println(j)
                                 #println(pkeys[1])
                                 if !pdummy
+                                    println("ret1")
                                     return (false, [-1 => -1], dummy_matching, dummy_index_matching)
                                 else
                                     continue
@@ -371,7 +299,8 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                             # dummy_matching=dummy_temp
                             #          println(dummy_temp)
                             #         println(dumindtemp)
-
+                            println("ret2 main found")
+                            println(dummy_temp)
                             return (true, match, dummy_temp, dumindtemp) #found the match #found the match
                         end
                     end
@@ -379,6 +308,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                 end
                 continue #else, just keep going
             end
+            println("ret3")
             return (false, [-1 => -1], dummy_matching, dummy_index_matching) #no match
 
 
@@ -451,6 +381,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                         #return match of the remaining. effectively, we're peeling off one term at a time. we can then add mimo by saving things that dont match
                         out = patt_match(pat2, exp2, tensorpatt, tensorexp, check[3], check[4])
                         if out[1] == true
+                            println("ret4")
                             return (true, vcat(check[2], out[2]), out[3], out[4])
                         else
                             # 
@@ -463,24 +394,8 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
 
                 end
 
-
+                println("ret5")
                 return (false, [-1 => -1], dummy_matching, dummy_index_matching) #no match
-
-
-                #(will be more complex once we use wildcards)
-
-
-                # decremement 
-
-
-
-                #for each term in the expression
-
-
-                #this is where we want to use recursion
-                # return patt_match(first_term in_pattern, exp term) * patt_match(rest_of_terms_in_pattern, rest_of_exp)
-                #can defs use mimo here
-
 
             end
 
@@ -494,6 +409,8 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
     else  #if multiple things to match in the pattern
         #use short circuit eval
 
+        println("multiple things in the pattern")
+
         outs = []
 
         for (pkeys, pvalues) in pat #if multiple freqencies
@@ -502,6 +419,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
 
 
             if out[1] == false
+                println("ret6")
                 return (false, [-1 => -1], dummy_matching, dummy_index_matching)
             else
                 if isempty(outs)
@@ -516,8 +434,6 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
         return outs
 
     end
-
-
 end
 
 
@@ -572,135 +488,6 @@ function check_index_match(loc_pat::Number, loc_exp::Number, pat::TensorTerm, ex
 end
 
 
-function sub_tensor(exp::TensorTerm, pattern::TensorTerm, rep::TensorTerm, repeat::Bool=true)
-
-    temp_dummy_tensor = Dict{String,TensorSuperType}() # keeps track of matches in a dummy pattern
-    temp_dummy = Dict{String,Index}()
-
-    exp_hist = term2histogram(exp)
-    pat_hist = term2histogram(pattern)
-
-
-    # go through the pattern and find mathces in the expression. if the names dont match, break and return exp no replacements
-
-    #should construct a possible replacement. if it doesnt work when matching indices, should go to the next possible replacement etc 
-    #else, if the names match, check the indices 
-
-    #so should have a mapping ie ?A?B C and DCF => ?A - D, ?B - F, C-C, then check indicies. if indices work, use temp_dummy etc to construct
-    #the replacement with the correct dummies
-
-    #how can I loop through all possible matches? get max key, compare, slowly iterate through. once 
-
-
-
-    matches = Dict{Number,Number}
-
-
-
-    # pairs where pattern matched a tensor
-    # i think that the keys should be exp, values are the expression. that way we can look through the keys and replace with the pattern replacements.
-    # it will also make sure we dont have double-ups, can't replace the same tensor twice
-    # use ints as key values so we can extract them directly from the original array
-
-
-    # how to do this best?
-    #suppose pattern.check first item of pattern to see if it matches anything. it may match with multiple things, in which case we need to store them all.
-    #  -- i think fastest way is a depth first search. find first instance of a match, go to the 2nd item in pattern and look for match.
-    # -- we can also then use mimo maybe to record if things have already matched??
-
-
-    # should be a fast way eg mimo that makes it less than n^2 time
-    # need a way to recognise  ?A ?A, same thing repeated but also ?A ?B
-
-
-    # we need to keep track of all matches. else its n! time i think.
-    # i think we need some sort of tree???
-    # find all things that match first expression. add to an array. then first each match, check the 2nd pattern in a depth first way
-
-    for tenpind in eachindex(pattern.terms)
-
-        for tenseind in eachindex(exp.terms)
-
-            # how do we deal with the rep? i think that we only know the correct rep after checking all the patterns
-            # eg if we have $A C -> C B^i or something, only know how to replace if the entire pattern matches
-
-
-            # if sub_tensor(exp.terms[tenseind], pattern.terms[tenpind], ,temp_dummy_tensor,temp_dummy)
-            #     push!(matches, tenseind=>tenpind) # this term in the expression is related to the pattern
-            #     break
-            # end
-
-            #so, what we should do
-            # look at each item in the pattern. for each item, find a match. if no matches, break obvs. 
-            # if we find a match for the entire pattern, construct a replacement, and then replace.
-            # if we're repeating, we can probs skip over terms that we've already check?? nah because we might do a replacement, and then
-            # a new valid replacement occurs
-            # dont forget to keep track of gradings
-
-
-
-        end
-
-        # things could be made faster by using a LinkedList instead of a vector
-        # then,we could remove anobject from the vector,and instead of shifting the indices, just change the
-        # "next" item in the list by accessing previous/next of the removed item
-        # idk about indexing tho
-        # apparaently Julia built in doubley linked lsit from DataStructures has constant time access like a vector
-        # this would be a good solution to eventually get around to implementing
-
-        #to construct a new term at the end, use filter to get everything that's not being replaced, rather the removing one by one
-
-    end
-
-
-    #for each tensor term, see if it matches any of the replacement terms
-    #add to a lsit of matches. if not repeat, stop once a single match found. else, find all matches
-    #to replace go through each set of matches and replace
-
-    # need to account for the fact that placeholders may be over multiple tensors
-    # for example, need a way to recognise  ?A ?A, same thing repeated. 
-
-
-
-    return exp
-end
-
-
-function build_replacement()
-    rep_dum = typeof(rep) <: DummyPatternTensor
-    rep = typeof(exp)(rep) #makes sure rep isnt a dummy if success
-
-
-    if rep_dum
-        # println("Namema")
-        # println(exp.name)
-        rep.name = exp.name
-        # println(rep.name)
-    end
-    #needs to make sure dummy indices match pattern
-    ri = rep.indices
-    # println("about to replace indices with non dummies")
-    for index in eachindex(ri)
-        # println("indices exist")
-        if typeof(ri[index][1]) <: DummyPatternIndex
-            # println("dummy")
-            # println(temp_dummy)
-            # println(ri[index][1])
-            if get(temp_dummy, ri[index][1].name, nothing) == nothing #problem with checking equality since technically different objects #use names instead
-                throw(InvalidReplacementPattern())
-            else
-                ri[index] = temp_dummy[ri[index][1].name] => ri[index][2] # maps index from original expression to replacement
-                # println("final assignment")##not happen
-                # println(ri[index])
-            end
-        end
-    end
-
-end
-
-
-
-# function parse_pattern2tenterm(pattern::String)
 
 
 #returns a tensor term
@@ -844,202 +631,3 @@ function parse_pattern2tensor(pattern::String)
     return TensorTerm(tensor_term) #should construct a term out of our set of patterns
 
 end
-
-
-
-
-function sub_tensor(exp::TensorSuperType, pattern::TensorSuperType, rep::TensorSuperType, temp_dummy_tensor::Dict{String,TensorSuperType}, temp_dummy::Dict{String,Index})
-
-
-    #if replacement has dummy indices need logic to compute that
-    rep_dum = typeof(rep) <: DummyPatternTensor
-    rep = typeof(exp)(rep) #makes sure rep isnt a dummy if success
-
-
-    if !hasIndices(pattern) && !hasIndices(exp) # if neither have indices, both scalars so do scalar replacement
-        if typeof(pattern) <: DummyPatternTensor || exp.name == pattern.name
-            # println("No indices, names match or dummy")
-            if rep_dum
-                if get(temp_dummy_tensor, pattern.name, nothing) == nothing #if dummy isnt already assigned a val in match
-                    temp_dummy_tensor[pattern.name] = exp
-
-                elseif temp_dummy_tensor[pattern.name] != exp #dummy doesnt match
-
-                    return false #dummy tensor name pattern
-                end
-
-                rep.name = exp.name
-            end
-            return true
-        end
-        # println("No indices, names dont match")
-        return false
-    elseif hasIndices(pattern) && hasIndices(exp)
-        if typeof(pattern) <: DummyPatternTensor || exp.name == pattern.name #both have indices, names match or one is a dummy
-
-            #checks to make sure the dummy tensor names match
-            if rep_dum
-                if get(temp_dummy_tensor, pattern.name, nothing) == nothing #if dummy isnt already assigned a val in match
-                    temp_dummy_tensor[pattern.name] = exp
-
-                elseif temp_dummy_tensor[pattern.name] != exp #dummy doesnt match
-
-                    return false #dummy tensor name pattern
-                end
-            end
-
-            pat_ind = pattern.indices
-            exp_ind = exp.indices
-            if pat_ind == exp_ind #indices match, ez money  # no dummy pattern indices, dont have to do logic on replacement
-                # println("Has indices, names match or dummy, and indices all match")
-                if rep_dum
-                    rep.name = exp.name
-                end
-                return true
-            else
-                # # println(pat_ind)
-                # # println(exp_ind)
-                pi_it = Iterators.Stateful(pat_ind)
-                ei_it = Iterators.Stateful(exp_ind)
-                # # println(pi_it)
-                # # println(ei_it)
-
-                # temp_dummy = Dict{String,Index}()
-
-                for indp in pi_it
-                    # # println(ei_it)
-                    inde = iterate(ei_it)[1]
-                    # println(inde[1])
-                    # println(indp[1])
-                    # println(typeof(indp[1]))
-                    # println(typeof(inde[1]))
-                    if indp[2] != inde[2]
-                        # println("upper/lower dont match")
-                        return false
-                    elseif indp[1] == inde[1]
-                        # println("Index matches")
-                        #if names match, good, continue
-                    elseif typeof(indp[1]) <: DummyPatternIndex
-                        # println("dummy found")
-                        if get(temp_dummy, indp[1].name, nothing) == nothing #if dummy isnt already assigned a val in match
-                            temp_dummy[indp[1].name] = inde[1]
-                            # println("checking index")
-                            # println(inde[1])
-                        elseif temp_dummy[indp[1].name] != inde[1] #dummy doesnt match
-                            # println("Has indices, names match or dummy, dummy indices dont match the dummy pattern")
-                            return false #dummy indice pattern didnt match
-                        end
-
-                    else
-                        # println("Has indices, non-dummy index doesnt match")
-                        return false #didnt match
-                    end
-
-                end
-                #everything matched!
-                # println("Has indices, names match or dummy, and indices all match or dummy pattern matches")
-
-
-                #this whole section is for constructing the replacement right? so I could move it to a different function to construct the replacements once matches are found
-
-                # # println(rep.name)
-                return true
-            end
-
-        end
-        # println("Has indices, names dont match")
-        return false
-
-    end
-
-    return false
-
-end
-
-
-
-
-
-
-
-# else #needs to match more than once #frequency not equal to 1
-
-#         (pkeys, pvalues)=first(pat)
-
-#         #handles the case where only one this etc
-#         if length(exp)==1
-#             looper= [first(exp)]
-#             println("this one used")
-#         else
-#             looper= zip(keys(exp), values(exp))
-#         end
-#         println(looper)
-#         for (ekey , evalue) in looper
-#             if pkeys[1]<=ekey #if occ in pat is less than occ in exp
-
-#                 #need to loop over evals!
-#                 for eval in evalue
-#                     println("occurs less but many times")
-#                     println(pvalues[1][1])
-#                     println(eval[1])
-#                     if pvalues[1][1]==eval[1]#names match
-#                         println("names match")
-
-
-
-
-#                         # return (true, [pvalues[1][2][1] => eval[2][1]]) #found the match
-#                     end
-#                 end
-
-#             end
-#             continue #else, just keep going
-#         end
-#         return (false, [-1=>-1]) #no match
-
-
-
-
-
-
-
-
-# else #needs to match more than once #frequency not equal to 1
-#     quant=pat[1][1] #number of times symbol occurs in the pattern
-#     println("pattern is")
-#     println(pat)
-#     (pkeys, pvalues)=zip(keys(pat), values(pat))
-#     for (ekey , evalue) in zip(keys(exp), values(exp))
-#         if pkeys[1]<=ekey #if occ in pat is less than occ in exp
-#             if pvalues[1][1]==evalue[1]#names match
-
-
-#                 #only needed if not the last match
-
-#                 #create copy of exp
-#                 # exp2=copy(exp)
-#                 # pat2=copy(pat)
-#                 # # decremement 
-#                 # push!(exp2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
-#                 # push!(exp2, ekey-pkeys[1] => push!(exp2[ekey-pkeys[1]]), evalue[1]=> evalue[2][2:end]) #decrements occ of tensor
-
-#                 # push!(pat2, ekey => filter!(x=>y -> x != evalue[1], eval))#remove tensor of this name
-
-#                 match=[]
-#                 #construct the match pairings
-#                 for i in 1:pkeys[1]
-#                     push!(match, pvalues[2][i] => evalue[2][i])
-#                 end
-
-
-#                 # #feed new back into method with quantity decreased by counts
-#                 # if patt_match(exp2)
-
-#                     #needs to loop over all n matches
-#                 return (true, match) #found the match
-#             end
-#         end
-#         continue #else, just keep going
-#     end
-#     return (false, [-1=>-1]) #no match
-
