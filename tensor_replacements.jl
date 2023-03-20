@@ -52,6 +52,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorT
     exp_hist = term2histogram(exp)
     pat_hist = term2histogram(pattern)
     out = patt_match(pat_hist, exp_hist, pattern, exp) # output will be (true, [index replacements etc], dummy tensor name dict, dummy index dict)
+    # replacemnts are pattern => exp index pairs
     grade = 0
     coef=1
 
@@ -64,18 +65,25 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorT
             # println(exp2)
             #build new exp by getting all terms that need replacement
             
-            # println(values(out[2]))
+            println(values(out[2])) ######### may have to remove multiple things.............
+            vlast=0
             for v in values(out[2]) #for each tensor that needs to be replaced 
                 v = v[2]
+                if vlast!=0&&vlast<v
+                            #logic for grading, and removal
+                    v-=1 #accounts for removal
+                end
+                
                 # println(v)
                 if v != 1
                     for i in 1:(v-1)
                         grade += grading(exp2[i])
                         grade %= 2
                     end
-                    grade += grading(exp2[v])
+                    grade += grading(exp2[v]) #need to account for multiple terms being moved to the front
                 end
                 splice!(exp2, v) #removes the vth element, after calculating the grading to move it to the front
+                vlast=v
             end
 
             # #construct the replacement
@@ -92,6 +100,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorT
                 if rep_dum
                     # println("Namema")
                     # println(exp.name)
+                    println(out[3])
                     rep.name = out[3][rep.name]
                     # println(rep.name)
                 end
@@ -289,7 +298,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                             dumindtemp = dummy_index_matching
                             if pdummy
 
-                                out = match_dummy_logic(dummy_matching, pvalues[1][1], eval[1])
+                                out = match_dummy_logic(dummy_temp, pvalues[1][1], eval[1])
                                 if out[1] == false
                                     continue
                                 else
@@ -327,7 +336,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
                                 # #println(ekey)
                                 #println(tensorpatt.terms[pvalues[1][2][j]].indices)
                                 #println(tensorexp.terms[eval[2][i]].indices)
-                                outt = check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp, dummy_matching)
+                                outt = check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp, dummy_index_matching)
                                 #  println(outt)
                                 if outt[1]
                                     #println("indices match")

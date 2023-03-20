@@ -143,6 +143,7 @@ if test_rep2==1
     K = Tensor("K", [n => upper, m => upper, m => lower, α => lower], θ)
     H=DummyPatternTensor("?H",K.indices)
     J2 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, DummyPatternIndex("γ") => lower], x)
+    
     J3 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, μ => lower], x)
 
     println("Consider the tensor expression:")
@@ -150,7 +151,7 @@ if test_rep2==1
     println(exp1)
     println("Now, suppose we want to replace tensors of the form")
     
-    pat1=TensorTerm(J2)
+    pat1=J*J
     println(pat1)
     println("where '?' denotes that the next character is a wildcard")
     println("Then, suppose that we want to replace such matching tensors with an expression")
