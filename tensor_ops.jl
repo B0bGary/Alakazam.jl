@@ -1065,7 +1065,7 @@ function tens2str(T::TensorSuperType)
             out*="_{" * lowers * "}"
         end
     end
-
+    return out
 
 end
 

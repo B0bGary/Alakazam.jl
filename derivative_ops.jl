@@ -26,6 +26,11 @@ function apply_derivative(D::DerivativeSuperType)
     return merge_sum(D)
 end
 
+function expand_derivative(TEX::TensorExpression)
+
+
+end
+
 # graded leibniz
 
 function product_rule(O::DerivativeSuperType)

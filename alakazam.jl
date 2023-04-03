@@ -140,14 +140,18 @@ if test_rep2==1
     # println(term2histogram(F*H× F))
 
     J = Tensor("F", [i => upper, k => upper, j => lower, β => lower], x)
+    Z = Tensor("Z", [i => upper, k => upper, j => lower, β => lower], x)
     K = Tensor("K", [n => upper, m => upper, m => lower, α => lower], θ)
+    L = Tensor("L", [q => upper, p => upper], θ)
+    # println(L.indices)
     H=DummyPatternTensor("?H",K.indices)
     J2 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, DummyPatternIndex("γ") => lower], x)
     
     J3 = DummyPatternTensor("?D", [i => upper, k => upper, j => lower, μ => lower], x)
 
     println("Consider the tensor expression:")
-    exp1=K*J*J
+    # println(L)
+    exp1=K*J*Z*L
     println(exp1)
     println("Now, suppose we want to replace tensors of the form")
     
@@ -164,7 +168,7 @@ if test_rep2==1
     # println(patt_match(term2histogram(pat1),term2histogram(exp1),pat1,exp1))
     println("Then, our pattern matching algorithm yields:")
 
-    outt=substitute_terms(exp1,pat1,rep)
+    outt=substitute_terms(exp1,pat1,rep,true)
     println(outt)
     # tens=outt.summands[1][2].terms[1]
     # println(tens)
