@@ -850,18 +850,31 @@ end
 ##############################################################################################################################
 
 
+function update_ext_indices(T::TensorExpression)
+    new_exp=zero
+    for tens in T.summands
+        if tens[1]==0
+            continue
+        end
+        update_ext_indices(tens[2])
+        new_exp+=tens[1]*tens[2]
+    end
+    T=new_exp
+end
+
+
 function update_ext_indices(T::TensorTerm)
-
     inds=[]
-
     for tens in T.terms
         if typeof(tens)<:OperatorSuperType
-            for summand in tens.operands
-                for term in summand[2]
+            for summand in tens.operand.summands
+                for term in summand[2].terms
+                    if typeof(term)<:OperatorSuperType
                     update_ext_indices(term)
+                    end
                 end
-            tens.operand_indices=tens.operands.summands[1][2].indices
-            tens.indices=Union(tens.operand_indices,tens.operator_indices)
+            tens.operand_indices=tens.operand.summands[1][2].indices
+            tens.indices= vcat(tens.operand_indices,tens.operator_indices)
 
             end
         end

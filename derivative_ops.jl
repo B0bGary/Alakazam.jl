@@ -72,33 +72,43 @@ function expand_derivative(TEX::TensorExpression,D::DerivativeSuperType,DExpansi
                         
                             #dums=get_dummies(reptensor)#gets the placeholder dummy indices from the pattern
                             for pair in eachindex(reptensor.operator_indices) # replace dummies with correct etc
-                                if mapping[reptensor.operator_indices[pair][1].name]!==nothing #if the index is fixed already from before
+                                println(reptensor.operator_indices[pair][1])
+
+                                if haskey(mapping,reptensor.operator_indices[pair][1].name) #if the index is fixed already from before
                                     # println(reptensor.operator_indices[pair][1])
                                     # println(mapping[reptensor.operator_indices[pair][1].name])
                                     # println(typeof(reptensor.operator_indices[pair]))
                                     # println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
                                     reptensor.operator_indices[pair]=mapping[reptensor.operator_indices[pair][1].name]=>reptensor.operator_indices[pair][2]#should replace with the right thing
-                                elseif dummymap[reptensor.operator_indices[pair][1].name]!==nothing
+                                    println("maps to ",mapping[reptensor.operator_indices[pair][1].name])
+                                elseif haskey(dummymap,reptensor.operator_indices[pair][1].name)
+                                    println(haskey(dummymap,reptensor.operator_indices[pair][1].name))
+                                    println(dummymap[reptensor.operator_indices[pair][1].name])
+                                    old=reptensor.operator_indices[pair][1].name
+                                    # println(, " maps to ",dummymap[reptensor.operator_indices[pair][1].name])
+                                    # println(dummymap)
                                     reptensor.operator_indices[pair]=dummymap[reptensor.operator_indices[pair][1].name]=>reptensor.operator_indices[pair][2]
-
+                                    # println(dummymap)
+                                    # println(dummymap[reptensor.operator_indices[pair][1].name])
+                                    println(old," maps to ",reptensor.operator_indices[pair][1].name)
                                 else #if just a placeholder index in the pattern, take from the list
                                     new_index=pop!(avail[reptensor.operator_indices[pair][1].index_set]) # get an unused index
                                     dummymap[reptensor.operator_indices[pair][1].name]=new_index #makes sure summation dummies do the right thing
                                     reptensor.operator_indices[pair]=new_index=>reptensor.operator_indices[pair][2]
-                                    
+                                    println("maps to ",new_index)
                                 end
                                 # for repindex in reptensor.
                             end
                         else
                             println("nonoperator")
                             for pair in eachindex(reptensor.indices) # replace dummies with correct etc
-                                if mapping[reptensor.indices[pair][1].name]!==nothing #if the index is fixed already from before
+                                if haskey(mapping,reptensor.indices[pair][1].name) #if the index is fixed already from before
                                     # println(reptensor.operator_indices[pair][1])
                                     # println(mapping[reptensor.operator_indices[pair][1].name])
                                     # println(typeof(reptensor.operator_indices[pair]))
                                     # println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
                                     reptensor.indices[pair]=mapping[reptensor.indices[pair][1].name]=>reptensor.indices[pair][2]#should replace with the right thing
-                                elseif dummymap[reptensor.indices[pair][1].name]!==nothing
+                                elseif haskey(dummymap,reptensor.indices[pair][1].name)
                                     reptensor.indices[pair]=dummymap[reptensor.indices[pair][1].name]=>reptensor.indices[pair][2]
 
                                 else #if just a placeholder index in the pattern, take from the list
@@ -121,6 +131,8 @@ function expand_derivative(TEX::TensorExpression,D::DerivativeSuperType,DExpansi
                   #  update_ext_indices(new_rep_term)
                     println("old summand is ",new_rep_summand)
                     println("adding ",new_rep_term)
+                    update_ext_indices(new_rep_term)
+                    update_ext_indices(new_rep_summand)
                     new_rep_summand+=new_rep_term
                 end
                 println("timesing here")

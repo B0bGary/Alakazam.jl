@@ -138,7 +138,7 @@ println("executing")
 
 if test_deriv_exp==1
 
-    F = Tensor("F", [i => upper, k => upper, j => lower, β => lower], θ)
+    F = Tensor("F", [i => upper, k => upper, j => lower, β => lower], θ)*Tensor("G", [p => upper, q => upper, γ => lower], θ)
     D = Derivative("D",F, θ, [i => upper, α => lower])
     K =Tensor("K", [ α => lower, β => upper], θ)
     expression=2*D

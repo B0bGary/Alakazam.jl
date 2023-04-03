@@ -459,15 +459,20 @@ end
 
 
 
-function construct_index_rep_map(tenpat::TensorSuperType,tenact::TensorSuperType)
+function construct_index_rep_map(tenpat::OperatorSuperType,tenact::OperatorSuperType)
     map=Dict{String,Index}()
-    for pos in eachindex(tenpat.indices)
-        if tenpat.indices[pos][2]!=tenact.indices[pos][2] || tenpat.indices[pos][1].index_set!=tenact.indices[pos][1].index_set #if wrong positions or wrong index set
+    # patdums=get_dummies(tenpat)
+    for pos in eachindex(tenpat.operator_indices)
+        # if  tenpat.operator_indices[pos][1] in patdums
+        #     continue
+        # end
+        if tenpat.operator_indices[pos][2]!=tenact.operator_indices[pos][2] || tenpat.operator_indices[pos][1].index_set!=tenact.operator_indices[pos][1].index_set #if wrong positions or wrong index set
             throw(InvalidReplacementPattern())
         end
-        map[tenpat.indices[pos][1].name]= tenact.indices[pos][1] 
+        map[tenpat.indices[pos][1].name]= tenact.operator_indices[pos][1] 
 
     end
+    println("mapping is" ,map)
     return map
 
 end
