@@ -16,26 +16,27 @@ mutable struct Derivative <:DerivativeSuperType
     operator_indices::Vector{Pair{Index, IndexPosition}}
     operand_indices::Vector{Pair{Index, IndexPosition}}
     indices::Vector{Pair{Index, IndexPosition}}
+    function_of::Vector{K} where {K<:Coordinate}
 
     function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
         inds=operand.summands[1][2].indices
-        new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds))
+        new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds),coord)
     end
     function Derivative(name::String, operand::TensorSuperType, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
-        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     end
     function Derivative(name::String, operand::TensorTerm, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate} 
-       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     
     end
        function Derivative(name::String, operand::TensorExpression, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
         inds=operand.summands[1][2].indices
-        new(name, operand, [coord], operator_indices, inds, vcat(operator_indices, inds))
+        new(name, operand, [coord], operator_indices, inds, vcat(operator_indices, inds),[coord])
     end
     function Derivative(name::String, operand::TensorSuperType, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
-        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord])
     end
     function Derivative(name::String, operand::TensorTerm, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate} 
-       new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+       new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord])
     end
  end

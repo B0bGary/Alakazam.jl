@@ -130,7 +130,26 @@ test_contract =0
 test_replace =0
 test_newtimes =0
 test_strings=0
-test_rep2=1
+test_rep2=0
+
+test_deriv_exp=1
+
+println("executing")
+
+if test_deriv_exp==1
+
+    F = Tensor("F", [i => upper, k => upper, j => lower, β => lower], θ)
+    D = Derivative("D",F, θ, [i => upper, α => lower])
+    K =Tensor("K", [ α => lower, β => upper], θ)
+    expression=2*D
+    new_deriv=Derivative("∇",zero, θ, [i => upper, α => lower])+K*Derivative("∂",zero, θ, [i => upper, β => lower])
+    out=expand_derivative(expression,D,new_deriv)
+    println(out)
+
+end
+
+
+
 
 
 if test_rep2==1

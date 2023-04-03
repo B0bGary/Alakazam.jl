@@ -459,6 +459,27 @@ end
 
 
 
+function construct_index_rep_map(tenpat::TensorSuperType,tenact::TensorSuperType)
+    map=Dict{String,Index}()
+    for pos in eachindex(tenpat.indices)
+        if tenpat.indices[pos][2]!=tenact.indices[pos][2] || tenpat.indices[pos][1].index_set!=tenact.indices[pos][1].index_set #if wrong positions or wrong index set
+            throw(InvalidReplacementPattern())
+        end
+        map[tenpat.indices[pos][1].name]= tenact.indices[pos][1] 
+
+    end
+    return map
+
+end
+
+
+
+
+
+
+
+
+
 function check_index_match(loc_pat::Number, loc_exp::Number, pat::TensorTerm, exp::TensorTerm, dumind::Dict{String,IndexSuperType})
     dummy = copy(dumind)
     #println("checking indices")

@@ -394,25 +394,49 @@ end
 
 
 function *(T::TensorSuperType, TEx::TensorExpression)
+    println("doing this sort of multiplcation1")
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
 
 function *(T::TensorTerm, TEx::TensorExpression)
+    println("doing this sort of multiplcation2")
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
 function *(TEx::TensorExpression,T::TensorTerm)
+    println("doing this sort of multiplcation3")
     return update_indices(TensorExpression([sum[1] =>  sum[2] *T for sum in TEx.summands]))
 end
 
 
-function *(TEx::TensorExpression, T::TensorSuperType)
+function *(TEx::TensorExpression, T::OperatorSuperType)
+    println("doing this sort of multiplcation5")
+    return update_indices(TEx*TensorExpression(T))
+end
 
+function *( T::OperatorSuperType,TEx::TensorExpression)
+    println("doing this sort of multiplcation6")
+    return update_indices(TensorExpression(T)*TEx)
+end
+
+
+function *(TEx1::TensorExpression,TEx2::TensorExpression)
+    new_tex=zero
+    for T in TEx1.summands
+    new_tex+=update_indices(TensorExpression([sum[1]*T[1] =>  T[2]*sum[2] for sum in TEx2.summands]))
+    end
+    return new_tex
+end
+
+
+function *(TEx::TensorExpression, T::TensorSuperType)
+    println("doing this sort of multiplcation4")
     for summandind in eachindex(TEx.summands)
         # println(TEx.summands[summandind])
         TEx.summands[summandind]=TEx.summands[summandind][1] => TEx.summands[summandind][2]*T
         # println(TEx.summands[summandind])
+        println("here")
     end
     #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
     # println(TEx)
@@ -672,7 +696,7 @@ end
 function get_unused_indices(T::TensorExpression, IS::IndexSet)
     # println(Set(i[1] for i in T.indices))
     # println(IS.indices)
-    return setdiff(IS.indices, Set(i[1] for i in T.terms[1].indices))
+    return setdiff(IS.indices, Set(i[1] for i in T.summands[1][2].indices))
 end
 
 #finding free indices
@@ -824,6 +848,33 @@ end
 
 
 ##############################################################################################################################
+
+
+function update_ext_indices(T::TensorTerm)
+
+    inds=[]
+
+    for tens in T.terms
+        if typeof(tens)<:OperatorSuperType
+            for summand in tens.operands
+                for term in summand[2]
+                    update_ext_indices(term)
+                end
+            tens.operand_indices=tens.operands.summands[1][2].indices
+            tens.indices=Union(tens.operand_indices,tens.operator_indices)
+
+            end
+        end
+        for i in tens.indices
+            push!(inds, i)
+
+        end
+    end
+    T.indices=inds
+
+end
+
+
 
 
 #rename dummies function
@@ -1123,6 +1174,34 @@ end
 function copy(T::TensorSuperType)
     return typeof(T)(T.name,copy(T.indices),T.function_of)
 end
+
+function copy(T::TensorExpression)
+    out=zero
+    if T==zero
+        return zero
+    end
+
+    for summand in T.summands
+        println(summand)
+        println(summand[1]*copy(summand[2]))
+        out+=summand[1]*copy(summand[2])
+    end
+    return out
+end
+
+
+
+# name::String
+#     operand::TensorExpression
+#     coord::Vector{T} where {T<:Coordinate}
+#     operator_indices::Vector{Pair{Index, IndexPosition}}
+#     operand_indices::Vector{Pair{Index, IndexPosition}}
+#     indices::Vector{Pair{Index, IndexPosition}}
+#     function_of::Vector{T} where {T<:Coordinate}
+
+function copy(T::DerivativeSuperType)
+    return typeof(T)(T.name,copy(T.operand),copy(T.coord),copy(T.operator_indices))
+end
 function copy(V::Vector{Pair{Index,IndexPosition}})
     return [pair[1] => pair[2] for pair in V]
 end
@@ -1148,6 +1227,9 @@ end
 function hasIndices(T::TensorTerm)
     return length(T.indices)!=0
 end
+
+
+zero=TensorExpression()
 
 
 function isZeroTens(T::TensorExpression)
