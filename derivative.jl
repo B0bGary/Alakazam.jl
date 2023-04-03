@@ -1,6 +1,6 @@
 include("operator.jl")
 
-abstract type DerivativeSuperType <: OperatorSuperType end
+abstract type DerivativeSuperType <: LeibnizOperatorSuperType end
 
 abstract type PartialSuperType <: DerivativeSuperType end
 
@@ -40,3 +40,7 @@ mutable struct Derivative <:DerivativeSuperType
        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord])
     end
  end
+
+
+derivative_actions=Dict{Pair{OperatorSuperType,TensorSuperType},TensorExpression}()
+

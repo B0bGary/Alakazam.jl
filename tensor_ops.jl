@@ -394,31 +394,21 @@ end
 
 
 function *(T::TensorSuperType, TEx::TensorExpression)
-    println("doing this sort of multiplcation1")
+    # println("doing this sort of multiplcation1")
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
 
 function *(T::TensorTerm, TEx::TensorExpression)
-    println("doing this sort of multiplcation2")
+    # println("doing this sort of multiplcation2")
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
 function *(TEx::TensorExpression,T::TensorTerm)
-    println("doing this sort of multiplcation3")
+    # println("doing this sort of multiplcation3")
     return update_indices(TensorExpression([sum[1] =>  sum[2] *T for sum in TEx.summands]))
 end
 
-
-function *(TEx::TensorExpression, T::OperatorSuperType)
-    println("doing this sort of multiplcation5")
-    return update_indices(TEx*TensorExpression(T))
-end
-
-function *( T::OperatorSuperType,TEx::TensorExpression)
-    println("doing this sort of multiplcation6")
-    return update_indices(TensorExpression(T)*TEx)
-end
 
 
 function *(TEx1::TensorExpression,TEx2::TensorExpression)
@@ -431,12 +421,12 @@ end
 
 
 function *(TEx::TensorExpression, T::TensorSuperType)
-    println("doing this sort of multiplcation4")
+    # println("doing this sort of multiplcation4")
     for summandind in eachindex(TEx.summands)
         # println(TEx.summands[summandind])
         TEx.summands[summandind]=TEx.summands[summandind][1] => TEx.summands[summandind][2]*T
         # println(TEx.summands[summandind])
-        println("here")
+        # println("here")
     end
     #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
     # println(TEx)
@@ -1195,8 +1185,8 @@ function copy(T::TensorExpression)
     end
 
     for summand in T.summands
-        println(summand)
-        println(summand[1]*copy(summand[2]))
+        # println(summand)
+        # println(summand[1]*copy(summand[2]))
         out+=summand[1]*copy(summand[2])
     end
     return out
@@ -1212,9 +1202,7 @@ end
 #     indices::Vector{Pair{Index, IndexPosition}}
 #     function_of::Vector{T} where {T<:Coordinate}
 
-function copy(T::DerivativeSuperType)
-    return typeof(T)(T.name,copy(T.operand),copy(T.coord),copy(T.operator_indices))
-end
+
 function copy(V::Vector{Pair{Index,IndexPosition}})
     return [pair[1] => pair[2] for pair in V]
 end

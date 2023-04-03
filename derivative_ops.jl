@@ -15,7 +15,7 @@ function apply_derivative(D::DerivativeSuperType)
                 operands=tensor.operand #get the operand (should only be one thanks to prod rule)
                 tens=operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of),Set(tensor.coord))) #see if tensor is a function of the derivative coords
-                    # println(summand[1])
+                    # #println(summand[1])
                     new_summands[summandind]= 0 => summand[2] #annihilate the term
                 end
             end
@@ -24,6 +24,13 @@ function apply_derivative(D::DerivativeSuperType)
     
         D.summands=new_summands
     return merge_sum(D)
+end
+
+# performs the actual derivative operation on tensors on which it is defined
+# if there are rules, then the derivative will be performed, else expressions will be left as eg ∇B
+function perform_derivative_action(D::DerivativeSuperType)
+
+
 end
 
 
@@ -64,49 +71,49 @@ function expand_derivative(TEX::TensorExpression,D::DerivativeSuperType,DExpansi
 
 
                     for reptensor in repsummand[2].terms
-                        println(reptensor)
+                        #println(reptensor)
                         if typeof(reptensor)<:OperatorSuperType
                             #if we found an operator,
-                            println("operators")
+                            #println("operators")
                             reptensor.operand=operand#set to correct operand
                         
                             #dums=get_dummies(reptensor)#gets the placeholder dummy indices from the pattern
                             for pair in eachindex(reptensor.operator_indices) # replace dummies with correct etc
-                                println(reptensor.operator_indices[pair][1])
+                                #println(reptensor.operator_indices[pair][1])
 
                                 if haskey(mapping,reptensor.operator_indices[pair][1].name) #if the index is fixed already from before
-                                    # println(reptensor.operator_indices[pair][1])
-                                    # println(mapping[reptensor.operator_indices[pair][1].name])
-                                    # println(typeof(reptensor.operator_indices[pair]))
-                                    # println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
+                                    # #println(reptensor.operator_indices[pair][1])
+                                    # #println(mapping[reptensor.operator_indices[pair][1].name])
+                                    # #println(typeof(reptensor.operator_indices[pair]))
+                                    # #println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
                                     reptensor.operator_indices[pair]=mapping[reptensor.operator_indices[pair][1].name]=>reptensor.operator_indices[pair][2]#should replace with the right thing
-                                    println("maps to ",mapping[reptensor.operator_indices[pair][1].name])
+                                    #println("maps to ",mapping[reptensor.operator_indices[pair][1].name])
                                 elseif haskey(dummymap,reptensor.operator_indices[pair][1].name)
-                                    println(haskey(dummymap,reptensor.operator_indices[pair][1].name))
-                                    println(dummymap[reptensor.operator_indices[pair][1].name])
+                                    #println(haskey(dummymap,reptensor.operator_indices[pair][1].name))
+                                    #println(dummymap[reptensor.operator_indices[pair][1].name])
                                     old=reptensor.operator_indices[pair][1].name
-                                    # println(, " maps to ",dummymap[reptensor.operator_indices[pair][1].name])
-                                    # println(dummymap)
+                                    # #println(, " maps to ",dummymap[reptensor.operator_indices[pair][1].name])
+                                    # #println(dummymap)
                                     reptensor.operator_indices[pair]=dummymap[reptensor.operator_indices[pair][1].name]=>reptensor.operator_indices[pair][2]
-                                    # println(dummymap)
-                                    # println(dummymap[reptensor.operator_indices[pair][1].name])
-                                    println(old," maps to ",reptensor.operator_indices[pair][1].name)
+                                    # #println(dummymap)
+                                    # #println(dummymap[reptensor.operator_indices[pair][1].name])
+                                    #println(old," maps to ",reptensor.operator_indices[pair][1].name)
                                 else #if just a placeholder index in the pattern, take from the list
                                     new_index=pop!(avail[reptensor.operator_indices[pair][1].index_set]) # get an unused index
                                     dummymap[reptensor.operator_indices[pair][1].name]=new_index #makes sure summation dummies do the right thing
                                     reptensor.operator_indices[pair]=new_index=>reptensor.operator_indices[pair][2]
-                                    println("maps to ",new_index)
+                                    #println("maps to ",new_index)
                                 end
                                 # for repindex in reptensor.
                             end
                         else
-                            println("nonoperator")
+                            #println("nonoperator")
                             for pair in eachindex(reptensor.indices) # replace dummies with correct etc
                                 if haskey(mapping,reptensor.indices[pair][1].name) #if the index is fixed already from before
-                                    # println(reptensor.operator_indices[pair][1])
-                                    # println(mapping[reptensor.operator_indices[pair][1].name])
-                                    # println(typeof(reptensor.operator_indices[pair]))
-                                    # println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
+                                    # #println(reptensor.operator_indices[pair][1])
+                                    # #println(mapping[reptensor.operator_indices[pair][1].name])
+                                    # #println(typeof(reptensor.operator_indices[pair]))
+                                    # #println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
                                     reptensor.indices[pair]=mapping[reptensor.indices[pair][1].name]=>reptensor.indices[pair][2]#should replace with the right thing
                                 elseif haskey(dummymap,reptensor.indices[pair][1].name)
                                     reptensor.indices[pair]=dummymap[reptensor.indices[pair][1].name]=>reptensor.indices[pair][2]
@@ -120,53 +127,72 @@ function expand_derivative(TEX::TensorExpression,D::DerivativeSuperType,DExpansi
                             end
                         end
                             
-                    println("prev new rep: ",new_rep_term) 
-                    println(typeof(new_rep_term))   
-                    println("multiplying by: ",reptensor)
-                    println(typeof(reptensor))
+                    #println("prev new rep: ",new_rep_term) 
+                    #println(typeof(new_rep_term))   
+                    #println("multiplying by: ",reptensor)
+                    #println(typeof(reptensor))
                     new_rep_term*=reptensor
-                    println("new_rep_term is ",new_rep_term)
+                    #println("new_rep_term is ",new_rep_term)
                        
                     end
                   #  update_ext_indices(new_rep_term)
-                    println("old summand is ",new_rep_summand)
-                    println("adding ",new_rep_term)
+                    #println("old summand is ",new_rep_summand)
+                    #println("adding ",new_rep_term)
                     update_ext_indices(new_rep_term)
                     update_ext_indices(new_rep_summand)
                     new_rep_summand+=new_rep_term
                 end
-                println("timesing here")
+                #println("timesing here")
                 new_summand*=new_rep_summand
-                println(new_summand)
+                #println(new_summand)
             else#normal tensor
-                println("timesing here22222")
+                #println("timesing here22222")
                 new_summand*=tensor
-                println(new_summand)
+                #println(new_summand)
             end
         end
 #        update_ext_indices(new_summand)
-        println("adding here22222")
+        #println("adding here22222")
         new_TEX+=summand[1]*new_summand
-        println(new_TEX)
+        #println(new_TEX)
     end
     return new_TEX
 end
 
 # graded leibniz
 
-function product_rule(O::DerivativeSuperType)
-    new_summand=Nothing
-    # println("operator is")
-    # println(O)
+function product_rule(TEX::TensorExpression)
+    new_summand=zero
+    for summand in TEX.summands
+        nterm=1
+        for term in summand[2].terms
+            # println("doing this1")
+            if typeof(term)<:LeibnizOperatorSuperType
+                # println("doing this")
+                nterm*=product_rule(term)
+            else
+                nterm*=term
+            end
+        end
+        new_summand+=summand[1]*nterm
+    end
+    return new_summand
+end
+
+
+function product_rule(O::LeibnizOperatorSuperType)
+    new_summand=zero
+    # #println("operator is")
+    # #println(O)
     for summandind= eachindex(O.operand.summands) #for each sum term in the expression
         summand=O.operand.summands[summandind] #get the summand (tensor term)
         grad=0 #initialise grading
         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
             grd=(-1)^(grad*grading(O))
             operator_on_tensor=typeof(O)(O.name,summand[2].terms[tensorind],O.coord, O.operator_indices) #operator on nth term
-            # println("this is the op on a tens")
-            # println(operator_on_tensor)
-            # println("help")
+            # #println("this is the op on a tens")
+            # #println(operator_on_tensor)
+            # #println("help")
             new_prod=1
             for indsss in eachindex(summand[2].terms)
                 if indsss!= tensorind
@@ -176,7 +202,7 @@ function product_rule(O::DerivativeSuperType)
                 end
             end
             # new_prod=[t  where t=summand[2].terms]
-            # println(new_prod)
+            # #println(new_prod)
             # new_prod.terms[tensorind]=operator_on_tensor
             if new_summand==Nothing
                 new_summand=grd*summand[1]*new_prod #adding the new term to the leibniz expanded version of the summand
@@ -188,5 +214,20 @@ function product_rule(O::DerivativeSuperType)
         end
         
     end
-    new_summand
+    return new_summand
+end
+
+
+function *(TEx::TensorExpression, T::OperatorSuperType)
+    # println("doing this sort of multiplcation5")
+    return update_indices(TEx*TensorExpression(T))
+end
+
+function *( T::OperatorSuperType,TEx::TensorExpression)
+    # println("doing this sort of multiplcation6")
+    return update_indices(TensorExpression(T)*TEx)
+end
+
+function copy(T::DerivativeSuperType)
+    return typeof(T)(T.name,copy(T.operand),copy(T.coord),copy(T.operator_indices))
 end

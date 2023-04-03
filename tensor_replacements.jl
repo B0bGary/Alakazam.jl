@@ -472,7 +472,7 @@ function construct_index_rep_map(tenpat::OperatorSuperType,tenact::OperatorSuper
         map[tenpat.indices[pos][1].name]= tenact.operator_indices[pos][1] 
 
     end
-    println("mapping is" ,map)
+    # println("mapping is" ,map)
     return map
 
 end
