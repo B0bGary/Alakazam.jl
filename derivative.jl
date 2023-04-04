@@ -42,5 +42,3 @@ mutable struct Derivative <:DerivativeSuperType
  end
 
 
-derivative_actions=Dict{Pair{OperatorSuperType,TensorSuperType},TensorExpression}()
-

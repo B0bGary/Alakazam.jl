@@ -3,6 +3,128 @@ include("operator.jl")
 ##############################################################################################################################
 ##############################################################################################################################
 
+#derivative rules
+
+
+derivative_actions=Dict{D,Dict{TensorSuperType, TensorExpression}}() where D<:DerivativeSuperType
+
+function is_pattern_equivalent(D_pat<:DerivativeSuperType,exp_pat::TensorExpression,D_stored<:DerivativeSuperType,exp_stored::TensorExpression)
+
+end
+
+
+function same_operator(D1<:DerivativeSuperType,D2<:DerivativeSuperType)
+    ind1=D1.operator_indices
+    ind2=D2.operator_indices
+    doubles=Dict{String,String}()#####
+    for ind in eachindex(ind1)
+        if ind1[ind][1].index_set==ind2[ind][1].index_set && ind1[ind][2].position==ind2[ind][2].position
+            if haskey(doubles,ind1[ind][1].name)
+                val=doubles[ind1[ind][1].name]
+                if val!=ind2[ind][1].name
+                    #if the patterns don't match ie repeated indices etc
+                    return (false =>doubles)
+                end
+            else
+                doubles[ind1[ind][1].name]=ind2[ind][1].name
+            end
+        else
+            #mistmatch
+            return (false =>doubles)
+        end
+
+    end
+    return (true =>doubles)
+end
+
+
+function add_derivative_action(D<:DerivativeSuperType,exp::TensorSuperType,res::TensorExpression)
+    key=nothing
+    in_dict=false
+    pattern_ref={}
+    for ky in keys(derivative_actions)
+        (B=>o)=same_operator(D,ky)
+        if B==true
+            key=ky
+            in_dict=true
+            pattern_reg=o
+            break
+        end
+    end
+    
+    #now we have index pattern if we found a match
+    if in_dict
+        #check and see if our pattern matches the expression
+
+    else
+
+
+    end
+    
+    
+    
+    
+
+
+    # #is the derivative registered by name 
+    # if haskey(derivative_actions,D.name)
+    #     deriv_index_options=derivative_actions[D.name]
+
+
+
+        
+    #     for option in collect(keys(deriv_index_options)) #for all index patterns
+    #         #check and see if there's a match or nah
+    #         #have to check: positions and index sets, not the names!
+    #         for ind in eachindex(option)
+    #             if option[ind][2].position!=D.operator_indices[ind][2].position || option[ind][1].index_set!=D.operator_indices[ind][1].index_set
+    #                 in_dict=false
+    #                 break
+    #             end
+    #         end
+    #         #found a mistatch
+    #         if !in_dict
+
+    #         else
+    #             #this option is a match
+    #             key=option
+
+    #         end
+
+    #         elseif in_dict
+    #             # if there were no mismatches, then our thing is already there
+    #             #thus, indices are a key ->>>>>>>>>>>> yeah nah ok yeah i got the key now
+    #             patterns=deriv_index_options[key]
+    #             #this should be all the patterns. now just go through and find blah blah pattern
+    #             #easier said than done θ^i_j is not the same as θ^i_i=θ^j_j but is the same as θ^j_i and θ^k_l
+    #             #maybe have a think about a better way of doing this
+
+    #             return false
+            
+    #         end
+    #     end
+    #     #if we get here, we checked everything and found no matches
+    #     old_dict=derivative_actions[D.name]
+    #     old_dict[D.operator_indices]=res
+
+    # else
+    #     derivative_actions[D.name]=...
+    # end
+
+end
+
+
+
+
+
+
+
+
+
+
+##############################################################################################################################
+##############################################################################################################################
+
 #apply the derivative and cancel terms that are annihilated
 
 function apply_derivative(D::DerivativeSuperType)
