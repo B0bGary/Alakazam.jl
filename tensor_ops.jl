@@ -291,6 +291,9 @@ function +(A::TensorExpression, B::TensorExpression)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
+        println(get_free_indices(A),":",get_free_indices(B))
+        println(A)
+        println(B)
         throw(FreeIndexMismatch())
     end
 end
@@ -301,6 +304,7 @@ function +(A::TensorTerm, B::TensorExpression)
     if  isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
+        
         throw(FreeIndexMismatch())
     end
 end
@@ -838,6 +842,9 @@ end
 
 
 ##############################################################################################################################
+
+
+
 
 
 function update_ext_indices(T::TensorExpression)

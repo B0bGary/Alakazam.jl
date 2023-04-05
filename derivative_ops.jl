@@ -16,17 +16,17 @@ derivative_actions = Dict{DerivativeSuperType,Dict{TensorSuperType,TensorExpress
 function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:DerivativeSuperType}
     ind1 = D1.operator_indices
     ind2 = D2.operator_indices
-    doubles = Dict{String,String}()#####
+    doubles = Dict{Index,Index}()#####
     for ind in eachindex(ind1)
         if ind1[ind][1].index_set == ind2[ind][1].index_set && ind1[ind][2].position == ind2[ind][2].position
-            if haskey(doubles, ind1[ind][1].name)
-                val = doubles[ind1[ind][1].name]
-                if val != ind2[ind][1].name
+            if haskey(doubles, ind1[ind][1])
+                val = doubles[ind1[ind][1]]
+                if val != ind2[ind][1]
                     #if the patterns don't match ie repeated indices etc
                     return (false => doubles)
                 end
             else
-                doubles[ind1[ind][1].name] = ind2[ind][1].name
+                doubles[ind1[ind][1]] = ind2[ind][1]
             end
         else
             #mistmatch
@@ -47,7 +47,9 @@ function add_derivative_action(D::T, exp::TensorSuperType, res::E) where {T<:Der
     pattern_ref = Dict()
     res = TensorExpression(res)
     for ky in keys(derivative_actions)
-        (B => o) = same_operator(D, ky)
+        out= same_operator(D, ky)
+        B=out[1]
+        o=out[2]
         if B == true
             key = ky
             in_dict = true
@@ -68,7 +70,7 @@ function add_derivative_action(D::T, exp::TensorSuperType, res::E) where {T<:Der
 
         #need to make sure correct indices
         pat_adj_tensor = index_to_pattern(exp, pattern_ref)
-        pat_adj_out = index_to_pattern(exp, res)
+        pat_adj_out = index_to_pattern(res, pattern_ref)
         derivative_actions[key][pat_adj_tensor] = pat_adj_out #adds the expression
         return true
     else
@@ -79,7 +81,7 @@ function add_derivative_action(D::T, exp::TensorSuperType, res::E) where {T<:Der
 end
 
 
-function index_to_pattern(T1::TensorExpression, pattern_ref::Dict{String,String})
+function index_to_pattern(T1::TensorExpression, pattern_ref::Dict{Index,Index})
     new_exp = zero
     for summand in T1.summands
         new_summand = summand[1]
@@ -92,37 +94,42 @@ function index_to_pattern(T1::TensorExpression, pattern_ref::Dict{String,String}
 end
 
 
-function index_to_pattern(T1::TensorSuperType, pattern_ref::Dict{String,String})
+function index_to_pattern(T1::TensorSuperType, pattern_ref::Dict{Index,Index})
     newT = copy(T1)
     ind1 = newT.indices
     for ind in eachindex(ind1)
-        if haskey(pattern_ref, ind1[ind][1].name)
-            ind1[ind][1].name = pattern_ref[ind1[ind][1].name]
+        if haskey(pattern_ref, ind1[ind][1])
+            new_ind=copy(ind1[ind][1])
+            new_ind = pattern_ref[ind1[ind][1]]
+            ind1[ind]=new_ind =>ind1[ind][2]
         end
     end
     return newT
 end
 
 
-function same_tensor_mod_pattern(T1::T, T2::T, index_dict::Dict{String,String}) where {T<:TensorSuperType}
+function same_tensor_mod_pattern(T1::T, T2::T, index_dict::Dict{Index,Index}) where {T<:TensorSuperType}
     println("this functio nrann")
     ind1 = T1.indices
     ind2 = T2.indices
-    temp_dict = Dict{String,String}()#stores non-dummies
+    temp_dict = Dict{Index,Index}()#stores non-dummies
     for ind in eachindex(ind1)
-        if haskey(index_dict, ind1[ind][1].name)#check if already in pattern
-            temp = index_dict[ind1[ind][1].name]
-            if temp != ind2[ind][1].name
+        if ind1[ind][2]!=ind2[ind][2]
+            return (false, Dict()) 
+        end
+        if haskey(index_dict, ind1[ind][1])#check if already in pattern
+            temp = index_dict[ind1[ind][1]]
+            if temp != ind2[ind][1]
                 return (false, Dict())  #after subbing appropritate pattern, the index has a different name
             end
             #not a dummy index
-        elseif haskey(temp_dict, ind1[ind][1].name)
-            temp = temp_dict[ind1[ind][1].name]
-            if temp != ind2[ind][1].name
+        elseif haskey(temp_dict, ind1[ind][1])
+            temp = temp_dict[ind1[ind][1]]
+            if temp != ind2[ind][1]
                 return (false, Dict()) #after subbing appropritate pattern, the index has a different name
             end
         else
-            temp_dict[ind1[ind][1].name] = ind2[ind][1].name #matches "free" (non derivative) indices up, this ensures same pattern
+            temp_dict[ind1[ind][1]] = ind2[ind][1] #matches "free" (non derivative) indices up, this ensures same pattern
         end
     end
     return (true, temp_dict)
@@ -199,20 +206,26 @@ function apply_derivative(D::DerivativeSuperType)
         for tensor in summand[2].terms # for each individual tensor in tensorterm
             if typeof(tensor) <: DerivativeSuperType # if the tensor is an operator
                 operands = tensor.operand #get the operand (should only be one thanks to prod rule)
+                println(operands, "should be a single term else liebniz wrong")
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
                     # #println(summand[1])
                     term *= 0 #annihilate the term
                 else
+                    println("old term pre: ", term)
                     out1 = perform_derivative_action(tensor)
+                    println("output of perofrming deriv action,", out1)
                     # # do the subs rules
                     # for ky in keys(derivative_actions)
                     #     (B=>o)=same_operator(D,ky) ################ complicated logic....
                     # end
+                    println("old term", term)
                     term *= out1
                     println("new term is ",term )
                 end
             else
+                println("problem zone: term is ", term)
+                println("tensor is, ",tensor)
                 term *= tensor
                 println("term is ",term )
             end
@@ -220,6 +233,12 @@ function apply_derivative(D::DerivativeSuperType)
         println(out)
         println(term)
         println("adding something")
+        if term==0
+            term=zero
+        end
+        if out==0
+            out=zero
+        end
         out += term
         println(out)
     end
@@ -428,6 +447,8 @@ function product_rule(O::LeibnizOperatorSuperType)
                 if indsss != tensorind
                     new_prod = new_prod * summand[2].terms[indsss]
                 else
+                    # update_ext_indices(operator_on_tensor)
+                    # println("updated ext inidices to: ",operator_on_tensor.indices)
                     new_prod = new_prod * operator_on_tensor
                 end
             end
@@ -446,6 +467,19 @@ function product_rule(O::LeibnizOperatorSuperType)
     end
     return new_summand
 end
+
+
+function update_ext_indices(O::OperatorSuperType)
+    if typeof(O.operand)<:TensorSuperType ||typeof(O.operand)<:TensorTerm 
+        O.indices=vcat(O.operator_indices, O.operand.indices)
+    elseif typeof(O.operand)<:TensorExpression
+        O.indices=vcat(O.operator_indices, O.operand.summands[1][2].indices)
+    end
+
+   
+end
+
+
 
 
 function *(TEx::TensorExpression, T::OperatorSuperType)

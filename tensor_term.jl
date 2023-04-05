@@ -33,10 +33,16 @@ mutable struct Tensor<:TensorSuperType
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
         new(name, indices,function_of)
     end
+    
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
         new(name, indices,[function_of])
+    end
+
+    function Tensor(name::String,
+        function_of::Coordinate=nothing) #lets you have scalars with no indices
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices

@@ -152,7 +152,9 @@ if test_deriv_registry==1
     act_theta=theta=Tensor("θ", [i => upper, α=>lower],θ)
     D=Derivative("D",act_theta, [θ,x], [j => lower, β => upper])
     res=apply_derivative(D)
-    print(res)
+    println(res)
+    δ2=KroneckerDelta([αdot => upper, βdot=>lower])
+    println(δ2)
 end
 
 

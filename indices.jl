@@ -141,6 +141,11 @@ function Base.show(io::IO, I::IndexSet)
    print(io,"]")
 end
 
+function Base.copy(index::Index)
+      return Index(index.name,index.index_set,index.grading)
+end
+
+
 
 
 # function rename_dummies(T::Tensor)
