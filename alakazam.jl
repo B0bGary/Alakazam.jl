@@ -132,9 +132,32 @@ test_newtimes =0
 test_strings=0
 test_rep2=0
 
-test_deriv_exp=1
+test_deriv_exp=0
+
+
+test_deriv_registry=1
 
 println("executing")
+
+if test_deriv_registry==1
+    # F = 2*Tensor("F", [i => upper, k => upper, j => lower, β => lower], θ)*Tensor("G", [p => upper, q => upper, γ => lower], θ)
+
+    delta=KroneckerDelta([n => upper, k=>lower])
+    delta2=KroneckerDelta([γ => upper, μ=>lower])
+    theta=Tensor("θ", [n => upper, μ=>lower],θ)
+    new_deriv_D = Derivative("D",zero, [θ,x], [k => lower, γ => upper])
+    add_derivative_action(new_deriv_D,theta,delta*delta2)
+    println(derivative_actions)
+
+    act_theta=theta=Tensor("θ", [i => upper, α=>lower],θ)
+    D=Derivative("D",act_theta, [θ,x], [j => lower, β => upper])
+    res=apply_derivative(D)
+    print(res)
+end
+
+
+
+
 
 if test_deriv_exp==1
 
