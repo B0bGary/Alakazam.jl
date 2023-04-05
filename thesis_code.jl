@@ -77,5 +77,14 @@ println("our superfield expansions is: ", SUPERFIELD)
 
 #apply our derivative
 D_SUPERFIELD=Derivative("∂",SUPERFIELD, [θ], [k => upper, γ => lower])
+println("We want to compute: ", D_SUPERFIELD)
 
-apply_derivative(D_SUPERFIELD)
+println("Appyling the derivative:")
+out=apply_derivative(D_SUPERFIELD)
+println(out)
+println("Getting rid of epsilon tensors")
+out=contract_metrics(out,EpsilonTensor)
+println(out)
+println("Eliminating deltas")
+out=eliminate_kronecker(out)
+println(out)

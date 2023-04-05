@@ -109,7 +109,7 @@ end
 
 
 function same_tensor_mod_pattern(T1::T, T2::T, index_dict::Dict{Index,Index}) where {T<:TensorSuperType}
-    println("this functio nrann")
+    # println("this functio nrann")
     ind1 = T1.indices
     ind2 = T2.indices
     temp_dict = Dict{Index,Index}()#stores non-dummies
@@ -202,37 +202,37 @@ function apply_derivative(D::DerivativeSuperType)
     for summandind in eachindex(D.summands) # for each summand (coefficient, tensorterm)
         summand = D.summands[summandind]
         term = summand[1]
-        println(term)
+        #println(term)
         for tensor in summand[2].terms # for each individual tensor in tensorterm
             if typeof(tensor) <: DerivativeSuperType # if the tensor is an operator
                 operands = tensor.operand #get the operand (should only be one thanks to prod rule)
-                println(operands, "should be a single term else liebniz wrong")
+                #println(operands, "should be a single term else liebniz wrong")
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
                     # #println(summand[1])
                     term *= 0 #annihilate the term
                 else
-                    println("old term pre: ", term)
+                    #println("old term pre: ", term)
                     out1 = perform_derivative_action(tensor)
-                    println("output of perofrming deriv action,", out1)
+                    #println("output of perofrming deriv action,", out1)
                     # # do the subs rules
                     # for ky in keys(derivative_actions)
                     #     (B=>o)=same_operator(D,ky) ################ complicated logic....
                     # end
-                    println("old term", term)
+                    #println("old term", term)
                     term *= out1
-                    println("new term is ",term )
+                    #println("new term is ",term )
                 end
             else
-                println("problem zone: term is ", term)
-                println("tensor is, ",tensor)
+                #println("problem zone: term is ", term)
+                #println("tensor is, ",tensor)
                 term *= tensor
-                println("term is ",term )
+                #println("term is ",term )
             end
         end
-        println(out)
-        println(term)
-        println("adding something")
+        #println(out)
+        #println(term)
+        #println("adding something")
         if term==0
             term=zero
         end
@@ -240,7 +240,7 @@ function apply_derivative(D::DerivativeSuperType)
             out=zero
         end
         out += term
-        println(out)
+        #println(out)
     end
 
     return merge_sum(out)
@@ -251,7 +251,7 @@ end
 # if there are rules, then the derivative will be performed, else expressions will be left as eg ∇B
 function perform_derivative_action(D::DerivativeSuperType)
     operand = D.operand.summands[1][2].terms[1] #get the operand
-    println(operand)
+    #println(operand)
 
     for ky in keys(derivative_actions)
         A = same_operator(D, ky)
@@ -260,18 +260,18 @@ function perform_derivative_action(D::DerivativeSuperType)
         if B
             action_dict = derivative_actions[ky] # dict of tensors we've defined deriv on
             for k in keys(action_dict)#looks through all tensors
-                println(k)
-                println(o)
+                #println(k)
+                #println(o)
                 op=same_tensor_mod_pattern(operand, k, o)
                 if op[1]
                     #do derivative:
                     replacement = action_dict[k] # need to go through and replace this with correct pattern
                     inverted_dict = Dict(v => k for (k, v) in o)
                     inverted_dict2 = Dict(v => k for (k, v) in op[2])
-                    println("replacement is, ", replacement)
+                    #println("replacement is, ", replacement)
                     pat_rep = index_to_pattern(replacement, inverted_dict)
                     pat_rep=index_to_pattern(pat_rep, inverted_dict2)
-                    println("with correct indices is, ", pat_rep)
+                    #println("with correct indices is, ", pat_rep)
                     return pat_rep
                 end
             end
@@ -320,7 +320,7 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
 
 
                     for reptensor in repsummand[2].terms
-                        #println(reptensor)
+                        ##println(reptensor)
                         if typeof(reptensor) <: OperatorSuperType
                             #if we found an operator,
                             #println("operators")

@@ -135,7 +135,7 @@ test_rep2=0
 test_deriv_exp=0
 
 
-test_deriv_registry=1
+test_deriv_registry=0
 
 println("executing")
 

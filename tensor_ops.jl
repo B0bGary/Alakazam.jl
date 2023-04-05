@@ -291,9 +291,9 @@ function +(A::TensorExpression, B::TensorExpression)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
-        println(get_free_indices(A),":",get_free_indices(B))
-        println(A)
-        println(B)
+        # println(get_free_indices(A),":",get_free_indices(B))
+        # println(A)
+        # println(B)
         throw(FreeIndexMismatch())
     end
 end
