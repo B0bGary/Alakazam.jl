@@ -965,7 +965,7 @@ end
 
 
 function simplify(TEx::TensorExpression)
-    pop_metric
+    # pop_metric
 
     new_exp=zero
     for summand in TEx.summands
@@ -1096,15 +1096,30 @@ end
 
 # sorting
 
-function sort_exp(TEx::TensorExpression, Order::Vector{T} where {T<:TensorSuperType})
-    for summand in TEx.summands
+# function sort_exp(TEx::TensorExpression, Order::Vector{T} where {T<:TensorSuperType})
+#     for summand in TEx.summands
 
 
 
-    end
-    return TEx
+#     end
+#     return TEx
+# end
+
+function Base.sort(TEx::TensorExpression)
+
+
 end
 
+function Base.isless(a::Tensor, b::Tensor)
+    if a.name <b.name
+        return true
+    elseif a.name == b.name
+        return a.indices<b.indices
+    end
+ end
+
+
+ 
 
 
 ##############################################################################################################################
