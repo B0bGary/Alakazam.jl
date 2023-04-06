@@ -147,6 +147,14 @@ end
 
 
 
+function Base.isless(a::Index, b::Index)
+   a.name < b.name
+end
+
+function Base.isless(a::IndexPosition, b::IndexPosition)
+   a.position < b.position
+end
+
 
 # function rename_dummies(T::Tensor)
 

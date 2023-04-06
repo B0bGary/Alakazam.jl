@@ -210,7 +210,7 @@ function apply_derivative(D::DerivativeSuperType)
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
                     # #println(summand[1])
-                    term *= 0 #annihilate the term
+                    term = zero #annihilate the term
                 else
                     #println("old term pre: ", term)
                     out1 = perform_derivative_action(tensor)

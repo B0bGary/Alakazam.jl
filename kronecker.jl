@@ -2,7 +2,7 @@
 include("tensor_term.jl")
 include("metric.jl")
 
-abstract type KroneckerSuperType <: SymMetricSuperType end
+abstract type KroneckerSuperType <: TotallySymmetricSuperType end
 
 
 

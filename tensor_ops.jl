@@ -20,12 +20,12 @@ function pop_metric(T::TensorSuperType) # makes all indices on the object go to 
             spare = get_unused_indices(T, index[1].index_set)
             # println(spare)
             dummy = pop!(spare) => index[1].index_set.default_position == upper ? lower : upper
-            if dummy[1].grading==0
+            if dummy[1].grading == 0
                 metric = Metric("η", [index, dummy])
             else
                 metric = EpsilonTensor([index, dummy])
             end
-            
+
             tensor = tensor * metric
             # println(new_index_pattern[pos])
             # println(dummy => index[1].index_set.default_position)
@@ -58,7 +58,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             index2 = metric.indices[2][1]
             for tens in non_metrics #try to contract with each other tensor
                 # println(tens)
-                if typeof(metric)<:EpsilonTensorSuperType && typeof(tens)<:MetricSuperType
+                if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: SymMetricSuperType
                     # println("cant contract kronecker")
                     continue
                 end
@@ -84,7 +84,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             if !(typeof(metric) <: SymMetricSuperType)
 
                                 if (tens.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
-                                    sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) )) #use 
+                                    sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
                                     # println("flipping")
                                     # println(tens.indices[indpairnum])
                                     if tens.indices[indpairnum][2] == upper
@@ -97,7 +97,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                         # println(tens.indices)
                                     end
                                 else
-                                tens.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                    tens.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
                                 end
                             else
 
@@ -139,7 +139,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                     tens.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
                                 end
                             else
-                                
+
                                 tens.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
                             end
                         else # shoulder never get here for anti sym
@@ -190,7 +190,9 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         # println(T.summands[k][1])
         # println(T.summands[k][1]*sign)
         T.summands[k] = T.summands[k][1] * sign => T.summands[k][2]
+        # println( T.summands[k])
     end
+    # println(T)
     return merge_sum(T)
 
 end
@@ -268,7 +270,7 @@ function +(A::TensorSuperType, B::TensorSuperType)
 end
 
 function +(A::TensorSuperType, B::TensorExpression)
-    if  isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
         throw(FreeIndexMismatch())
@@ -276,7 +278,7 @@ function +(A::TensorSuperType, B::TensorExpression)
 end
 
 function +(A::TensorExpression, B::TensorSuperType)
-    if  isZeroTens(A) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(A) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, TensorExpression(B))
     else
         throw(FreeIndexMismatch())
@@ -301,31 +303,31 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if  isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
-        
+
         throw(FreeIndexMismatch())
     end
 end
 
-+(A::TensorExpression, B::TensorTerm)= +(B,A)
++(A::TensorExpression, B::TensorTerm) = +(B, A)
 
 function +(A::TensorTerm, B::TensorTerm)
 
     if get_free_indices(A) == get_free_indices(B)
-        return TensorExpression(A)+TensorExpression(B)
+        return TensorExpression(A) + TensorExpression(B)
     else
         throw(FreeIndexMismatch())
     end
 end
 
-+(A::TensorSuperType, B::TensorTerm)= +(B,A)
++(A::TensorSuperType, B::TensorTerm) = +(B, A)
 
 function +(A::TensorTerm, B::TensorSuperType)
 
     if get_free_indices(A) == get_free_indices(B)
-        return TensorExpression(A)+TensorExpression(B)
+        return TensorExpression(A) + TensorExpression(B)
     else
         # println(get_free_indices(A))
         # println(get_free_indices(B))
@@ -408,17 +410,17 @@ function *(T::TensorTerm, TEx::TensorExpression)
     return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
 end
 
-function *(TEx::TensorExpression,T::TensorTerm)
+function *(TEx::TensorExpression, T::TensorTerm)
     # println("doing this sort of multiplcation3")
-    return update_indices(TensorExpression([sum[1] =>  sum[2] *T for sum in TEx.summands]))
+    return update_indices(TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands]))
 end
 
 
 
-function *(TEx1::TensorExpression,TEx2::TensorExpression)
-    new_tex=zero
+function *(TEx1::TensorExpression, TEx2::TensorExpression)
+    new_tex = zero
     for T in TEx1.summands
-    new_tex+=update_indices(TensorExpression([sum[1]*T[1] =>  T[2]*sum[2] for sum in TEx2.summands]))
+        new_tex += update_indices(TensorExpression([sum[1] * T[1] => T[2] * sum[2] for sum in TEx2.summands]))
     end
     return new_tex
 end
@@ -428,7 +430,7 @@ function *(TEx::TensorExpression, T::TensorSuperType)
     # println("doing this sort of multiplcation4")
     for summandind in eachindex(TEx.summands)
         # println(TEx.summands[summandind])
-        TEx.summands[summandind]=TEx.summands[summandind][1] => TEx.summands[summandind][2]*T
+        TEx.summands[summandind] = TEx.summands[summandind][1] => TEx.summands[summandind][2] * T
         # println(TEx.summands[summandind])
         # println("here")
     end
@@ -464,43 +466,43 @@ end
 
 
 # end
-function ×( T2::SymorNum, N::Union{TensorExpression,TensorTerm,TensorSuperType} ) 
+function ×(T2::SymorNum, N::Union{TensorExpression,TensorTerm,TensorSuperType})
     N × T2
 end
 
-function ×( T2::Union{TensorExpression,TensorTerm,TensorSuperType}, N::SymorNum) 
+function ×(T2::Union{TensorExpression,TensorTerm,TensorSuperType}, N::SymorNum)
     # T2*N 
     throw(OperatorPrecedenceError())
 end
 
 
-function ×( T2::TensorExpression, T1::TensorExpression) 
+function ×(T2::TensorExpression, T1::TensorExpression)
 
-    vec=[]
+    vec = []
     for summand2 in T2.summands
         for summand1 in T1.summands
-            push!(vec, summand2[1]*summand1[1] => summand2[2] × summand1[2] )
+            push!(vec, summand2[1] * summand1[1] => summand2[2] × summand1[2])
         end
     end
-    T2.summands=vec
+    T2.summands = vec
     return T2
 end
 
 
-function ×( T2::TensorExpression, T1::Union{TensorSuperType,TensorTerm}) 
+function ×(T2::TensorExpression, T1::Union{TensorSuperType,TensorTerm})
 
-    (-1)^((grading(T1)*grading(T2))%2)*(T1 × T2)
+    (-1)^((grading(T1) * grading(T2)) % 2) * (T1 × T2)
 end
 
-function ×( T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression) 
-   new_terms=TensorExpression()
-   T1=rename_dummies(T1)
-#    println(T1)
-#    println(T2)
-#    println("^in func")
+function ×(T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression)
+    new_terms = TensorExpression()
+    T1 = rename_dummies(T1)
+    #    println(T1)
+    #    println(T2)
+    #    println("^in func")
     for summandin in eachindex(T1.summands)
-        t=(T2 × T1.summands[summandin][2])
-        new_terms+= (T1.summands[summandin][1]* t)
+        t = (T2 × T1.summands[summandin][2])
+        new_terms += (T1.summands[summandin][1] * t)
         # println(t)
         # println("poo poo")
         # println(T1.summands[summandin])
@@ -511,85 +513,85 @@ function ×( T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression)
 
 end
 
-function ×(T1::TensorTerm, T2::TensorTerm) 
-    
+function ×(T1::TensorTerm, T2::TensorTerm)
+
     for term in T2.terms
-        T1=T1 × term
+        T1 = T1 × term
     end
     return T1
 end
 
 
 
-function ×( T2::TensorSuperType, T1::TensorTerm) 
-    return (-1)^((grading(T1)*grading(T2))%2)*TensorExpression(T1 × T2)
+function ×(T2::TensorSuperType, T1::TensorTerm)
+    return (-1)^((grading(T1) * grading(T2)) % 2) * TensorExpression(T1 × T2)
 
 end
 
-function ×(T1::Union{TensorTerm, TensorSuperType}, T2::TensorSuperType) 
+function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorSuperType)
     # println("crash func")
     # println(T1)
     # println(typeof(T1)) #some different behaviour between tensor and tensor term. tensor works..
     # println(T2)
-    T2=copy(T2)
-    t1inds=OrderedSet{Index}()
-    t2inds=OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
+    T2 = copy(T2)
+    t1inds = OrderedSet{Index}()
+    t2inds = OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
     # t2ok=Set{Index}()
     for inds in T1.indices
         push!(t1inds, inds[1])
     end
     for inds in eachindex(T2.indices)
-        if  T2.indices[inds][1] in t1inds #if theres a repeated indice
-            push!(t2inds, inds => T2.indices[inds][1] ) # which index to replace
+        if T2.indices[inds][1] in t1inds #if theres a repeated indice
+            push!(t2inds, inds => T2.indices[inds][1]) # which index to replace
         else
             # push!(t2ok,T2.indices[inds][1])# index doesnt need to be replaced
         end
     end
     # we now have all the indices we need to replace and where they are on the tensor
-    sets=get_index_sets(T2) #Set{IndexSet}()
-    avail=Dict{IndexSet, OrderedSet{Index}}() #pairs of index sets, with the unused indices
+    sets = get_index_sets(T2) #Set{IndexSet}()
+    avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
     for set in sets
-        a=OrderedSet{Index}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
-        push!(avail, set=> a) #ones we can replace with
+        a = OrderedSet{Index}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
+        push!(avail, set => a) #ones we can replace with
     end
     # println(avail)
     # println(T2.indices)
-    dummie_matchup=Dict{Index,Index}()
+    dummie_matchup = Dict{Index,Index}()
 
-    t2dums=get_dummies(T2)
-    
+    t2dums = get_dummies(T2)
+
     for ind in t2inds # for each we need to replace (vec pos => index)
         # println(avail[ind[2].index_set])
         # println(ind)
 
         if ind[2] in t2dums
-           
+
             if ind[2] in keys(dummie_matchup)
-                nind=pop!(dummie_matchup,ind[2])
-            # println(nind)
-            T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
+                nind = pop!(dummie_matchup, ind[2])
+                # println(nind)
+                T2.indices[ind[1]] = nind => T2.indices[ind[1]][2]
             else
                 if isempty(avail[ind[2].index_set])
-                    throw(OutOfIndices) 
-                 end
-                nind=popfirst!(avail[ind[2].index_set])
+                    throw(OutOfIndices)
+                end
+                nind = popfirst!(avail[ind[2].index_set])
                 push!(dummie_matchup, ind[2] => nind)
-                T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2]
+                T2.indices[ind[1]] = nind => T2.indices[ind[1]][2]
             end
         else
             if isempty(avail[ind[2].index_set])
-               throw(OutOfIndices) 
+                throw(OutOfIndices)
             end
-            nind=popfirst!(avail[ind[2].index_set])
+            nind = popfirst!(avail[ind[2].index_set])
             # println(nind)
-            T2.indices[ind[1]]= nind=> T2.indices[ind[1]][2] #should replace
+            T2.indices[ind[1]] = nind => T2.indices[ind[1]][2] #should replace
         end
-        
+
     end
     # println("before crash") #same dummies
     # println(T1)
     # println(T2)
-    return T1*T2
+    return T1 * T2
 end
 
 
@@ -641,14 +643,14 @@ end
 #update indices
 
 function update_indices(T::TensorTerm)
-    inds=[]
+    inds = []
     for t in T.terms
         for i in t.indices
             push!(inds, i)
         end
     end
     # println(inds)
-    T.indices=inds
+    T.indices = inds
     ordered_counts = OrderedDict((pair[1], 0) for pair in T.indices)
     # println(ordered_counts)
     for pair in T.indices
@@ -664,10 +666,10 @@ function update_indices(T::TensorTerm)
 end
 
 function update_indices(T::TensorExpression)
-for summand in T.summands
-    update_indices(summand[2])
-end
-return T
+    for summand in T.summands
+        update_indices(summand[2])
+    end
+    return T
 end
 
 
@@ -702,11 +704,11 @@ end
 function get_free_indices(T::TensorTerm)
     # println("doing this one")
     # println(T.indices)
-    d=get_dummies_positional(T)
+    d = get_dummies_positional(T)
     # # println(d)
     # # println("free")
     # println(Set(intersect(T.indices,d)))
-    return Set(setdiff(T.indices,d))
+    return Set(setdiff(T.indices, d))
 end
 
 function get_free_indices(T::TensorExpression)
@@ -738,9 +740,9 @@ end
 
 function get_index_sets(T::Union{TensorSuperType,TensorTerm})
     temp = [ind[1] for ind in T.indices]
-    out=OrderedSet{IndexSet}()
+    out = OrderedSet{IndexSet}()
     for t in temp
-        push!(out,t.index_set)
+        push!(out, t.index_set)
     end
     return out
 end
@@ -848,30 +850,30 @@ end
 
 
 function update_ext_indices(T::TensorExpression)
-    new_exp=zero
+    new_exp = zero
     for tens in T.summands
-        if tens[1]==0
+        if tens[1] == 0
             continue
         end
         update_ext_indices(tens[2])
-        new_exp+=tens[1]*tens[2]
+        new_exp += tens[1] * tens[2]
     end
-    T=new_exp
+    T = new_exp
 end
 
 
 function update_ext_indices(T::TensorTerm)
-    inds=[]
+    inds = []
     for tens in T.terms
-        if typeof(tens)<:OperatorSuperType
+        if typeof(tens) <: OperatorSuperType
             for summand in tens.operand.summands
                 for term in summand[2].terms
-                    if typeof(term)<:OperatorSuperType
-                    update_ext_indices(term)
+                    if typeof(term) <: OperatorSuperType
+                        update_ext_indices(term)
                     end
                 end
-            tens.operand_indices=tens.operand.summands[1][2].indices
-            tens.indices= vcat(tens.operand_indices,tens.operator_indices)
+                tens.operand_indices = tens.operand.summands[1][2].indices
+                tens.indices = vcat(tens.operand_indices, tens.operator_indices)
 
             end
         end
@@ -880,7 +882,7 @@ function update_ext_indices(T::TensorTerm)
 
         end
     end
-    T.indices=inds
+    T.indices = inds
 
 end
 
@@ -914,7 +916,9 @@ function rename_dummies(T::TensorTerm)
         # println(replacements)
         for p in replacements
             for t in T.terms
-                t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices]
+                if !isempty(t.indices)
+                    t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices]
+                end
             end
         end
         #     for (x, y) in T.indices
@@ -927,7 +931,7 @@ end
 
 function rename_dummies(T::TensorExpression)
     for term in T.summands
-        term= term[1] => rename_dummies(term[2])
+        term = term[1] => rename_dummies(term[2])
     end
     update_indices(T)
     return T
@@ -938,10 +942,57 @@ end
 ##############################################################################################################################
 ##############################################################################################################################
 
+
+function sort_symmetric(T::TensorSuperType)
+    if typeof(T) <: TotallySymmetricSuperType
+        indsorted = sortperm(T.indices)
+        newinds = T.indices[indsorted]
+        T.indices = newinds
+        return T
+    elseif typeof(T) <: TotallyAntiSymmetricSuperType
+        indsorted = sortperm(T.indices)
+        # println(T.indices)
+        # println(indsorted)
+        # println(swaps)
+        newinds = T.indices[indsorted]
+        # println(newinds)
+        T.indices = newinds
+        invcount = is_even_perm(indsorted)
+        return (-1)^(! invcount) * T
+    end
+    return T
+end
+
+
+function simplify(TEx::TensorExpression)
+    pop_metric
+
+    new_exp=zero
+    for summand in TEx.summands
+        new_term=summand[1]
+        for tens in summand[2].terms
+            
+            new_term*=sort_symmetric(tens)
+        end
+        new_exp+=new_term
+    end
+    return new_exp
+end
+
+
+
+
+
+
+
+
 #merging terms with same tensor content
 
+## need to add functionality for symmetric and antisym tensors
+
 function merge_sum(TEx::TensorExpression)
-    out = filter!(x -> x[1] != 0, TEx.summands)
+    out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
+    # println(out)
     TEx.summands = out
     new_merged = []
     for summand in TEx.summands
@@ -962,10 +1013,13 @@ function merge_sum(TEx::TensorExpression)
                 break
             end
         end
-        if found
-            break
+        # if found
+        #     println("breaking....")
+        #     break
+        # end
+        if !found
+            push!(new_merged, summand)
         end
-        push!(new_merged, summand)
     end
 
     TEx.summands = new_merged
@@ -1011,7 +1065,7 @@ end
 # printing and display
 
 function Base.show(io::IO, T::TensorSuperType)
-    print(io,tens2str(T))
+    print(io, tens2str(T))
 end
 
 function Base.show(io::IO, T::TensorTerm)
@@ -1045,7 +1099,7 @@ end
 function sort_exp(TEx::TensorExpression, Order::Vector{T} where {T<:TensorSuperType})
     for summand in TEx.summands
 
-        
+
 
     end
     return TEx
@@ -1060,13 +1114,13 @@ end
 
 
 function substitute(TEx::TensorExpression, pattern::String, repeat::Bool=true)
-    pattern=strip(pattern) #remove spaces
+    pattern = strip(pattern) #remove spaces
 
     #first step: parse terms to a string, that points back to position in term
     #convert pattern to regex
 
     for summand in TEx.summands
-        string=term2strpos(summand[2])
+        string = term2strpos(summand[2])
 
     end
 
@@ -1076,27 +1130,27 @@ end
 
 function pattern2regex(pattern::String)
     # example "?D^{?i*}_{*?\alpha}[[\theta^{?j*}_{*?\beta}]]: \delta^{?j*}_{*?i} \delta^{?\alpha *}_{*?\beta}"
-    reg=""
+    reg = ""
 
     return reg
 end
 
 function term2strpos(Term::TensorTerm)
-    out=Vector{Pair{String, Int64}}()
+    out = Vector{Pair{String,Int64}}()
     for tind in eachindex(Term.terms)
         push!(out, tens2str(Term.terms[tind]) => tind)
     end
-   return out
+    return out
 end
 
 
 function tens2str(T::TensorSuperType)
-    out=""
-    if typeof(T)==DummyPatternTensor
+    out = ""
+    if typeof(T) == DummyPatternTensor
         # out*="?"
     end
 
-    out*=T.name
+    out *= T.name
     if !isempty(T.indices)
         lowers = ""
         uppers = ""
@@ -1104,7 +1158,7 @@ function tens2str(T::TensorSuperType)
         uppersempt::Bool = 1
         for (ind, pos) in T.indices
             if pos.position == 0
-                if typeof(ind)==DummyPatternIndex
+                if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
                 uppers = uppers * ind.name
@@ -1113,17 +1167,17 @@ function tens2str(T::TensorSuperType)
             else
                 uppers = uppers * "*"
                 lowersempt = 0
-                if typeof(ind)==DummyPatternIndex
+                if typeof(ind) == DummyPatternIndex
                     lowers *= "?"
                 end
                 lowers = lowers * ind.name
             end
         end
         if !uppersempt
-            out*="^{" * uppers * "}"
+            out *= "^{" * uppers * "}"
         end
         if !lowersempt
-            out*="_{" * lowers * "}"
+            out *= "_{" * lowers * "}"
         end
     end
     return out
@@ -1144,8 +1198,8 @@ function replace(TEx::TensorExpression, old_T::TensorSuperType, new_T::TensorSup
         summand = TEx.summands[k]
         matches = []
         for tind in eachindex(summand[2].terms)
-            if summand[2].terms[tind]== old_T
-            push!(matches, tind)
+            if summand[2].terms[tind] == old_T
+                push!(matches, tind)
             end
         end
         # matches = filter(y -> y==old_T, summand[2].terms)
@@ -1155,13 +1209,13 @@ function replace(TEx::TensorExpression, old_T::TensorSuperType, new_T::TensorSup
         # sign = 1 #for antisym metrics (spinor)
         if repeat
             for match in matches
-                summand[2].terms[match]=new_T
+                summand[2].terms[match] = new_T
             end
         else
             if !isempty(matches)
-                summand[2].terms[1]=new_T
+                summand[2].terms[1] = new_T
             end
-        end 
+        end
     end
     return update_indices(TEx)
 end
@@ -1182,19 +1236,19 @@ function copy(T::TensorTerm)
 end
 
 function copy(T::TensorSuperType)
-    return typeof(T)(T.name,copy(T.indices),T.function_of)
+    return typeof(T)(T.name, copy(T.indices), T.function_of)
 end
 
 function copy(T::TensorExpression)
-    out=zero
-    if T==zero
+    out = zero
+    if T == zero
         return zero
     end
 
     for summand in T.summands
         # println(summand)
         # println(summand[1]*copy(summand[2]))
-        out+=summand[1]*copy(summand[2])
+        out += summand[1] * copy(summand[2])
     end
     return out
 end
@@ -1213,8 +1267,8 @@ end
 function copy(V::Vector{Pair{Index,IndexPosition}})
     return [pair[1] => pair[2] for pair in V]
 end
-function copy(T::MetricSuperType)
-    return typeof(T)(T.name,copy(T.indices))
+function copy(T::SymMetricSuperType)
+    return typeof(T)(T.name, copy(T.indices))
 end
 function copy(T::KroneckerSuperType)
     return typeof(T)(copy(T.indices))
@@ -1229,19 +1283,19 @@ end
 # utils
 
 function hasIndices(T::TensorSuperType)
-    return length(T.indices)!=0
+    return length(T.indices) != 0
 end
 
 function hasIndices(T::TensorTerm)
-    return length(T.indices)!=0
+    return length(T.indices) != 0
 end
 
 
-zero=TensorExpression()
+zero = TensorExpression()
 
 
 function isZeroTens(T::TensorExpression)
-    if length(T.summands)==1 && T.summands[1][1]==0
+    if length(T.summands) == 1 && T.summands[1][1] == 0
         return true
     else
         return false
@@ -1266,6 +1320,46 @@ function first_element(arr, elem1, elem2)
     else
         return elem1
     end
+end
+
+function is_even_perm(p::AbstractVector{T}) where T<:Real
+    n = length(p)
+    if n <= 1
+        return true
+    end
+    # Compute the number of inversions in the left and right halves of the input vector
+    mid = div(n, 2)
+    left = p[1:mid]
+    right = p[mid+1:end]
+    inv_left = is_even_perm(left)
+    inv_right = is_even_perm(right)
+    # Merge the sorted left and right halves while counting inversions
+    merged = Vector{T}(undef, n)
+    i, j, k = 1, 1, 0
+    inv_merge = 0
+    while i <= length(left) && j <= length(right)
+        if left[i] <= right[j]
+            merged[k+1] = left[i]
+            i += 1
+        else
+            merged[k+1] = right[j]
+            j += 1
+            inv_merge += length(left) - i + 1
+        end
+        k += 1
+    end
+    while i <= length(left)
+        merged[k+1] = left[i]
+        i += 1
+        k += 1
+    end
+    while j <= length(right)
+        merged[k+1] = right[j]
+        j += 1
+        k += 1
+    end
+    # Return whether the number of inversions is even or odd
+    return (inv_left + inv_right + inv_merge) % 2 == 0
 end
 
 

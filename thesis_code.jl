@@ -36,6 +36,7 @@ qc = Index("̄q", flavour_conj_indices)
 γ = Index("γ", spinor_indices, 1)
 μ = Index("μ", spinor_indices, 1)
 ν = Index("ν", spinor_indices, 1)
+ρ = Index("ρ", spinor_indices, 1)
 
 αdot = Index("̇α", spinor_conj_indices, 1)
 βdot = Index("̇β", spinor_conj_indices, 1)
@@ -60,19 +61,26 @@ x = Coordinate("x", spacetime_indices)
 # define our grassman basis
 θiα=Tensor("θ",[i=>lower, α=>upper],θ)
 barθαi=Tensor("θ",[αdot=>lower, ic=>upper],θbar)
-θij=Tensor("θ",[i=>lower, α=>upper],θ)*Tensor("θ",[j=>lower, α=>lower],θ)
-
+θij=Tensor("θ",[i=>lower, ν=>upper],θ)*Tensor("θ",[j=>lower, ν=>lower],θ)
+θupij=Tensor("θ",[i=>upper, μ=>upper],θ)*Tensor("θ",[j=>upper, μ=>lower],θ)
+θjα=Tensor("θ",[j=>lower, α=>upper],θ)
 
 # define a basic proof of concept derivative
 grassman_deriv_normalrep=Derivative("∂",zero, [θ], [j => upper, β => lower])
 #note that the derivative isn't defined on literally θiα, but on tensors with the same index patterns
 add_derivative_action(grassman_deriv_normalrep,θiα,KroneckerDelta([i=>lower,j=>upper])*KroneckerDelta([β=>lower,α=>upper]))
 add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>lower, α=>lower],θ),KroneckerDelta([i=>lower,j=>upper])*EpsilonTensor([α=>lower,β=>lower]))
-
+add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>upper],θ),EpsilonTensor([i=>upper,j=>upper])*KroneckerDelta([β=>lower,α=>upper]))
+add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>lower],θ),EpsilonTensor([i=>upper,j=>upper])*EpsilonTensor([α=>lower,β=>lower]))
 
 #define our superfield expansions tensors
+exp=(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)
+println(exp)
+SUPERFIELD=(Tensor("j", x)+θiα*Tensor("ψ",[i=>upper, α=>lower],x)+θij*SymmetricTensor("F",[i=>upper, j=>upper],x)
++(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)+θij*θupij*Tensor("H",x)
+)
 
-SUPERFIELD=Tensor("j", x)+Tensor("ψ",[i=>upper, α=>lower],x)*θiα+Tensor("F",[i=>upper, j=>upper],x)*θij
+
 println("our superfield expansions is: ", SUPERFIELD)
 
 #apply our derivative
@@ -87,4 +95,24 @@ out=contract_metrics(out,EpsilonTensor)
 println(out)
 println("Eliminating deltas")
 out=eliminate_kronecker(out)
+println(out)
+println("Renaming dummies")
+rename_dummies(out)
+println(out)
+DD_SUPERFIELD=Derivative("∂",out, [θ], [l => upper, ρ => lower])
+println("We want to compute: ", DD_SUPERFIELD)
+println("Appyling the derivative:")
+out=apply_derivative(DD_SUPERFIELD)
+println(out)
+println("Getting rid of epsilon tensors")
+out=contract_metrics(out,EpsilonTensor)
+println(out)
+println("Eliminating deltas")
+out=eliminate_kronecker(out)
+println(out)
+println("Renaming dummies")
+rename_dummies(out)
+println(out)
+println("Simplifying")
+out=simplify(out)
 println(out)

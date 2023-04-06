@@ -1,8 +1,9 @@
 include("tensor_term.jl")
 
-abstract type MetricSuperType <: TensorSuperType end
-abstract type AntiSymMetricSuperType <: MetricSuperType end
-abstract type SymMetricSuperType <: MetricSuperType end
+
+abstract type SymMetricSuperType <: TotallySymmetricSuperType end
+abstract type AntisymMetricSuperType <: TotallyAntiSymmetricSuperType end
+
 
 mutable struct Metric <:SymMetricSuperType
     name::String

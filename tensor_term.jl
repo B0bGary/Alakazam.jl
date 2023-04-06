@@ -3,7 +3,8 @@ include("custom_exceptions.jl")
 
 SymorNum = Union{SymbolicUtils.Symbolic,Number}
 abstract type TensorSuperType end
-
+abstract type TotallyAntisymmetricSuperType <: TensorSuperType end
+abstract type TotallySymmetricSuperType <: TensorSuperType end
 
 mutable struct DummyPatternTensor<:TensorSuperType
     name::String
@@ -23,6 +24,8 @@ mutable struct DummyPatternTensor<:TensorSuperType
     end
 
  end
+
+
 
 mutable struct Tensor<:TensorSuperType
     name::String
@@ -53,10 +56,73 @@ mutable struct Tensor<:TensorSuperType
     end
  end
 
- 
 
 
 
+# struct SymmetricTensor <:TotallySymmetricSuperType
+# end
+
+mutable struct SymmetricTensor<:TotallySymmetricSuperType
+    name::String
+    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
+    function_of::Vector{Coordinate}
+
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,function_of)
+    end
+    
+
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
+        new(name, indices,[function_of])
+    end
+
+    function SymmetricTensor(name::String,
+        function_of::Coordinate=nothing) #lets you have scalars with no indices
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
+    end
+
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,[])
+    end
+    function SymmetricTensor(T::DummyPatternTensor) #
+        new(T.name,T.indices,T.function_of)
+    end
+ end
+
+
+# struct AntisymmetricTensor <:TotallyAntisymmetricSuperType
+# end
+
+mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
+    name::String
+    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
+    function_of::Vector{Coordinate}
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,function_of)
+    end
+    
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
+        new(name, indices,[function_of])
+    end
+
+    function AntisymmetricTensor(name::String,
+        function_of::Coordinate=nothing) #lets you have scalars with no indices
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
+    end
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,[])
+    end
+    function AntisymmetricTensor(T::DummyPatternTensor) #
+        new(T.name,T.indices,T.function_of)
+    end
+ end
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
     #     function_of::Coordinate=nothing) #lets you have scalars with no indices
     #     new(name, indices,[function_of])
