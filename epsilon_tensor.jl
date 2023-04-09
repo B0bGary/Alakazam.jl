@@ -9,7 +9,8 @@ abstract type EpsilonTensorSuperType <: AntisymMetricSuperType end
 mutable struct EpsilonTensor<:EpsilonTensorSuperType
     name::String
     indices::Vector{Pair{Index, IndexPosition}}
+    weights::Dict{String,Number}
     function EpsilonTensor(indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
-        new("ϵ",indices)
+        new("ϵ",indices,Dict{String,Number}())
     end
  end

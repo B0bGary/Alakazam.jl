@@ -10,17 +10,21 @@ mutable struct DummyPatternTensor<:TensorSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}}  where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
+    weights::Dict{String,Number}
 
     function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}() )  #lets you have scalars with no indices
-        new(name, indices,function_of)
+        new(name, indices,function_of,Dict{String, Number}())
     end
 
     function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}() )  #lets you have scalars with no indices
-        new(name, indices,[])
+        new(name, indices,[],Dict{String, Number}())
     end
     function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}(),function_of::Coordinate=Coordinate("",Vector{IndexSet}()) )  #lets you have scalars with no indices
-        new(name, indices,[function_of])
+        new(name, indices,[function_of],Dict{String, Number}())
+    end
+    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType} =Vector{Pair{IndexSuperType, IndexPosition}}(),function_of::Coordinate=Coordinate("",Vector{IndexSet}()),weights::Dict{String,Number}=Dict{String, Number}())  #lets you have scalars with no indices
+        new(name, indices,[function_of],)
     end
 
  end
@@ -31,29 +35,79 @@ mutable struct Tensor<:TensorSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
+    weights::Dict{String,Number}
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,function_of)
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,w)
     end
     
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
-        new(name, indices,[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, indices,[function_of],w)
     end
 
     function Tensor(name::String,
         function_of::Coordinate=nothing) #lets you have scalars with no indices
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[])
+        
+        new(name, indices,[],Dict{String, Number}())
     end
     function Tensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of)
+        new(T.name,T.indices,T.function_of,T.weights)
     end
+
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}(),weights::Dict{String,Number}=Dict{String, Number}())  where {I<:IndexSuperType}#lets you have scalars with no indices
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,merge(w,weights))
+    end
+    
+
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) where {I<:IndexSuperType} #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+
+        new(name, indices,[function_of],merge(w,weights))
+    end
+
+    function Tensor(name::String,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+    end
+
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,[],weights)
+    end
+
+    # weights::Dict{String,Number}=Dict()
+
  end
 
 
@@ -61,68 +115,166 @@ mutable struct Tensor<:TensorSuperType
 
 # struct SymmetricTensor <:TotallySymmetricSuperType
 # end
-
 mutable struct SymmetricTensor<:TotallySymmetricSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
+    weights::Dict{String,Number}
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,function_of)
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,w)
     end
     
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
-        new(name, indices,[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, indices,[function_of],w)
     end
 
     function SymmetricTensor(name::String,
         function_of::Coordinate=nothing) #lets you have scalars with no indices
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
     end
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[])
+        
+        new(name, indices,[],Dict{String, Number}())
     end
     function SymmetricTensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of)
+        new(T.name,T.indices,T.function_of,T.weights)
     end
- end
 
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}(),weights::Dict{String,Number}=Dict{String, Number}())  where {I<:IndexSuperType}#lets you have scalars with no indices
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,merge(w,weights))
+    end
+    
+
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) where {I<:IndexSuperType} #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+
+        new(name, indices,[function_of],merge(w,weights))
+    end
+
+    function SymmetricTensor(name::String,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+    end
+
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,[],weights)
+    end
+
+    # weights::Dict{String,Number}=Dict()
+
+ end
 
 # struct AntisymmetricTensor <:TotallyAntisymmetricSuperType
 # end
-
 mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
+    weights::Dict{String,Number}
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,function_of)
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,w)
     end
     
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
-        new(name, indices,[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, indices,[function_of],w)
     end
 
     function AntisymmetricTensor(name::String,
         function_of::Coordinate=nothing) #lets you have scalars with no indices
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of])
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
     end
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[])
+        
+        new(name, indices,[],Dict{String, Number}())
     end
     function AntisymmetricTensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of)
+        new(T.name,T.indices,T.function_of,T.weights)
     end
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
+        function_of::Vector{Coordinate}=Vector{Coordinate}(),weights::Dict{String,Number}=Dict{String, Number}())  where {I<:IndexSuperType}#lets you have scalars with no indices
+        w=Dict{String,Number}()
+        for coord in function_of
+            w[coord.name]=1
+        end
+        new(name, indices,function_of,merge(w,weights))
+    end
+    
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) where {I<:IndexSuperType} #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+
+        new(name, indices,[function_of],merge(w,weights))
+    end
+
+    function AntisymmetricTensor(name::String,
+        function_of::Coordinate=nothing,weights::Dict{String,Number}=Dict{String, Number}()) #lets you have scalars with no indices
+        w=Dict{String,Number}()
+        if function_of!=nothing
+            w[function_of.name]=1
+        end
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+    end
+
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,[],weights)
+    end
+
+    # weights::Dict{String,Number}=Dict()
+
  end
+
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
     #     function_of::Coordinate=nothing) #lets you have scalars with no indices
     #     new(name, indices,[function_of])

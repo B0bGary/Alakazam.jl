@@ -652,6 +652,44 @@ function +(A::TensorTerm, B::TensorSuperType)
     end
 end
 
+function term_weight(T::TensorTerm,w::String)
+    weight=0
+    for term in T.terms
+        if typeof(term)<:OperatorSuperType
+            weight+=operator_weight(term,w)
+        elseif haskey(term.weights,w)
+            weight+=term.weights[w]
+        end
+    end
+    return weight
+end
+
+function singleterm(TEx::TensorExpression)
+    if length(TEx.summands)==1 && TEx.summands[1][1]!=0
+        return true
+    end
+    return false
+end
+
+function operator_weight(O::OperatorSuperType,w::String)
+    if singleterm(O.operand)
+        return term_weight(O.operand.summands[1][2],w)
+    else
+        throw(MixedWeightOperandTerms())
+    end
+end
+
+function get_weighted_terms(T::TensorExpression, w::String, value::Number)
+    new_exp=zero
+    for summand in T.summands
+        if term_weight(summand[2],w)==value
+            new_exp+=summand[1]*summand[2]
+        end
+    end
+    return new_exp
+end
+
+
 
 # function +(N::SymorNum, T::TensorExpression)
 

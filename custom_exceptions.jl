@@ -18,3 +18,6 @@ end
 
 struct InvalidReplacementPattern <: Exception
 end
+
+struct MixedWeightOperandTerms <: Exception
+end

@@ -21,6 +21,9 @@ p = Index("p", flavour_indices)
 q = Index("q", flavour_indices)
 r = Index("r", flavour_indices)
 s = Index("s", flavour_indices)
+t = Index("t", flavour_indices)
+u = Index("u", flavour_indices)
+v = Index("v", flavour_indices)
 
 # ic = Index("̄i", flavour_conj_indices, 0)
 # jc = Index("̄j", flavour_conj_indices)
@@ -73,6 +76,9 @@ barθupij=Tensor("̄θ",[i=>upper, μdot=>upper],θbar)*Tensor("θ",[j=>upper, �
 θij=Tensor("θ",[i=>lower, ν=>upper],θ)*Tensor("θ",[j=>lower, ν=>lower],θ)
 θupij=Tensor("θ",[i=>upper, μ=>upper],θ)*Tensor("θ",[j=>upper, μ=>lower],θ)
 θjα=Tensor("θ",[j=>lower, α=>upper],θ)
+θ4=Tensor("θ",[m=>lower, ν=>upper],θ)*Tensor("θ",[n=>lower, ν=>lower],θ)*Tensor("θ",[m=>upper, μ=>upper],θ)*Tensor("θ",[n=>upper, μ=>lower],θ)
+θbar4=Tensor("̄θ",[p=>lower, νdot=>upper],θbar)*Tensor("θ",[q=>lower, νdot=>lower],θbar)*Tensor("̄θ",[p=>upper, μdot=>upper],θbar)*Tensor("θ",[q=>upper, μdot=>lower],θbar)
+
 
 # define a basic proof of concept derivative
 grassman_deriv_normalrep=Derivative("∂",zero, [θ], [j => upper, β => lower])
@@ -95,10 +101,32 @@ add_derivative_action(grassman_deriv_conjrep,barθαi,KroneckerDelta([i=>upper,j
 # +θjα*barθαi*Tensor("K",[j=>upper, α=>lower,i => lower, αdot =>upper],x)
 # +Tensor("θ",[k=>lower, α=>upper],θ)*barθupij*Tensor("L",[k=>upper, α =>lower, i=>lower,j => lower],x)
 # )
-SUPERFIELD=(Tensor("j", x)+θiα*Tensor("ψ",[i=>upper, α=>lower],x)+θij*SymmetricTensor("F",[i=>upper, j=>upper],x)+(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)+θij*θupij*Tensor("H",x)
-+θjα*barθαi*Tensor("K",[j=>upper, α=>lower,i => lower, αdot =>upper],x))
+SUPERFIELD=(Tensor("j", x)+θiα*Tensor("ψ",[i=>upper, α=>lower],x)+θij*SymmetricTensor("F",[i=>upper, j=>upper],x)
++(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)+θij*θupij*Tensor("H",x)
++θjα*barθαi*Tensor("K",[j=>upper, α=>lower,i => lower, αdot =>upper],x)
++Tensor("θ",[k=>lower, α=>upper],θ)*barθupij*Tensor("L",[k=>upper, α =>lower, i=>lower,j => lower],x)
++Tensor("θ",[k=>lower, α=>upper],θ)*barθαi*barθij*Tensor("M",[k=>upper, α =>lower, j=>lower, αdot=> upper],x)
++θiα*θbar4*Tensor("N",[i=>upper, α=>lower],x)
++θij*Tensor("̄θ",[m=>lower, νdot=>upper],θbar)*Tensor("θ",[n=>lower, νdot=>lower],θbar)*Tensor("P",[i=>upper,j=>upper,m=>upper,n=>upper],x)
++θij*Tensor("̄θ",[k=>upper, αdot=>lower],θbar)*Tensor("̄θ",[k=>lower, νdot=>upper],θbar)*Tensor("θ",[l=>lower, νdot=>lower],θbar)*Tensor("Q",[i=>upper,j=>upper,l=>upper,αdot=>upper],x)
++θij*θbar4*Tensor("R",[i=>upper, j=>upper],x)
++θupij*Tensor("θ",[j=>lower, α=>upper],θ)*Tensor("̄θ",[k=>upper, αdot=>lower],θbar)*Tensor("̄θ",[k=>lower, νdot=>upper],θbar)*Tensor("θ",[l=>lower, νdot=>lower],θbar)*Tensor("S",[i=>lower,α=>lower,l=>upper,αdot=>upper],x)
++Tensor("θ",[j=>lower, α=>upper],θ)*θupij*θbar4*Tensor("T",[i=>lower, α=>lower],x)
++θ4*θbar4*Tensor("V",x)
++barθαi*Tensor("ϕ",[i=>lower, αdot=>upper],x)
++barθij*Tensor("A",[i=>upper, j=>upper],x)
++barθαi*barθij*Tensor("B",[j=>upper, αdot=>upper],x)
++θbar4*Tensor("C",x)
++barθαi*Tensor("̄θ",[j=>upper, ν=>upper],θ)*Tensor("θ",[k=>upper, ν=>lower],θ)*Tensor("U",[j=>lower,k=>lower, i=>lower, αdot=>upper],x)
++barθαi*Tensor("̄θ",[k=>lower, β=>upper],θ)*Tensor("̄θ",[j=>upper, ν=>upper],θ)*Tensor("θ",[k=>upper, ν=>lower],θ)*Tensor("W",[j=>lower,β=>lower, i=>lower, αdot=>upper],x)
++barθαi*θ4*Tensor("X",[i=>lower, αdot=>upper],x)
++barθupij*Tensor("θ",[k=>upper, μ=>upper],θ)*Tensor("θ",[l=>upper, μ=>lower],θ)*Tensor("θ",[l=>lower, α=>upper],θ)*Tensor("Y",[k=>lower,α =>lower, i=>lower, j=>lower],x)
++barθupij*θ4*Tensor("Z",[i=>lower, j=>lower],x)
++Tensor("θ",[j=>upper, αdot=>lower],θ)*barθij*θ4*Tensor("E",[i=>lower, αdot=>upper],x)
+)
 
-
+# println(θupij*Tensor("θ",[j=>lower, α=>upper],θ)*Tensor("̄θ",[k=>upper, αdot=>lower],θbar)*Tensor("̄θ",[k=>lower, νdot=>upper],θbar)*Tensor("θ",[l=>lower, νdot=>lower],θbar)*Tensor("S",[i=>upper,α=>lower,l=>upper,αdot=>upper],x))
+# break
 
 covar_expansion=grassman_deriv_normalrep-im*Tensor("σ",[b =>upper, γdot=>upper, β =>lower])*Tensor("̄θ",[γdot=>lower, j=>upper],θbar)*spatial_deriv
 covar=Derivative("D",zero, [x,θ], [j => upper, β => lower])
@@ -134,6 +162,13 @@ println(out)
 println("Simplifying")
 out=simplify(out)
 println(out)
+
+
+t11=get_weighted_terms(get_weighted_terms(out,"θ",1),"̄θ",1)
+println("t11 weight:")
+println(rename_dummies(sort(pop_metric(t11))))
+
+
 # println("We want to compute: ", DD_SUPERFIELD)
 # println("Appyling the derivative:")
 # out=apply_derivative(DD_SUPERFIELD)
