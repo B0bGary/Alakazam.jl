@@ -99,7 +99,9 @@ function index_to_pattern(T1::TensorSuperType, pattern_ref::Dict{Index,Index})
     ind1 = newT.indices
     for ind in eachindex(ind1)
         if haskey(pattern_ref, ind1[ind][1])
-            new_ind=copy(ind1[ind][1])
+            # println("yeahh hthis might be it")
+            # new_ind=ind1[ind][1]
+            # println(":O")
             new_ind = pattern_ref[ind1[ind][1]]
             ind1[ind]=new_ind =>ind1[ind][2]
         end
@@ -108,12 +110,16 @@ function index_to_pattern(T1::TensorSuperType, pattern_ref::Dict{Index,Index})
 end
 
 
-function same_tensor_mod_pattern(T1::T, T2::T, index_dict::Dict{Index,Index}) where {T<:TensorSuperType}
+function same_tensor_mod_pattern(T1::T, T2::T_2, index_dict::Dict{Index,Index}) where {T<:TensorSuperType,T_2<:TensorSuperType}
     # println("this functio nrann")
     ind1 = T1.indices
     ind2 = T2.indices
+    if length(ind1)!=length(ind2)
+        return (false, Dict())
+    end
     temp_dict = Dict{Index,Index}()#stores non-dummies
     for ind in eachindex(ind1)
+        # println(ind)
         if ind1[ind][2]!=ind2[ind][2]
             return (false, Dict()) 
         end
@@ -193,10 +199,31 @@ end
 ##############################################################################################################################
 ##############################################################################################################################
 
+function apply_derivative(TEX::TensorExpression)
+    out=zero
+    for summand in TEX.summands
+        nt=summand[1]
+        for term in summand[2].terms
+            if typeof(term)<:DerivativeSuperType
+                nt*=apply_derivative(term)
+            else
+                nt*=term
+            end
+            
+        end
+        out=TensorExpression(out)
+        out+=TensorExpression(nt)
+    end
+        return TensorExpression(out)
+end
+
+
+
 #apply the derivative and cancel terms that are annihilated
 
 function apply_derivative(D::DerivativeSuperType)
     D = product_rule(D)
+    # println("ran product rule")
     out = zero
     # new_summands=D.summands
     for summandind in eachindex(D.summands) # for each summand (coefficient, tensorterm)
@@ -210,9 +237,11 @@ function apply_derivative(D::DerivativeSuperType)
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
                     # #println(summand[1])
-                    term = zero #annihilate the term
+                    term*= zero #annihilate the term
+                   ##println("term:: ",term)
                 else
                     #println("old term pre: ", term)
+                    # println("performing action")
                     out1 = perform_derivative_action(tensor)
                     #println("output of perofrming deriv action,", out1)
                     # # do the subs rules
@@ -224,8 +253,8 @@ function apply_derivative(D::DerivativeSuperType)
                     #println("new term is ",term )
                 end
             else
-                #println("problem zone: term is ", term)
-                #println("tensor is, ",tensor)
+                # println("problem zone: term is ", term)
+                # println("tensor is, ",tensor)
                 term *= tensor
                 #println("term is ",term )
             end
@@ -240,8 +269,10 @@ function apply_derivative(D::DerivativeSuperType)
             out=zero
         end
         out += term
-        #println(out)
+       ##println("scuffma:",out)
     end
+    out=TensorExpression(out)
+   ##println("out is:", out)
 
     return merge_sum(out)
 end
@@ -290,21 +321,27 @@ Replaces a symbolic derivative with its full form, eg substituting a covariant d
 'TEX' is the original expression. 'D' is the derivative to replace, and 'DExpansion' is a tensor expression that will be a sum of tensors/operators.
 For each operator in 'DExpansion', the operand will be replaced by the matching operand in 'TEX'.
 """
-function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpansion::TensorExpression)
+function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D::DerivativeSuperType, DExpansion::TensorExpression)
     #think about: hellish dummie indice relabeling//////
 
     new_TEX = zero #construct new expression term by term
+    TEX=1*TEX
+    avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
+    dummymap = Dict{String,Index}()#dict of what to replace pattern indices with
     for summand in TEX.summands
-        new_summand = 1
+        new_summand = summand[1]
         for tensor in summand[2].terms #look at each tensor in the tensor term
             if typeof(tensor) == typeof(D) && tensor.name == D.name #operator found
                 operand = tensor.operand
-                mapping = construct_index_rep_map(tensor, D) #index map so we use correct indices in expansion
+                # println(TensorExpression(D))
+                # println(TensorExpression(tensor))
+                mapping = construct_index_rep_map(D,tensor) #index map so we use correct indices in expansion
+                # println("mapping ", mapping)
                 replace = copy(DExpansion) #new copy of expansion to replace in our exp
 
                 #figure out what indices we're allowed to use in the replacement
                 sets = get_index_sets(tensor) #Set{IndexSet}()
-                avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
+                
                 for set in sets
                     a = OrderedSet{Index}(get_unused_indices(TEX, set))
                     push!(avail, set => a) #ones we can replace with
@@ -312,8 +349,8 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                 #construct the replacement
                 new_rep_summand = zero
                 for repsummand in replace.summands
-                    new_rep_term = 1
-                    dummymap = Dict{String,Index}()#dict of what to replace pattern indices with
+                    new_rep_term = repsummand[1]
+                    
 
                     ###############fix index logic for multiple tensors in the expressions
                     ## currently, K^{*β}_{α*}∂^{i*}_{*β}[[0*]]   => goes to K^{*β}_{α*}∂^{i*}_{*β}[[F^{ik**}_{**jβ}]], where F^{ik**}_{**jβ}
@@ -331,16 +368,18 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                                 #println(reptensor.operator_indices[pair][1])
 
                                 if haskey(mapping, reptensor.operator_indices[pair][1].name) #if the index is fixed already from before
-                                    # #println(reptensor.operator_indices[pair][1])
-                                    # #println(mapping[reptensor.operator_indices[pair][1].name])
-                                    # #println(typeof(reptensor.operator_indices[pair]))
+                                   ##println("SYMBOILIC INDEX ALREADY FIXED by pattern:")
+                                   ##println(reptensor.operator_indices[pair][1])
+                                   ##println(mapping[reptensor.operator_indices[pair][1].name])
+                                   ##println(typeof(reptensor.operator_indices[pair]))
                                     # #println(typeof(mapping[reptensor.operator_indices[pair][1].name]))
                                     reptensor.operator_indices[pair] = mapping[reptensor.operator_indices[pair][1].name] => reptensor.operator_indices[pair][2]#should replace with the right thing
                                 #println("maps to ",mapping[reptensor.operator_indices[pair][1].name])
                                 elseif haskey(dummymap, reptensor.operator_indices[pair][1].name)
+                                   ##println("there's already a dummy assigned")
                                     #println(haskey(dummymap,reptensor.operator_indices[pair][1].name))
                                     #println(dummymap[reptensor.operator_indices[pair][1].name])
-                                    old = reptensor.operator_indices[pair][1].name
+                                    #old = reptensor.operator_indices[pair][1].name
                                     # #println(, " maps to ",dummymap[reptensor.operator_indices[pair][1].name])
                                     # #println(dummymap)
                                     reptensor.operator_indices[pair] = dummymap[reptensor.operator_indices[pair][1].name] => reptensor.operator_indices[pair][2]
@@ -348,7 +387,13 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                                     # #println(dummymap[reptensor.operator_indices[pair][1].name])
                                     #println(old," maps to ",reptensor.operator_indices[pair][1].name)
                                 else #if just a placeholder index in the pattern, take from the list
-                                    new_index = pop!(avail[reptensor.operator_indices[pair][1].index_set]) # get an unused index
+                                   ##println(avail)
+                                    if !haskey(avail,reptensor.operator_indices[pair][1].index_set)
+                                            #if we're using a dummy index type thats not in the orignal expression
+                                            new_index=pop!(get_unused_indices(TEX,reptensor.operator_indices[pair][1].index_set))
+                                    else
+                                        new_index = pop!(avail[reptensor.operator_indices[pair][1].index_set]) # get an unused index
+                                    end
                                     dummymap[reptensor.operator_indices[pair][1].name] = new_index #makes sure summation dummies do the right thing
                                     reptensor.operator_indices[pair] = new_index => reptensor.operator_indices[pair][2]
                                     #println("maps to ",new_index)
@@ -356,7 +401,7 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                                 # for repindex in reptensor.
                             end
                         else
-                            #println("nonoperator")
+                           ##println("nonoperator")
                             for pair in eachindex(reptensor.indices) # replace dummies with correct etc
                                 if haskey(mapping, reptensor.indices[pair][1].name) #if the index is fixed already from before
                                     # #println(reptensor.operator_indices[pair][1])
@@ -368,7 +413,17 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                                     reptensor.indices[pair] = dummymap[reptensor.indices[pair][1].name] => reptensor.indices[pair][2]
 
                                 else #if just a placeholder index in the pattern, take from the list
-                                    new_index = pop!(avail[reptensor.indices[pair][1].index_set]) # get an unused index
+                                    if !haskey(avail,reptensor.indices[pair][1].index_set)
+                                        #if we're using a dummy index type thats not in the orignal expression
+                                       ##println("getta new index for index sets")
+                                        new_index=pop!(get_unused_indices(TEX,reptensor.indices[pair][1].index_set))
+                                       ##println("new index, ", new_index)
+                                    else
+                                       ##println("none yet taken")
+                                        new_index = pop!(avail[reptensor.indices[pair][1].index_set]) # get an unused index
+                                       ##println(new_index)
+                                    end
+                                    #new_index = pop!(avail[reptensor.indices[pair][1].index_set]) # get an unused index
                                     dummymap[reptensor.indices[pair][1].name] = new_index #makes sure summation dummies do the right thing
                                     reptensor.indices[pair] = new_index => reptensor.indices[pair][2]
 
@@ -389,6 +444,10 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
                     #println("adding ",new_rep_term)
                     update_ext_indices(new_rep_term)
                     update_ext_indices(new_rep_summand)
+                   ##println(new_rep_term)
+                   ##println(get_free_indices(new_rep_term))
+                   ##println(new_rep_summand)
+                   ##println(get_free_indices(new_rep_summand))
                     new_rep_summand += new_rep_term
                 end
                 #println("timesing here")
@@ -405,6 +464,7 @@ function expand_derivative(TEX::TensorExpression, D::DerivativeSuperType, DExpan
         new_TEX += summand[1] * new_summand
         #println(new_TEX)
     end
+   ##println(new_TEX)
     return new_TEX
 end
 
@@ -413,17 +473,18 @@ end
 function product_rule(TEX::TensorExpression)
     new_summand = zero
     for summand in TEX.summands
-        nterm = 1
+        nterm = summand[1]
         for term in summand[2].terms
-            # println("doing this1")
+            ###println("doing this1")
             if typeof(term) <: LeibnizOperatorSuperType
-                # println("doing this")
+                ###println("doing this")
                 nterm *= product_rule(term)
+                
             else
                 nterm *= term
             end
         end
-        new_summand += summand[1] * nterm
+        new_summand += nterm
     end
     return new_summand
 end
@@ -431,11 +492,15 @@ end
 
 function product_rule(O::LeibnizOperatorSuperType)
     new_summand = zero
-    # #println("operator is")
-    # #println(O)
+   ##println("ns: ",new_summand)
+   ##println(zero)
+   ##println("operator is")
+   ##println(O)
     for summandind = eachindex(O.operand.summands) #for each sum term in the expression
         summand = O.operand.summands[summandind] #get the summand (tensor term)
         grad = 0 #initialise grading
+       ##println("summand is: ",summand)
+       ##println("zero is , ", zero)
         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
             grd = (-1)^(grad * grading(O))
             operator_on_tensor = typeof(O)(O.name, summand[2].terms[tensorind], O.coord, O.operator_indices) #operator on nth term
@@ -443,25 +508,46 @@ function product_rule(O::LeibnizOperatorSuperType)
             # #println(operator_on_tensor)
             # #println("help")
             new_prod = 1
+           ##println(summand[2].terms)
+           ##println("zero is now , ", zero)
             for indsss in eachindex(summand[2].terms)
+                ###println("looking a thte ", indsss," summand: ", summand[2].terms[indsss])
                 if indsss != tensorind
+                    ###println(new_prod)
+                    ###println(summand[2].terms[indsss])
                     new_prod = new_prod * summand[2].terms[indsss]
+                   ##println("me when zero is , ", zero)
                 else
                     # update_ext_indices(operator_on_tensor)
-                    # println("updated ext inidices to: ",operator_on_tensor.indices)
+                    ###println("updated ext inidices to: ",operator_on_tensor.indices)
                     new_prod = new_prod * operator_on_tensor
+                   ##println("zero is wwaasfd, ", zero)
                 end
             end
+           ##println("we am HERE")
             # new_prod=[t  where t=summand[2].terms]
             # #println(new_prod)
             # new_prod.terms[tensorind]=operator_on_tensor
             if new_summand == Nothing
-                new_summand = grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
+                new_summand = zero+ grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
+               ##println(new_summand, "lets see if meessing up")
             else
+               ##println(new_summand)
+               ##println(new_summand.summands)
+               ##println(typeof(new_summand))
+               ##println("try me")
+               ##println(grd)
+               ##println( summand[1])
+               ##println(new_prod)
+               ##println(grd * summand[1] * new_prod)
+               ##println(typeof(grd * summand[1] * new_prod))
+               ##println("poo")
                 new_summand = new_summand + grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
+               ##println(new_summand, "addition problem??")
             end
 
             grad = (grad + grading(summand[2].terms[tensorind])) % 2
+           ##println("where..........")
         end
 
     end
@@ -475,8 +561,6 @@ function update_ext_indices(O::OperatorSuperType)
     elseif typeof(O.operand)<:TensorExpression
         O.indices=vcat(O.operator_indices, O.operand.summands[1][2].indices)
     end
-
-   
 end
 
 

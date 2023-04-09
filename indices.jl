@@ -12,11 +12,11 @@ mutable struct IndexSet
    range::Int
    indices::Vector
    default_position::IndexPosition
-   function IndexSet(name::String, range::Int=1, indices::Vector=[], default_position::IndexPosition=upper)
-      return new(name, range, indices, default_position)
-   end
-   function IndexSet(name::String, indices::Vector=[], default_position::IndexPosition=upper)
-      return new(name, 0, indices, default_position)
+   function IndexSet(name::String, range::Int=1, default_position::IndexPosition=upper)
+[      return new(name, range, [], default_position)
+]   end
+   function IndexSet(name::String, default_position::IndexPosition=upper)
+      return new(name, 0, [], default_position)
    end
 end
 
@@ -28,10 +28,12 @@ mutable struct Index<:IndexSuperType
  function Index(name::String,index_set::IndexSet, grading::Int=0)
    temp=new(name,index_set,grading)
    push!(index_set.indices,temp)
+   # println("creating idnex w name ", name)
    return temp
  end
 
  function Index(name::String, grading::Int=0)
+   # println("creating idnex w name ", name)
    new(name,IndexSet(""),grading)
  end
 end

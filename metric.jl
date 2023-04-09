@@ -2,7 +2,7 @@ include("tensor_term.jl")
 
 
 abstract type SymMetricSuperType <: TotallySymmetricSuperType end
-abstract type AntisymMetricSuperType <: TotallyAntiSymmetricSuperType end
+abstract type AntisymMetricSuperType <: TotallyAntisymmetricSuperType end
 
 
 mutable struct Metric <:SymMetricSuperType

@@ -174,7 +174,7 @@ mutable struct TensorTerm
     function TensorExpression(num::SymorNum, T::TensorSuperType)
         merge_sum(new([num=>TensorTerm(T)]))
     end
-    function TensorExpression(vec::Vector{Pair{N,T}}) where {N<:SymorNum} where {T<:TensorSuperType} 
+    function TensorExpression(vec::Vector{<:Pair{<:SymorNum,<:TensorSuperType}}) 
         merge_sum(new([v[1]=>TensorTerm(v[2]) for v in vec]))
     end
     function TensorExpression(T::TensorSuperType)
@@ -186,15 +186,20 @@ mutable struct TensorTerm
     function TensorExpression(p::Pair{T ,TensorTerm}) where {T<:SymorNum}
         merge_sum(new([p]))
     end
-    function TensorExpression(v::Vector{Pair{T ,TensorTerm}}) where {T<:SymorNum}
+    function TensorExpression(v::Vector{Pair{T ,TensorTerm}} where {T<:SymorNum})
         merge_sum(new(v))
     end
-    function TensorExpression(p::Pair{N ,T}) where {N<:SymorNum} where {T<:TensorSuperType} 
+    function TensorExpression(p::Pair{N ,T}) where {N<:SymorNum,T<:TensorSuperType} 
         merge_sum(new([p[1]=>TensorTerm(p[2])]))
     end
-
+    function TensorExpression(tex::TensorExpression)
+        tex
+    end
     function TensorExpression()
         new([0=> TensorTerm(Tensor(""))])
+    end
+    function TensorExpression(n::SymorNum)
+        new([n=> TensorTerm(Tensor(""))])
     end
 end
 
