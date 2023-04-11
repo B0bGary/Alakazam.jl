@@ -58,7 +58,7 @@ end
 
 function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorTerm,Nothing}=nothing, running_term::Union{TensorExpression,TensorTerm,Nothing}=nothing)# makes all indices on the object go to the default position according to the index set
     # println("doing pop of", T)
-    if typeof(T) <: AntisymMetricSuperType || typeof(T) <: SymMetricSuperType || typeof(T) <: OperatorSuperType  || typeof(T) <: KroneckerSuperType
+    if typeof(T) <: AntisymMetricSuperType || typeof(T) <: SymMetricSuperType || typeof(T) <: OperatorSuperType || typeof(T) <: KroneckerSuperType
         return T
     end
     T = copy(T)
@@ -78,7 +78,7 @@ function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorT
                     spare = intersect(spare, get_unused_indices(running_term, index[1].index_set))
                 end
                 spare = setdiff(spare, used_indices)
-                
+
                 ###println("using spares from original exp")
                 ###println(spare)
             end
@@ -115,7 +115,7 @@ end
 
 function contract_metrics(T::TensorExpression, typ::Type=Metric)
     ###println("running function")
-    T=copy(T)
+    T = copy(T)
     for k in eachindex(T.summands)
         ###println(k)
         ###println(T.summands)
@@ -129,17 +129,17 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         uncontr_mets = Vector{TensorSuperType}()
         ###println(metrics) 
         sign = 1 #for antisym metrics (spinor)
-        factor=1 #(for contracted deltas etc)
+        factor = 1 #(for contracted deltas etc)
 
         for metric in metrics #for each in the found metrics
             flag = false # terminate when metric is contracted
             index1 = metric.indices[1][1]
             index2 = metric.indices[2][1]
 
-            if typeof(metric)<:KroneckerSuperType
-                if index1==index2 # contracts same index kroneckers
-                    factor*=index1.index_set.range
-                    flag=true
+            if typeof(metric) <: KroneckerSuperType
+                if index1 == index2 # contracts same index kroneckers
+                    factor *= index1.index_set.range
+                    flag = true
                     break
                 end
             end
@@ -155,267 +155,494 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     break
                 end
 
-                if typeof(metric)<: EpsilonTensorSuperType && typeof(metric)==typeof(tens)
-                    # see if they have same indices, and then contract
-                    if get_free_indices(metric)==get_free_indices(tens)
-                    #same indices, so do a contraction
-                    if metric.indices[1][2]==tens.indices[1][2] #same positions
-                        if metric.indices[1][1]==tens.indices[1][1]
-                            factor*=index1.index_set.range
-                        else
-                            factor*=-index1.index_set.range
-                        end
-                    else
-                        if metric.indices[1][1]==tens.indices[1][1]
-                            factor*=-index1.index_set.range
-                        else
-                            factor*=index1.index_set.range
-                        end
-                    end
-                    
-                    flag=true
-                    end
-
-                end
 
 
                 ###########################################################################
                 if typeof(tens) <: OperatorSuperType
-                    operand=tens.operand
-                    if typeof(operand)<:TensorSuperType ||typeof(operand)<:TensorTerm
-                        
-                    for indpairnum in eachindex(tens.operand.indices)
-                        if flag
-                            break
-                        end
-                        if tens.operand.indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
-                            #some complicated logic to make sure indices go to the right position
+                    if typeof(metric) <: KroneckerSuperType
+                        println("kron metric,,", tens, metric)
+                    else
+                        println("non-kron metric,,", tens, metric)
+                    end
+                    operand = tens.operand
+                    println(operand)
+                    println(typeof(operand))
+                    if typeof(operand) <: TensorSuperType || typeof(operand) <: TensorTerm || (typeof(operand) <: TensorExpression && length(operand.summands) == 1)
+                        if typeof(operand) <: TensorExpression
+                            println("got hersssse")
+                            for indpairnum in eachindex(operand.summands[1][2].indices)
+                                if flag
+                                    break
+                                end
+                                println("got hersssssse2222")
+                                if operand.summands[1][2].indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
+                                    #some complicated logic to make sure indices go to the right position
 
-                            # this should let you contract Kronckers and metrics in a consistent way
-                            met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
-                            met_pos2 = metric.indices[2][2].position
-                            ###println(met_pos1)
-                            ###println(met_pos2)
-                            sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
-                            if sumind == 0
+                                    # this should let you contract Kronckers and metrics in a consistent way
+                                    met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
+                                    met_pos2 = metric.indices[2][2].position
+                                    ###println(met_pos1)
+                                    ###println(met_pos2)
+                                    sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
+                                    if sumind == 0
 
-                                if !(typeof(metric) <: SymMetricSuperType)
+                                        if !(typeof(metric) <: SymMetricSuperType)
 
-                                    if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
-                                        sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
-                                        ###println("flipping")
-                                        ###println(tens.operand.indices[indpairnum])
-                                        if tens.operand.indices[indpairnum][2] == upper
-                                            ###println("sending upper to lower")
+                                            if (operand.summands[1][2].indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
+                                                sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
+                                                ###println("flipping")
+                                                ###println(operand.summands[1][2].indices[indpairnum])
+                                                if operand.summands[1][2].indices[indpairnum][2] == upper
+                                                    ###println("sending upper to lower")
 
-                                            tens.operand.indices[indpairnum] = metric.indices[1][1] => lower
-                                            ###println(tens.operand.indices)
+                                                    operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => lower
+                                                    ###println(operand.summands[1][2].indices)
+                                                else
+                                                    ###println("sending lower to upper")
+                                                    operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => upper
+                                                    ###println(operand.summands[1][2].indices)
+                                                end
+                                            else
+                                                operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                            end
                                         else
-                                            ###println("sending lower to upper")
-                                            tens.operand.indices[indpairnum] = metric.indices[1][1] => upper
-                                            ###println(tens.operand.indices)
+
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
                                         end
                                     else
+                                        ###println("doing this one")
+                                        ###println(operand.summands[1][2].indices[indpairnum][2])
+                                        if (operand.summands[1][2].indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => operand.summands[1][2].indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+                                        else
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[1][1] => operand.summands[1][2].indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                        end
+                                    end
+                                    #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                    flag = true #this term has been contracted, break
+                                elseif operand.summands[1][2].indices[indpairnum][1] == index1
+                                    #some complicated logic to make sure indices go to the right position
+                                    #if contracting with antisym, pick up a minus
+                                    ###println("symmetric?")
+                                    ###println(typeof(metric)<:SymMetricSuperType)
+                                    ###println(sign)
+                                    met_pos1 = metric.indices[1][2].position
+                                    met_pos2 = metric.indices[2][2].position
+                                    ###println(met_pos1)
+                                    ###println(met_pos2)
+                                    sumind = (met_pos1 + met_pos2) % 2
+                                    if sumind == 0
+                                        ###println(" yo")
+                                        if !(typeof(metric) <: SymMetricSuperType)
+                                            if (operand.summands[1][2].indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
+                                                if operand.summands[1][2].indices[indpairnum][2] == upper
+                                                    operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => lower
+                                                else
+                                                    operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => upper
+                                                end
+                                            else
+                                                sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
+                                                operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
+                                            end
+                                        else
+
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
+                                        end
+                                    else # shoulder never get here for anti sym
+                                        ###println("doing this one")
+                                        ###println(operand.summands[1][2].indices[indpairnum][2])
+                                        if (operand.summands[1][2].indices[indpairnum][2].position + met_pos1) % 2 == 0
+                                            ###println(" here")
+                                            #for anti sym, we need to keep sign but change pos 
+                                            #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                            # if !(typeof(metric)<:SymMetricSuperType)
+                                            #    ##println("we antisym")
+                                            #     if operand.summands[1][2].indices[indpairnum][2].position ==upper
+                                            #         operand.summands[1][2].indices[indpairnum]=metric.indices[2][1] => lower
+                                            #     else
+                                            #         operand.summands[1][2].indices[indpairnum]=metric.indices[2][1] => upper
+                                            #     end
+                                            # else 
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => operand.summands[1][2].indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+
+
+                                        else #opposite pos, grading etc
+                                            # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                            ###println("got here")
+                                            # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
+                                            #    ##println("we antisym too")
+                                            #     if operand.summands[1][2].indices[indpairnum][2].position ==upper
+                                            #         operand.summands[1][2].indices[indpairnum]=metric.indices[2][1] => lower
+                                            #     else
+                                            #         operand.summands[1][2].indices[indpairnum]=metric.indices[2][1] => upper
+                                            #     end
+                                            # else
+                                            operand.summands[1][2].indices[indpairnum] = metric.indices[2][1] => operand.summands[1][2].indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                            # end
+                                        end
+                                    end
+                                    #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                    flag = true #this term has been contracted, break
+                                end
+                            end
+                            for indpairnum in eachindex(tens.operator_indices)
+                                if flag
+                                    break
+                                end
+                                if tens.operator_indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
+                                    #some complicated logic to make sure indices go to the right position
+
+                                    # this should let you contract Kronckers and metrics in a consistent way
+                                    met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
+                                    met_pos2 = metric.indices[2][2].position
+                                    ###println(met_pos1)
+                                    ###println(met_pos2)
+                                    sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
+                                    if sumind == 0
+
+                                        if !(typeof(metric) <: SymMetricSuperType)
+
+                                            if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
+                                                sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
+                                                ###println("flipping")
+                                                ###println(tens.operator_indices[indpairnum])
+                                                if tens.operator_indices[indpairnum][2] == upper
+                                                    ###println("sending upper to lower")
+
+                                                    tens.operator_indices[indpairnum] = metric.indices[1][1] => lower
+                                                    ###println(tens.operator_indices)
+                                                else
+                                                    ###println("sending lower to upper")
+                                                    tens.operator_indices[indpairnum] = metric.indices[1][1] => upper
+                                                    ###println(tens.operator_indices)
+                                                end
+                                            else
+                                                tens.operator_indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                            end
+                                        else
+
+                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                        end
+                                    else
+                                        ###println("doing this one")
+                                        ###println(tens.operator_indices[indpairnum][2])
+                                        if (tens.operator_indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
+                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+                                        else
+                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                        end
+                                    end
+                                    #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                    flag = true #this term has been contracted, break
+                                elseif tens.operator_indices[indpairnum][1] == index1
+                                    #some complicated logic to make sure indices go to the right position
+                                    #if contracting with antisym, pick up a minus
+                                    ###println("symmetric?")
+                                    ###println(typeof(metric)<:SymMetricSuperType)
+                                    ###println(sign)
+                                    met_pos1 = metric.indices[1][2].position
+                                    met_pos2 = metric.indices[2][2].position
+                                    ###println(met_pos1)
+                                    ###println(met_pos2)
+                                    sumind = (met_pos1 + met_pos2) % 2
+                                    if sumind == 0
+                                        ###println(" yo")
+                                        if !(typeof(metric) <: SymMetricSuperType)
+                                            if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
+                                                if tens.operator_indices[indpairnum][2] == upper
+                                                    tens.operator_indices[indpairnum] = metric.indices[2][1] => lower
+                                                else
+                                                    tens.operator_indices[indpairnum] = metric.indices[2][1] => upper
+                                                end
+                                            else
+                                                sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
+                                                tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
+                                            end
+                                        else
+
+                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
+                                        end
+                                    else # shoulder never get here for anti sym
+                                        ###println("doing this one")
+                                        ###println(tens.operator_indices[indpairnum][2])
+                                        if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0
+                                            ###println(" here")
+                                            #for anti sym, we need to keep sign but change pos 
+                                            #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                            # if !(typeof(metric)<:SymMetricSuperType)
+                                            #    ##println("we antisym")
+                                            #     if tens.operator_indices[indpairnum][2].position ==upper
+                                            #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
+                                            #     else
+                                            #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
+                                            #     end
+                                            # else 
+                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+
+
+                                        else #opposite pos, grading etc
+                                            # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                            ###println("got here")
+                                            # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
+                                            #    ##println("we antisym too")
+                                            #     if tens.operator_indices[indpairnum][2].position ==upper
+                                            #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
+                                            #     else
+                                            #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
+                                            #     end
+                                            # else
+                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                            # end
+                                        end
+                                    end
+                                    #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                    flag = true #this term has been contracted, break
+                                end
+                            end
+
+                            tens.operand_indices = operand.summands[1][2].indices
+                            tens.indices = vcat(tens.operator_indices, tens.operand_indices)
+                        
+
+                            #####################################################
+                            ###################################################3#
+                            ########################################################
+                        else
+                        println("got here")
+                        for indpairnum in eachindex(tens.operand.indices)
+                            if flag
+                                break
+                            end
+                            println("got here2222")
+                            if tens.operand.indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
+                                #some complicated logic to make sure indices go to the right position
+
+                                # this should let you contract Kronckers and metrics in a consistent way
+                                met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
+                                met_pos2 = metric.indices[2][2].position
+                                ###println(met_pos1)
+                                ###println(met_pos2)
+                                sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
+                                if sumind == 0
+
+                                    if !(typeof(metric) <: SymMetricSuperType)
+
+                                        if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
+                                            sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
+                                            ###println("flipping")
+                                            ###println(tens.operand.indices[indpairnum])
+                                            if tens.operand.indices[indpairnum][2] == upper
+                                                ###println("sending upper to lower")
+
+                                                tens.operand.indices[indpairnum] = metric.indices[1][1] => lower
+                                                ###println(tens.operand.indices)
+                                            else
+                                                ###println("sending lower to upper")
+                                                tens.operand.indices[indpairnum] = metric.indices[1][1] => upper
+                                                ###println(tens.operand.indices)
+                                            end
+                                        else
+                                            tens.operand.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                        end
+                                    else
+
                                         tens.operand.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
                                     end
                                 else
-
-                                    tens.operand.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
-                                end
-                            else
-                                ###println("doing this one")
-                                ###println(tens.operand.indices[indpairnum][2])
-                                if (tens.operand.indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
-                                    tens.operand.indices[indpairnum] = metric.indices[1][1] => tens.operand.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
-                                else
-                                    tens.operand.indices[indpairnum] = metric.indices[1][1] => tens.operand.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
-                                end
-                            end
-                            #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
-                            flag = true #this term has been contracted, break
-                        elseif tens.operand.indices[indpairnum][1] == index1
-                            #some complicated logic to make sure indices go to the right position
-                            #if contracting with antisym, pick up a minus
-                            ###println("symmetric?")
-                            ###println(typeof(metric)<:SymMetricSuperType)
-                            ###println(sign)
-                            met_pos1 = metric.indices[1][2].position
-                            met_pos2 = metric.indices[2][2].position
-                            ###println(met_pos1)
-                            ###println(met_pos2)
-                            sumind = (met_pos1 + met_pos2) % 2
-                            if sumind == 0
-                                ###println(" yo")
-                                if !(typeof(metric) <: SymMetricSuperType)
-                                    if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
-                                        if tens.operand.indices[indpairnum][2] == upper
-                                            tens.operand.indices[indpairnum] = metric.indices[2][1] => lower
-                                        else
-                                            tens.operand.indices[indpairnum] = metric.indices[2][1] => upper
-                                        end
+                                    ###println("doing this one")
+                                    ###println(tens.operand.indices[indpairnum][2])
+                                    if (tens.operand.indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
+                                        tens.operand.indices[indpairnum] = metric.indices[1][1] => tens.operand.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
                                     else
-                                        sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
-                                        tens.operand.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
+                                        tens.operand.indices[indpairnum] = metric.indices[1][1] => tens.operand.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
                                     end
-                                else
-
-                                    tens.operand.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
                                 end
-                            else # shoulder never get here for anti sym
-                                ###println("doing this one")
-                                ###println(tens.operand.indices[indpairnum][2])
-                                if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0
-                                    ###println(" here")
-                                    #for anti sym, we need to keep sign but change pos 
-                                    #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
-                                    # if !(typeof(metric)<:SymMetricSuperType)
-                                    #    ##println("we antisym")
-                                    #     if tens.operand.indices[indpairnum][2].position ==upper
-                                    #         tens.operand.indices[indpairnum]=metric.indices[2][1] => lower
-                                    #     else
-                                    #         tens.operand.indices[indpairnum]=metric.indices[2][1] => upper
-                                    #     end
-                                    # else 
-                                    tens.operand.indices[indpairnum] = metric.indices[2][1] => tens.operand.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
-
-
-                                else #opposite pos, grading etc
-                                    # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
-                                    ###println("got here")
-                                    # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
-                                    #    ##println("we antisym too")
-                                    #     if tens.operand.indices[indpairnum][2].position ==upper
-                                    #         tens.operand.indices[indpairnum]=metric.indices[2][1] => lower
-                                    #     else
-                                    #         tens.operand.indices[indpairnum]=metric.indices[2][1] => upper
-                                    #     end
-                                    # else
-                                    tens.operand.indices[indpairnum] = metric.indices[2][1] => tens.operand.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
-                                    # end
-                                end
-                            end
-                            #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
-                            flag = true #this term has been contracted, break
-                        end
-                    end
-                    for indpairnum in eachindex(tens.operator_indices)
-                        if flag
-                            break
-                        end
-                        if tens.operator_indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
-                            #some complicated logic to make sure indices go to the right position
-
-                            # this should let you contract Kronckers and metrics in a consistent way
-                            met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
-                            met_pos2 = metric.indices[2][2].position
-                            ###println(met_pos1)
-                            ###println(met_pos2)
-                            sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
-                            if sumind == 0
-
-                                if !(typeof(metric) <: SymMetricSuperType)
-
-                                    if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
-                                        sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
-                                        ###println("flipping")
-                                        ###println(tens.operator_indices[indpairnum])
-                                        if tens.operator_indices[indpairnum][2] == upper
-                                            ###println("sending upper to lower")
-
-                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => lower
-                                            ###println(tens.operator_indices)
+                                #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                flag = true #this term has been contracted, break
+                            elseif tens.operand.indices[indpairnum][1] == index1
+                                #some complicated logic to make sure indices go to the right position
+                                #if contracting with antisym, pick up a minus
+                                ###println("symmetric?")
+                                ###println(typeof(metric)<:SymMetricSuperType)
+                                ###println(sign)
+                                met_pos1 = metric.indices[1][2].position
+                                met_pos2 = metric.indices[2][2].position
+                                ###println(met_pos1)
+                                ###println(met_pos2)
+                                sumind = (met_pos1 + met_pos2) % 2
+                                if sumind == 0
+                                    ###println(" yo")
+                                    if !(typeof(metric) <: SymMetricSuperType)
+                                        if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
+                                            if tens.operand.indices[indpairnum][2] == upper
+                                                tens.operand.indices[indpairnum] = metric.indices[2][1] => lower
+                                            else
+                                                tens.operand.indices[indpairnum] = metric.indices[2][1] => upper
+                                            end
                                         else
-                                            ###println("sending lower to upper")
-                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => upper
-                                            ###println(tens.operator_indices)
+                                            sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
+                                            tens.operand.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
                                         end
                                     else
+
+                                        tens.operand.indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
+                                    end
+                                else # shoulder never get here for anti sym
+                                    ###println("doing this one")
+                                    ###println(tens.operand.indices[indpairnum][2])
+                                    if (tens.operand.indices[indpairnum][2].position + met_pos1) % 2 == 0
+                                        ###println(" here")
+                                        #for anti sym, we need to keep sign but change pos 
+                                        #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                        # if !(typeof(metric)<:SymMetricSuperType)
+                                        #    ##println("we antisym")
+                                        #     if tens.operand.indices[indpairnum][2].position ==upper
+                                        #         tens.operand.indices[indpairnum]=metric.indices[2][1] => lower
+                                        #     else
+                                        #         tens.operand.indices[indpairnum]=metric.indices[2][1] => upper
+                                        #     end
+                                        # else 
+                                        tens.operand.indices[indpairnum] = metric.indices[2][1] => tens.operand.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+
+
+                                    else #opposite pos, grading etc
+                                        # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                        ###println("got here")
+                                        # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
+                                        #    ##println("we antisym too")
+                                        #     if tens.operand.indices[indpairnum][2].position ==upper
+                                        #         tens.operand.indices[indpairnum]=metric.indices[2][1] => lower
+                                        #     else
+                                        #         tens.operand.indices[indpairnum]=metric.indices[2][1] => upper
+                                        #     end
+                                        # else
+                                        tens.operand.indices[indpairnum] = metric.indices[2][1] => tens.operand.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                        # end
+                                    end
+                                end
+                                #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                flag = true #this term has been contracted, break
+                            end
+                        end
+                        for indpairnum in eachindex(tens.operator_indices)
+                            if flag
+                                break
+                            end
+                            if tens.operator_indices[indpairnum][1] == index2 #tensor has an index matching the 2nd index of the metric
+                                #some complicated logic to make sure indices go to the right position
+
+                                # this should let you contract Kronckers and metrics in a consistent way
+                                met_pos1 = metric.indices[1][2].position # identifies when the metric is metric or kronecker etc
+                                met_pos2 = metric.indices[2][2].position
+                                ###println(met_pos1)
+                                ###println(met_pos2)
+                                sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
+                                if sumind == 0
+
+                                    if !(typeof(metric) <: SymMetricSuperType)
+
+                                        if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
+                                            sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
+                                            ###println("flipping")
+                                            ###println(tens.operator_indices[indpairnum])
+                                            if tens.operator_indices[indpairnum][2] == upper
+                                                ###println("sending upper to lower")
+
+                                                tens.operator_indices[indpairnum] = metric.indices[1][1] => lower
+                                                ###println(tens.operator_indices)
+                                            else
+                                                ###println("sending lower to upper")
+                                                tens.operator_indices[indpairnum] = metric.indices[1][1] => upper
+                                                ###println(tens.operator_indices)
+                                            end
+                                        else
+                                            tens.operator_indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                        end
+                                    else
+
                                         tens.operator_indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
                                     end
                                 else
-
-                                    tens.operator_indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
+                                    ###println("doing this one")
+                                    ###println(tens.operator_indices[indpairnum][2])
+                                    if (tens.operator_indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
+                                        tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
+                                    else
+                                        tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                    end
                                 end
-                            else
-                                ###println("doing this one")
-                                ###println(tens.operator_indices[indpairnum][2])
-                                if (tens.operator_indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
-                                    tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
-                                else
-                                    tens.operator_indices[indpairnum] = metric.indices[1][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
-                                end
-                            end
-                            #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
-                            flag = true #this term has been contracted, break
-                        elseif tens.operator_indices[indpairnum][1] == index1
-                            #some complicated logic to make sure indices go to the right position
-                            #if contracting with antisym, pick up a minus
-                            ###println("symmetric?")
-                            ###println(typeof(metric)<:SymMetricSuperType)
-                            ###println(sign)
-                            met_pos1 = metric.indices[1][2].position
-                            met_pos2 = metric.indices[2][2].position
-                            ###println(met_pos1)
-                            ###println(met_pos2)
-                            sumind = (met_pos1 + met_pos2) % 2
-                            if sumind == 0
-                                ###println(" yo")
-                                if !(typeof(metric) <: SymMetricSuperType)
-                                    if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
-                                        if tens.operator_indices[indpairnum][2] == upper
-                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => lower
+                                #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                flag = true #this term has been contracted, break
+                            elseif tens.operator_indices[indpairnum][1] == index1
+                                #some complicated logic to make sure indices go to the right position
+                                #if contracting with antisym, pick up a minus
+                                ###println("symmetric?")
+                                ###println(typeof(metric)<:SymMetricSuperType)
+                                ###println(sign)
+                                met_pos1 = metric.indices[1][2].position
+                                met_pos2 = metric.indices[2][2].position
+                                ###println(met_pos1)
+                                ###println(met_pos2)
+                                sumind = (met_pos1 + met_pos2) % 2
+                                if sumind == 0
+                                    ###println(" yo")
+                                    if !(typeof(metric) <: SymMetricSuperType)
+                                        if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
+                                            if tens.operator_indices[indpairnum][2] == upper
+                                                tens.operator_indices[indpairnum] = metric.indices[2][1] => lower
+                                            else
+                                                tens.operator_indices[indpairnum] = metric.indices[2][1] => upper
+                                            end
                                         else
-                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => upper
+                                            sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
+                                            tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
                                         end
                                     else
-                                        sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use sign
-                                        tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower index
+
+                                        tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
                                     end
-                                else
+                                else # shoulder never get here for anti sym
+                                    ###println("doing this one")
+                                    ###println(tens.operator_indices[indpairnum][2])
+                                    if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0
+                                        ###println(" here")
+                                        #for anti sym, we need to keep sign but change pos 
+                                        #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                        # if !(typeof(metric)<:SymMetricSuperType)
+                                        #    ##println("we antisym")
+                                        #     if tens.operator_indices[indpairnum][2].position ==upper
+                                        #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
+                                        #     else
+                                        #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
+                                        #     end
+                                        # else 
+                                        tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
 
-                                    tens.operator_indices[indpairnum] = metric.indices[2][1] => metric.indices[2][2] # raise/lower
+
+                                    else #opposite pos, grading etc
+                                        # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
+                                        ###println("got here")
+                                        # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
+                                        #    ##println("we antisym too")
+                                        #     if tens.operator_indices[indpairnum][2].position ==upper
+                                        #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
+                                        #     else
+                                        #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
+                                        #     end
+                                        # else
+                                        tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
+                                        # end
+                                    end
                                 end
-                            else # shoulder never get here for anti sym
-                                ###println("doing this one")
-                                ###println(tens.operator_indices[indpairnum][2])
-                                if (tens.operator_indices[indpairnum][2].position + met_pos1) % 2 == 0
-                                    ###println(" here")
-                                    #for anti sym, we need to keep sign but change pos 
-                                    #sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
-                                    # if !(typeof(metric)<:SymMetricSuperType)
-                                    #    ##println("we antisym")
-                                    #     if tens.operator_indices[indpairnum][2].position ==upper
-                                    #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
-                                    #     else
-                                    #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
-                                    #     end
-                                    # else 
-                                    tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
-
-
-                                else #opposite pos, grading etc
-                                    # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
-                                    ###println("got here")
-                                    # if !(typeof(metric)<:SymMetricSuperType) #for anti symm, change positions
-                                    #    ##println("we antisym too")
-                                    #     if tens.operator_indices[indpairnum][2].position ==upper
-                                    #         tens.operator_indices[indpairnum]=metric.indices[2][1] => lower
-                                    #     else
-                                    #         tens.operator_indices[indpairnum]=metric.indices[2][1] => upper
-                                    #     end
-                                    # else
-                                    tens.operator_indices[indpairnum] = metric.indices[2][1] => tens.operator_indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
-                                    # end
-                                end
+                                #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
+                                flag = true #this term has been contracted, break
                             end
-                            #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
-                            flag = true #this term has been contracted, break
                         end
-                    end
 
-                    tens.operand_indices = tens.operand.indices
-                    tens.indices = vcat(tens.oeprator_indices, tens.operand_indices)
+                        tens.operand_indices = tens.operand.indices
+                        tens.indices = vcat(tens.operator_indices, tens.operand_indices)
                     end
+                end
                 else
                     ###not an operator
                     #########################################################################################
@@ -545,12 +772,60 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             if !flag
                 push!(uncontr_mets, metric)
             end
-
         end
+        to_remove = []
+        for i in eachindex(uncontr_mets)
+            if i in to_remove
+                continue
+            end
+            for j in eachindex(uncontr_mets)
+                if j in to_remove
+                    continue
+                end
+                if i < j
+                    metric = uncontr_mets[i]
+                    tens = uncontr_mets[j]
+                    # println(metric)
+                    # println(tens)
+                    if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: EpsilonTensorSuperType
+                        # see if they have same indices, and then contract
+                        # println(get_free_indices_nopos(metric))
+                        # println(get_free_indices_nopos(tens))
+                        if get_free_indices_nopos(metric) == get_free_indices_nopos(tens)
+                            #same indices, so do a contraction
+                            if metric.indices[1][2] == tens.indices[1][2] #same positions
+                                if metric.indices[1][1] == tens.indices[1][1]
+                                    factor *= metric.indices[1][1].index_set.range
+                                else
+                                    factor *= -metric.indices[1][1].index_set.range
+                                end
+                            else
+                                if metric.indices[1][1] == tens.indices[1][1]
+                                    factor *= -metric.indices[1][1].index_set.range
+                                else
+                                    factor *= metric.indices[1][1].index_set.range
+                                end
+                            end
+                            # println(factor)
+                            push!(to_remove, i)
+                            push!(to_remove, j)
+                            break
+                        end
+
+                    end
+
+                end
+            end
+        end
+        sorted_idx = sort(to_remove, rev=true)
+        for indexx in sorted_idx
+            deleteat!(uncontr_mets, indexx)
+        end
+
         T.summands[k][2].terms = vcat(uncontr_mets, non_metrics)
         ###println(T.summands[k][1])
         ###println(T.summands[k][1]*sign)
-        T.summands[k] = T.summands[k][1] * sign* factor => T.summands[k][2]
+        T.summands[k] = T.summands[k][1] * sign * factor => T.summands[k][2]
         ###println( T.summands[k])
     end
     ###println(T)
@@ -655,7 +930,7 @@ function +(A::TensorExpression, B::TensorExpression)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
-        println(get_free_indices(A),":",get_free_indices(B))
+        println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
         println(B)
 
@@ -698,20 +973,20 @@ function +(A::TensorTerm, B::TensorSuperType)
     end
 end
 
-function term_weight(T::TensorTerm,w::String)
-    weight=0
+function term_weight(T::TensorTerm, w::String)
+    weight = 0
     for term in T.terms
-        if typeof(term)<:OperatorSuperType
-            weight+=operator_weight(term,w)
-        elseif haskey(term.weights,w)
-            weight+=term.weights[w]
+        if typeof(term) <: OperatorSuperType
+            weight += operator_weight(term, w)
+        elseif haskey(term.weights, w)
+            weight += term.weights[w]
         end
     end
     return weight
 end
 
 function singleterm(TEx::TensorExpression)
-    if length(TEx.summands)==1 && TEx.summands[1][1]!=0
+    if length(TEx.summands) == 1 && TEx.summands[1][1] != 0
         return true
     end
     return false
@@ -720,10 +995,10 @@ end
 
 
 function get_weighted_terms(T::TensorExpression, w::String, value::Number)
-    new_exp=zero
+    new_exp = zero
     for summand in T.summands
-        if term_weight(summand[2],w)==value
-            new_exp+=summand[1]*summand[2]
+        if term_weight(summand[2], w) == value
+            new_exp += summand[1] * summand[2]
         end
     end
     return new_exp
@@ -800,9 +1075,9 @@ end
 
 function *(T::TensorSuperType, TEx::TensorExpression)
     ###println("doing this sort of multiplcation1")
-    new_exp=zero
+    new_exp = zero
     for sum in TEx.summands
-        new_exp+=sum[1]*T*sum[2]
+        new_exp += sum[1] * T * sum[2]
     end
     return update_indices(new_exp)
 end
@@ -1138,6 +1413,15 @@ function get_free_indices(T::TensorExpression)
     return Set(setdiff(T.summands[1][2].indices, get_dummies_positional(T.summands[1][2])))#all tensors should have matching free indices in a sum already
 end
 
+function get_free_indices_nopos(T::Union{TensorExpression,TensorSuperType,TensorTerm})
+    inds = get_free_indices(T)
+    ind = Set()
+    for d in inds
+        push!(ind, d[1])
+    end
+    return ind
+end
+
 ##############################################################################################################################
 
 #finding dummie indices
@@ -1172,9 +1456,9 @@ end
 
 
 function get_dummies(T::TensorExpression)
-    out=Set()
+    out = Set()
     for summand in T.summands
-        out=union(out, get_dummies(summand[2]))
+        out = union(out, get_dummies(summand[2]))
     end
     return out
 end
@@ -1474,7 +1758,7 @@ function simplify(TEx::TensorExpression)
     #     end
     # end
     # println("eiminating delta")
-    
+
     println(exp)
     println("popping metric")
     exp = pop_metric(exp)
@@ -1493,7 +1777,7 @@ function simplify(TEx::TensorExpression)
     println("sorting")
     sort(exp)
     exp = eliminate_epsilon(exp)
-    
+
     exp = rename_dummies(exp)
     # println("renamed:",exp)
     new_exp = zero
@@ -1507,9 +1791,9 @@ function simplify(TEx::TensorExpression)
         ##println(new_term)
         new_exp += new_term
     end
-   
+
     new_exp = eliminate_kronecker(new_exp)
-    new_exp=copy(new_exp)
+    new_exp = copy(new_exp)
     # rename_dummies(rename_dummies(new_exp))
     # ##println("renamed: ",new_exp)
     # eliminate_epsilon(new_exp)
@@ -1625,7 +1909,7 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1])!=0 ? string(tens[1]) : string(imag(tens[1]))*"im" )* ")" : tens[1])
+        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "im") * ")" : tens[1])
         print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "" : "*")
         print(io, tens[2])
         next = peek(it)
@@ -1691,22 +1975,22 @@ function Base.sort(term::TensorTerm)
 end
 
 
-function custom_order_isless(T1::TensorSuperType,T2::TensorSuperType)
-    if haskey(sort_order,T1.name)
-        if haskey(sort_order,T2.name)
-            if sort_order[T1.name]<sort_order[T2.name]
+function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType)
+    if haskey(sort_order, T1.name)
+        if haskey(sort_order, T2.name)
+            if sort_order[T1.name] < sort_order[T2.name]
                 return true
-            else 
+            else
                 return false
             end
         else
             # println(T1.name," is less than ",T2.name)
             return true
         end
-    elseif haskey(sort_order,T2.name)
+    elseif haskey(sort_order, T2.name)
         return false
     else
-        return T1.name<T2.name
+        return T1.name < T2.name
     end
 end
 
