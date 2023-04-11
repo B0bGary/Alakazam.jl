@@ -4,8 +4,62 @@ include("alakazam.jl")
 #thesis specific code to get constraints
 function strip_thetas(TEx::TensorExpression)
     used_inds=union(get_dummies(TEx),get_free_indices(TEx))
-
-
+    unused_flav=Vector(setdiff(flavour_indices.indices,used_inds))
+    unused_spin=Vector(setdiff(spinor_indices.indices,used_inds))
+    unused_conj=Vector(setdiff(spinor_conj_indices.indices,used_inds))
+    new_exp=zero
+    for summand in TEx.summands
+        new_term=summand[1]
+        tcounter=1
+        tbcounter=1
+        for term in summand[2].terms
+            if term.name=="θ"
+                # println(term)
+                for indexes in eachindex(term.indices)
+                    if term.indices[indexes][2]==upper
+                        if term.indices[indexes][1].index_set==flavour_indices
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>lower])
+                        else
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>lower])
+                        end
+                    else
+                        if term.indices[indexes][1].index_set==flavour_indices
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>upper])
+                        else
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>upper])
+                        end
+                    end
+                    
+                end
+                # println(new_term)
+                tcounter+=1
+            elseif term.name=="Θ"
+                # println(term)
+                for indexes in eachindex(term.indices)
+                    if term.indices[indexes][2]==upper
+                        if term.indices[indexes][1].index_set==flavour_indices
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>lower])
+                        else
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>lower])
+                        end
+                    else
+                        if term.indices[indexes][1].index_set==flavour_indices
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>upper])
+                        else
+                            new_term*=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>upper])
+                        end
+                    end
+                    
+                end
+                tbcounter+=1
+                # println(new_term)
+            else
+                new_term*=term
+            end
+        end
+        new_exp+=new_term
+    end
+    return new_exp
 end
 
 
@@ -190,6 +244,15 @@ println(t11)
 println("elim delta")
 t11=eliminate_kronecker(t11)
 println(t11)
+out=sort(pop_metric(t11))
+println(out)
+println("stripping thetas")
+out=strip_thetas(out)
+println(out)
+for summand in out.summands
+        println(get_free_indices(summand[2]))
+end
+println(eliminate_kronecker(out))
 
 
 
