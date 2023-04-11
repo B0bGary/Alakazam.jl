@@ -129,11 +129,21 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         uncontr_mets = Vector{TensorSuperType}()
         ###println(metrics) 
         sign = 1 #for antisym metrics (spinor)
+        factor=1 #(for contracted deltas etc)
 
         for metric in metrics #for each in the found metrics
             flag = false # terminate when metric is contracted
             index1 = metric.indices[1][1]
             index2 = metric.indices[2][1]
+
+            if typeof(metric)<:KroneckerSuperType
+                if index1==index2 # contracts same index kroneckers
+                    factor*=index1.index_set.range
+                    flag=true
+                    break
+                end
+            end
+
             for tens in non_metrics #try to contract with each other tensor
                 ###println(tens)
                 if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: KroneckerSuperType
@@ -144,6 +154,31 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                 if flag # terminat if contracted
                     break
                 end
+
+                if typeof(metric)<: EpsilonTensorSuperType && typeof(metric)==typeof(tens)
+                    # see if they have same indices, and then contract
+                    if get_free_indices(metric)==get_free_indices(tens)
+                    #same indices, so do a contraction
+                    if metric.indices[1][2]==tens.indices[1][2] #same positions
+                        if metric.indices[1][1]==tens.indices[1][1]
+                            factor*=index1.index_set.range
+                        else
+                            factor*=-index1.index_set.range
+                        end
+                    else
+                        if metric.indices[1][1]==tens.indices[1][1]
+                            factor*=-index1.index_set.range
+                        else
+                            factor*=index1.index_set.range
+                        end
+                    end
+                    
+                    flag=true
+                    end
+
+                end
+
+
                 ###########################################################################
                 if typeof(tens) <: OperatorSuperType
                     operand=tens.operand
@@ -515,7 +550,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         T.summands[k][2].terms = vcat(uncontr_mets, non_metrics)
         ###println(T.summands[k][1])
         ###println(T.summands[k][1]*sign)
-        T.summands[k] = T.summands[k][1] * sign => T.summands[k][2]
+        T.summands[k] = T.summands[k][1] * sign* factor => T.summands[k][2]
         ###println( T.summands[k])
     end
     ###println(T)
@@ -1131,6 +1166,15 @@ function get_index_sets(T::Union{TensorSuperType,TensorTerm})
     out = OrderedSet{IndexSet}()
     for t in temp
         push!(out, t.index_set)
+    end
+    return out
+end
+
+
+function get_dummies(T::TensorExpression)
+    out=Set()
+    for summand in T.summands
+        out=union(out, get_dummies(summand[2]))
     end
     return out
 end

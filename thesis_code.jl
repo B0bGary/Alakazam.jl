@@ -3,7 +3,7 @@ include("alakazam.jl")
 
 #thesis specific code to get constraints
 function strip_thetas(TEx::TensorExpression)
-
+    used_inds=union(get_dummies(TEx),get_free_indices(TEx))
 
 
 end
@@ -188,7 +188,8 @@ println("rearrange")
 t11=sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11))))))
 println(t11)
 println("elim delta")
-println(eliminate_kronecker(t11))
+t11=eliminate_kronecker(t11)
+println(t11)
 
 
 
