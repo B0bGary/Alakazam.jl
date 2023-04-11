@@ -87,3 +87,11 @@ function Base.show(io::IO, T::OperatorSuperType)
     print(io, T.operand)
     print(io,"]]")
 end
+
+function operator_weight(O::OperatorSuperType,w::String)
+    if singleterm(O.operand)
+        return term_weight(O.operand.summands[1][2],w)
+    else
+        throw(MixedWeightOperandTerms())
+    end
+end

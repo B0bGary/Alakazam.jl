@@ -58,7 +58,7 @@ end
 
 function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorTerm,Nothing}=nothing, running_term::Union{TensorExpression,TensorTerm,Nothing}=nothing)# makes all indices on the object go to the default position according to the index set
     # println("doing pop of", T)
-    if typeof(T) <: AntisymMetricSuperType || typeof(T) <: SymMetricSuperType || typeof(T) <: OperatorSuperType
+    if typeof(T) <: AntisymMetricSuperType || typeof(T) <: SymMetricSuperType || typeof(T) <: OperatorSuperType  || typeof(T) <: KroneckerSuperType
         return T
     end
     T = copy(T)
@@ -115,12 +115,16 @@ end
 
 function contract_metrics(T::TensorExpression, typ::Type=Metric)
     ###println("running function")
-
+    T=copy(T)
     for k in eachindex(T.summands)
         ###println(k)
         ###println(T.summands)
         summand = T.summands[k]
+        # println(summand)
         metrics = filter(y -> typeof(y) <: typ, summand[2].terms)
+        # if typ<:EpsilonTensorSuperType
+        #     println(metrics)
+        # end
         non_metrics = filter(y -> !(typeof(y) <: typ), summand[2].terms)
         uncontr_mets = Vector{TensorSuperType}()
         ###println(metrics) 
@@ -132,11 +136,11 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             index2 = metric.indices[2][1]
             for tens in non_metrics #try to contract with each other tensor
                 ###println(tens)
-                if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: SymMetricSuperType
-                    ###println("cant contract kronecker")
+                if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: KroneckerSuperType
+                    # println("cant contract kronecker")
                     continue
                 end
-                ###println("not a kronecker")
+                # println(tens,"not a kronecker")
                 if flag # terminat if contracted
                     break
                 end
@@ -378,7 +382,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     tens.indices = vcat(tens.oeprator_indices, tens.operand_indices)
                     end
                 else
-
+                    ###not an operator
                     #########################################################################################
                     for indpairnum in eachindex(tens.indices)
                         if flag
@@ -393,9 +397,9 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             ###println(met_pos1)
                             ###println(met_pos2)
                             sumind = (met_pos1 + met_pos2) % 2 # if = 0, both upper/lower, 1 if 1 upper 1 lower
-                            if sumind == 0
+                            if sumind == 0 # metric, not a kronecker
 
-                                if !(typeof(metric) <: SymMetricSuperType)
+                                if !(typeof(metric) <: SymMetricSuperType) #eps tensor
 
                                     if (tens.indices[indpairnum][2].position + met_pos1) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
                                         sign = sign * ((-1)^(!(typeof(metric) <: SymMetricSuperType))) #use 
@@ -420,12 +424,15 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                 end
                             else
                                 ###println("doing this one")
+                                # println("is a krnoecker, ",metric)
+                                # println("contracting, ",tens)
                                 ###println(tens.indices[indpairnum][2])
                                 if (tens.indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
                                     tens.indices[indpairnum] = metric.indices[1][1] => tens.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
                                 else
                                     tens.indices[indpairnum] = metric.indices[1][1] => tens.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
                                 end
+                                # println("yields, ",tens)
                             end
                             #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
                             flag = true #this term has been contracted, break
@@ -460,6 +467,8 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             else # shoulder never get here for anti sym
                                 ###println("doing this one")
                                 ###println(tens.indices[indpairnum][2])
+                                # println("1111is a krnoecker, ",metric)
+                                # println("111contracting, ",tens)
                                 if (tens.indices[indpairnum][2].position + met_pos1) % 2 == 0
                                     ###println(" here")
                                     #for anti sym, we need to keep sign but change pos 
@@ -489,6 +498,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                     tens.indices[indpairnum] = metric.indices[2][1] => tens.indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
                                     # end
                                 end
+                                # println("yields, ",tens)
                             end
                             #.indices[indpairnum]=metric.indices[1][1] => metric.indices[1][2]
                             flag = true #this term has been contracted, break
@@ -610,9 +620,10 @@ function +(A::TensorExpression, B::TensorExpression)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
-        ###println(get_free_indices(A),":",get_free_indices(B))
-        ###println(A)
-        ###println(B)
+        println(get_free_indices(A),":",get_free_indices(B))
+        println(A)
+        println(B)
+
         throw(FreeIndexMismatch())
     end
 end
@@ -671,13 +682,7 @@ function singleterm(TEx::TensorExpression)
     return false
 end
 
-function operator_weight(O::OperatorSuperType,w::String)
-    if singleterm(O.operand)
-        return term_weight(O.operand.summands[1][2],w)
-    else
-        throw(MixedWeightOperandTerms())
-    end
-end
+
 
 function get_weighted_terms(T::TensorExpression, w::String, value::Number)
     new_exp=zero
@@ -760,7 +765,11 @@ end
 
 function *(T::TensorSuperType, TEx::TensorExpression)
     ###println("doing this sort of multiplcation1")
-    return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
+    new_exp=zero
+    for sum in TEx.summands
+        new_exp+=sum[1]*T*sum[2]
+    end
+    return update_indices(new_exp)
 end
 
 
@@ -1420,11 +1429,10 @@ function simplify(TEx::TensorExpression)
     #         end
     #     end
     # end
-    println("eiminating delta")
-    exp = eliminate_kronecker(exp)
+    # println("eiminating delta")
+    
     println(exp)
     println("popping metric")
-
     exp = pop_metric(exp)
     # for summand in exp.summands
     #     println(summand[2])
@@ -1441,6 +1449,7 @@ function simplify(TEx::TensorExpression)
     println("sorting")
     sort(exp)
     exp = eliminate_epsilon(exp)
+    
     exp = rename_dummies(exp)
     # println("renamed:",exp)
     new_exp = zero
@@ -1454,7 +1463,9 @@ function simplify(TEx::TensorExpression)
         ##println(new_term)
         new_exp += new_term
     end
-
+   
+    new_exp = eliminate_kronecker(new_exp)
+    new_exp=copy(new_exp)
     # rename_dummies(rename_dummies(new_exp))
     # ##println("renamed: ",new_exp)
     # eliminate_epsilon(new_exp)
@@ -1570,7 +1581,7 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * string(tens[1]) * ")" : tens[1])
+        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1])!=0 ? string(tens[1]) : string(imag(tens[1]))*"im" )* ")" : tens[1])
         print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "" : "*")
         print(io, tens[2])
         next = peek(it)
@@ -1598,6 +1609,11 @@ end
 #     end
 #     return TEx
 # end
+
+function Base.sort(T::TensorTerm)
+    return sort(TensorExpression(T))
+end
+
 
 function Base.sort(TEx::TensorExpression)
     new_exp = zero
@@ -1630,6 +1646,26 @@ function Base.sort(term::TensorTerm)
     return fac * term
 end
 
+
+function custom_order_isless(T1::TensorSuperType,T2::TensorSuperType)
+    if haskey(sort_order,T1.name)
+        if haskey(sort_order,T2.name)
+            if sort_order[T1.name]<sort_order[T2.name]
+                return true
+            else 
+                return false
+            end
+        else
+            # println(T1.name," is less than ",T2.name)
+            return true
+        end
+    elseif haskey(sort_order,T2.name)
+        return false
+    else
+        return T1.name<T2.name
+    end
+end
+
 function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
     n = length(v)
     swapped = true
@@ -1637,7 +1673,13 @@ function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
     while swapped
         swapped = false
         for i in 1:n-1
-            if isless(v[i+1], v[i])
+            if !isempty(sort_order)
+                if custom_order_isless(v[i+1], v[i])
+                    v[i], v[i+1] = v[i+1], v[i]
+                    swaps += grading(v[i]) * grading(v[i+1])
+                    swapped = true
+                end
+            elseif isless(v[i+1], v[i])
                 v[i], v[i+1] = v[i+1], v[i]
                 swaps += grading(v[i]) * grading(v[i+1])
                 swapped = true

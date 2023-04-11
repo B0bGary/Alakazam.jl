@@ -30,6 +30,14 @@ include("kronecker.jl")
 include("epsilon_tensor.jl")
 include("tensor_replacements.jl")
 
+
+sort_order=Dict()
+
+function custom_sort_order(v::Vector{String})
+    global sort_order
+    sort_order = Dict(zip(v, 1:length(v)))
+end
+
 # flavour_indices = IndexSet("flavour", 2)
 # spinor_indices = IndexSet("spinor", 2)
 # spacetime_indices = IndexSet("spacetime", 4)

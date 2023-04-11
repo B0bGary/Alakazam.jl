@@ -10,7 +10,11 @@ mutable struct EpsilonTensor<:EpsilonTensorSuperType
     name::String
     indices::Vector{Pair{Index, IndexPosition}}
     weights::Dict{String,Number}
+    function_of::Vector{Coordinate}
     function EpsilonTensor(indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
-        new("ϵ",indices,Dict{String,Number}())
+        if indices[1][2]!=indices[2][2]
+            throw(InvalidEpsilonIndices())
+        end
+        new("ϵ",indices,Dict{String,Number}(),[])
     end
  end

@@ -10,6 +10,13 @@ struct OverusedIndices <: Exception
 end
 
 
+struct InvalidKroneckerIndices <: Exception
+end
+
+
+struct InvalidEpsilonIndices <: Exception
+end
+
 struct OperatorPrecedenceError <: Exception
 end
 
