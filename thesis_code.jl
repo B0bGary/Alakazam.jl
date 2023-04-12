@@ -237,22 +237,31 @@ println(out)
 
 t11=get_weighted_terms(get_weighted_terms(out,"θ",1),"Θ",1)
 println("t11 weight:")
-println(t11)
+println(merge_sum(t11))
+
 println("rearrange")
-t11=sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11))))))
+t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
 println(t11)
+
 println("elim delta")
-t11=eliminate_kronecker(t11)
+t11=merge_sum(eliminate_kronecker(t11))
+# for summand in t11.summands
+#     println(summand)
+#     println(get_free_indices(summand[2]))
+# end
 println(t11)
-out=sort(pop_metric(t11))
+out=merge_sum(sort(pop_metric(t11)))
 println(out)
+
+
 println("stripping thetas")
 out=strip_thetas(out)
 println(out)
-for summand in out.summands
-        println(get_free_indices(summand[2]))
-end
-println(eliminate_kronecker(out))
+# for summand in out.summands
+#         println(get_free_indices(summand[2]))
+# end
+println("constraint:")
+println(eliminate_epsilon(eliminate_kronecker(out)))
 
 
 
