@@ -151,8 +151,11 @@ barθupij=Tensor("Θ",[i=>upper, μdot=>upper],θbar)*Tensor("Θ",[j=>upper, μd
 θjα=Tensor("θ",[j=>lower, α=>upper],θ)
 θ4=Tensor("θ",[m=>lower, ν=>upper],θ)*Tensor("θ",[n=>lower, ν=>lower],θ)*Tensor("θ",[m=>upper, μ=>upper],θ)*Tensor("θ",[n=>upper, μ=>lower],θ)
 θbar4=Tensor("Θ",[p=>lower, νdot=>upper],θbar)*Tensor("Θ",[q=>lower, νdot=>lower],θbar)*Tensor("Θ",[p=>upper, μdot=>upper],θbar)*Tensor("Θ",[q=>upper, μdot=>lower],θbar)
-
-
+θᵅᵝ=Tensor("θ",[y=>upper, α=>upper],θ)*Tensor("θ",[y=>lower, β=>upper],θ)
+θᵦᵧ =Tensor("θ",[y=>upper, β=>lower],θ)*Tensor("θ",[y=>lower, γ=>lower],θ)
+barθᵅᵝ=Tensor("Θ",[z=>upper, αdot=>upper],θbar)*Tensor("Θ",[z=>lower, βdot=>upper],θbar)
+barθᵦᵧ =Tensor("Θ",[z=>upper, βdot=>lower],θbar)*Tensor("Θ",[z=>lower, γdot=>lower],θbar)
+θiβ=Tensor("θ",[i=>lower, β=>upper],θ)
 # define a basic proof of concept derivative
 grassman_deriv_normalrep=Derivative("∂",zero, [θ], [j => upper, β => lower])
 grassman_deriv_conjrep=Derivative("𝝏",zero, [θbar], [j => lower, βdot => upper])
@@ -197,6 +200,9 @@ SUPERFIELD=(Tensor("j", x)
 +barθupij*Tensor("θ",[k=>upper, μ=>upper],θ)*Tensor("θ",[l=>upper, μ=>lower],θ)*Tensor("θ",[l=>lower, α=>upper],θ)*Tensor("Y",[k=>lower,α =>lower, i=>lower, j=>lower],x)
 +barθupij*θ4*SymmetricTensor("Z",[i=>lower, j=>lower],x)
 +Tensor("Θ",[j=>upper, αdot=>lower],θbar)*barθij*θ4*Tensor("E",[i=>lower, αdot=>upper],x)
++θᵦᵧ*SymmetricTensor("Ω",[β=>upper,γ=>upper],x)
++θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
++barθᵦᵧ*Tensor("Λ",[βdot=>upper,γdot=>upper],x)
 )
 
 custom_sort_order(["θ","Θ","ϵ"])
@@ -221,7 +227,7 @@ out=apply_derivative(out)
 out=EpsilonTensor([τ=>upper,ρ=>upper])*out
 
 out=eliminate_epsilon(out)
-
+out=copy(out)
 D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θ], [r => upper, τ => lower])
 out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
 out2=apply_derivative(out2)
@@ -233,8 +239,9 @@ out2=apply_derivative(out2)
 out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
 
 out2=eliminate_epsilon(out2)
-
+out2=copy(out2)
 println("Result:")
+println(out+out2)
 res=simplify(out+out2)
 println(res)
 res=copy(res)
