@@ -130,12 +130,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         ###println(metrics) 
         sign = 1 #for antisym metrics (spinor)
         factor = 1 #(for contracted deltas etc)
-
+        extra_deltas =Vector{TensorSuperType}()
         for metric in metrics #for each in the found metrics
             flag = false # terminate when metric is contracted
             index1 = metric.indices[1][1]
             index2 = metric.indices[2][1]
-
+            # println(metric)
             if typeof(metric) <: KroneckerSuperType
                 if index1 == index2 # contracts same index kroneckers
                     factor *= index1.index_set.range
@@ -169,15 +169,15 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     # println(typeof(operand))
                     if typeof(operand) <: TensorSuperType || typeof(operand) <: TensorTerm || (typeof(operand) <: TensorExpression && length(operand.summands) == 1 && length(operand.summands[1][2].terms) == 1)
                         if typeof(operand) <: TensorExpression || typeof(operand) <: OperatorSuperType
-                            op_chain=Any[tens]
+                            op_chain = Any[tens]
                             # note: operand is always a tensor exp
                             # println(typeof(operand))
                             # while typeof(operand) <:OperatorSuperType 
-                            while length(operand.summands)==1 && length(operand.summands[1][2].terms)==1 && typeof(operand.summands[1][2].terms[1])<:OperatorSuperType
+                            while length(operand.summands) == 1 && length(operand.summands[1][2].terms) == 1 && typeof(operand.summands[1][2].terms[1]) <: OperatorSuperType
                                 #if operand has one summand, and if the object is an operator
-                                push!(op_chain,operand.summands[1][2].terms[1])
+                                push!(op_chain, operand.summands[1][2].terms[1])
                                 # println("pushed:", operand.summands[1][2].terms[1])
-                                operand=operand.summands[1][2].terms[1].operand
+                                operand = operand.summands[1][2].terms[1].operand
                                 # println("next operand:", operand)
                                 # if typeof(operand)<:TensorExpression
                                 #     if typeof(operand.summands[1][2])
@@ -185,7 +185,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             end
                             # println(typeof(operand))
                             # println(operand)
-                            push!(op_chain,operand.summands[1][2].terms[1])
+                            push!(op_chain, operand.summands[1][2].terms[1])
                             # println(op_chain)
                             #operand is expression
                             # println("got hersssse")
@@ -283,9 +283,9 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                             #         operand.summands[1][2].terms[1].indices[indpairnum]=metric.indices[2][1] => upper
                                             #     end
                                             # else 
-                                     #       println(operand.summands[1][2].terms[1].indices[indpairnum])
+                                            #       println(operand.summands[1][2].terms[1].indices[indpairnum])
                                             operand.summands[1][2].terms[1].indices[indpairnum] = metric.indices[2][1] => operand.summands[1][2].terms[1].indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
-                                      #      println(operand.summands[1][2].terms[1].indices[indpairnum])
+                                        #      println(operand.summands[1][2].terms[1].indices[indpairnum])
 
                                         else #opposite pos, grading etc
                                             # sign=sign*((-1)^(!(typeof(metric)<:SymMetricSuperType) ))
@@ -298,7 +298,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                             #         operand.summands[1][2].terms[1].indices[indpairnum]=metric.indices[2][1] => upper
                                             #     end
                                             # else
-                                    #        println(operand.summands[1][2].terms[1].indices[indpairnum])
+                                            #        println(operand.summands[1][2].terms[1].indices[indpairnum])
                                             operand.summands[1][2].terms[1].indices[indpairnum] = metric.indices[2][1] => operand.summands[1][2].terms[1].indices[indpairnum][2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
                                             # end
                                             # println(operand.summands[1][2].terms[1].indices[indpairnum])
@@ -433,12 +433,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             # println(op_chain)
                             for oind in reverse(eachindex(op_chain))
                                 # println("doing this")
-                                if oind>1
+                                if oind > 1
                                     # println( op_chain[oind-1],", ",op_chain[oind])
-                                op_chain[oind-1].operand_indices=op_chain[oind].indices
-                                op_chain[oind-1].indices=vcat( op_chain[oind-1].operator_indices,  op_chain[oind-1].operand_indices)
-                                # println(op_chain[oind-1])
-                                # println(op_chain[oind-1].indices)
+                                    op_chain[oind-1].operand_indices = op_chain[oind].indices
+                                    op_chain[oind-1].indices = vcat(op_chain[oind-1].operator_indices, op_chain[oind-1].operand_indices)
+                                    # println(op_chain[oind-1])
+                                    # println(op_chain[oind-1].indices)
                                 end
                             end
                             # tens.operand_indices = operand.summands[1][2].terms[1].indices
@@ -573,7 +573,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                     flag = true #this term has been contracted, break
                                 end
                             end
-                          
+
                             for indpairnum in eachindex(tens.operator_indices)
                                 if flag
                                     break
@@ -734,11 +734,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
 
                                     tens.indices[indpairnum] = metric.indices[1][1] => metric.indices[1][2] # raise/lower index
                                 end
-                            else
+                            else #TTHIS IS A KroneckerDelta
                                 ###println("doing this one")
                                 # println("is a krnoecker, ",metric)
                                 # println("contracting, ",tens)
                                 ###println(tens.indices[indpairnum][2])
+                    
                                 if (tens.indices[indpairnum][2].position + met_pos2) % 2 == 0 # if tensor index position is same as 2nd metric pos 
                                     tens.indices[indpairnum] = metric.indices[1][1] => tens.indices[indpairnum][2] # keep index in same pos ( δ_j^i A^i= A^j for example)
                                 else
@@ -839,10 +840,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     # println(metric)
                     # println(tens)
                     if typeof(metric) <: EpsilonTensorSuperType && typeof(tens) <: EpsilonTensorSuperType
+                        # println(metric, " and ",tens)
                         # see if they have same indices, and then contract
                         # println(get_free_indices_nopos(metric))
                         # println(get_free_indices_nopos(tens))
                         if get_free_indices_nopos(metric) == get_free_indices_nopos(tens)
+                            # println("same indes")
                             #same indices, so do a contraction
                             if metric.indices[1][2] == tens.indices[1][2] #same positions
                                 if metric.indices[1][1] == tens.indices[1][1]
@@ -861,9 +864,157 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             push!(to_remove, i)
                             push!(to_remove, j)
                             break
+                        elseif !isempty(intersect(get_free_indices_nopos(metric), get_free_indices_nopos(tens)))
+                            #shared index, turn to a kronecker
+
+                            # #check if both upper/lower
+                            # println(metric.indices[1][2].position)
+                            # println( tens.indices[1][2].position  )
+                            if metric.indices[1][2].position  == tens.indices[1][2].position  #same positions
+                            #    println("same pos")
+
+                                if metric.indices[1][1] == tens.indices[1][1] #eg eps^{ij} eps^{ik}
+                          
+                                    if metric.indices[1][2].position  == upper.position 
+                                        # println("c")
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[2][1] => lower]))
+                                    else
+                                        # println("d")
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[2][1] => upper]))
+                                    end
+
+                                    # factor *= metric.indices[1][1].index_set.range
+                                elseif metric.indices[2][1] == tens.indices[2][1] #2nd index same, #eg eps^{ij} eps^{kj}
+                                    if metric.indices[1][2].position  == upper.position 
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[1][1] => lower]))
+                                        # println("e")
+                                    else
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[1][1] => upper]))
+                                        # println("f")
+                                    end
+                                elseif metric.indices[1][1] == tens.indices[2][1] #alt index same, #eg eps^{ij} eps^{ki}
+                                    if metric.indices[1][2].position  == upper.position 
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[1][1] => lower]))
+                                        # println("g")
+                                    else
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[1][1] => upper]))
+                                        # println("h")
+                                    end
+                                    
+                                    factor *= (-1)
+                                    # println(factor)
+
+                                elseif metric.indices[2][1] == tens.indices[1][1] #alt index same, #eg eps^{ij} eps^{jk}
+                                    if metric.indices[1][2].position  == upper.position 
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[2][1] => lower]))
+                                        # println("i")
+                                    else
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[2][1] => upper]))
+                                        # println("j")
+                                    end
+                                    factor *= (-1)
+                                    # println(factor)
+                                    #  factor *= -metric.indices[1][1].index_set.range
+                                end
+                            elseif metric.indices[1][2].position != tens.indices[1][2].position   #opposite positions 
+                                # println("opp pos")
+
+                                if metric.indices[1][1] == tens.indices[1][1]    #eg eps^{ij} eps_{ik}
+                                    push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[2][1] => tens.indices[2][2]]))                     
+                                    factor *= (-1)
+                                    # println(factor)
+                                    # println("k")
+                                elseif metric.indices[2][1] == tens.indices[2][1] #2nd index same, #eg eps^{ij} eps_{kj}
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[1][1] => tens.indices[1][2]]))
+                                        factor *= (-1)
+                                        # println("l")
+                                elseif metric.indices[1][1] == tens.indices[2][1] #alt index same, #eg eps^{ij} eps_{ki}
+            
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[1][1] => tens.indices[1][2]]))
+                                        # println("m")
+
+                                elseif metric.indices[2][1] == tens.indices[1][1] #alt index same, #eg eps^{ij} eps_{jk}
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[2][1] => tens.indices[2][2]]))
+                                        # println("n")
+                                end
+                            end
+                            # println(factor)
+                            push!(to_remove, i)
+                            push!(to_remove, j)
+                            # println(metric," and ",tens," were contracted to make a delta")
+                            break
+
+                        end
+
+                    
+
+                    elseif typeof(metric) <: KroneckerSuperType && typeof(tens) <: KroneckerSuperType
+                        # println(metric, " and ",tens)
+                        # see if they have same indices, and then contract
+                        # println(get_free_indices_nopos(metric))
+                        # println(get_free_indices_nopos(tens))
+                        if get_free_indices_nopos(metric) == get_free_indices_nopos(tens)
+                            factor *= metric.indices[1][1].index_set.range
+                            push!(to_remove, i)
+                            push!(to_remove, j)
+                            break
+                        elseif !isempty(intersect(get_free_indices_nopos(metric), get_free_indices_nopos(tens)))
+                            #shared index, turn to a kronecker via contraction
+
+                            if metric.indices[1][2].position  == tens.indices[1][2].position  #same positions
+                            #    println("same pos")
+
+                                if metric.indices[1][1] == tens.indices[1][1] #eg eps^{ij} eps^{ik}
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[2][1] => tens.indices[1][2]]))
+
+                                    # factor *= metric.indices[1][1].index_set.range
+                                elseif metric.indices[2][1] == tens.indices[2][1] #2nd index same, #eg eps^{ij} eps^{kj}
+                            
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[1][1] => tens.indices[2][2]]))
+                                        # println("e")
+                        
+                                elseif metric.indices[1][1] == tens.indices[2][1] #alt index same, #eg eps^{ij} eps^{ki}
+                                  
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[1][1] => tens.indices[1][2]]))
+
+                                elseif metric.indices[2][1] == tens.indices[1][1] #alt index same, #eg eps^{ij} eps^{jk}
+                  
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[2][1] => tens.indices[2][2]]))
+                          
+                                    # println(factor)
+                                    #  factor *= -metric.indices[1][1].index_set.range
+                                end
+                            elseif metric.indices[1][2].position != tens.indices[1][2].position   #opposite positions 
+                                # println("opp pos")
+
+                                if metric.indices[1][1] == tens.indices[1][1]    #eg eps^{ij} eps_{ik}
+                                    push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[2][1] => tens.indices[2][2]]))                     
+                            
+                                    # println(factor)
+                                    # println("k")
+                                elseif metric.indices[2][1] == tens.indices[2][1] #2nd index same, #eg eps^{ij} eps_{kj}
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[1][1] => tens.indices[1][2]]))
+                                     
+                                elseif metric.indices[1][1] == tens.indices[2][1] #alt index same, #eg eps^{ij} eps_{ki}
+            
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[2][1] => metric.indices[2][2], tens.indices[1][1] => tens.indices[2][2]]))
+                                        # println("m")
+
+                                elseif metric.indices[2][1] == tens.indices[1][1] #alt index same, #eg eps^{ij} eps_{jk}
+                                        push!(extra_deltas, KroneckerDelta([metric.indices[1][1] => metric.indices[1][2], tens.indices[2][1] => tens.indices[1][2]]))
+                                        # println("n")
+                                end
+                            end
+                            # println(factor)
+                            push!(to_remove, i)
+                            push!(to_remove, j)
+                            # println(metric," and ",tens," were contracted to make a delta")
+                            break
+
                         end
 
                     end
+                    
 
                 end
             end
@@ -873,6 +1024,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             deleteat!(uncontr_mets, indexx)
         end
 
+        uncontr_mets=vcat(extra_deltas, uncontr_mets)
         T.summands[k][2].terms = vcat(uncontr_mets, non_metrics)
         ###println(T.summands[k][1])
         ###println(T.summands[k][1]*sign)
@@ -927,13 +1079,13 @@ end
 
 
 function eliminate_epsilon(T::TensorExpression)
-    contact_eps(contract_metrics(T, EpsilonTensorSuperType))
+    eliminate_kronecker(contract_metrics(T, EpsilonTensorSuperType))
 
 end
 
-function contact_eps(T::TensorExpression)
-    return T
-end
+# function contact_eps(T::TensorExpression)
+#     return T
+# end
 
 
 
@@ -2108,35 +2260,35 @@ end
 
 
 function to_latex(T::TensorTerm)
-    out=""
+    out = ""
     for tens in T.terms
-        out*=to_latex(tens)
+        out *= to_latex(tens)
     end
-    return Base.replace(out*" ", "\$" => "")
+    return Base.replace(out * " ", "\$" => "")
 end
 
 function to_latex(T::TensorExpression)
-    out=""
+    out = ""
     it = Iterators.Stateful(T.summands)
     for tens in it
-        out*=string( tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : string(tens[1]))
+        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : string(tens[1]))
         # println(string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "*"))
-        out*= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
-        out*=to_latex(tens[2])
+        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
+        out *= to_latex(tens[2])
         next = peek(it)
         if next !== nothing
             # println(next[1])
             if !isreal(next[1]) || real(next[1]) >= 0
-               out*= "+"
+                out *= "+"
             end
         end
     end
-    return Base.replace(out*" ", "\$" => "")
+    return Base.replace(out * " ", "\$" => "")
 end
 
 function to_latex(T::TensorSuperType)
-    out=""
-    out *= latexstring(T.name) *" "
+    out = ""
+    out *= (T.name) * " "
     if !isempty(T.indices)
         lowers = ""
         uppers = ""
@@ -2147,15 +2299,15 @@ function to_latex(T::TensorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
-                uppers = uppers * latexstring(ind.name) *" "
+                uppers = uppers * (ind.name) * " "
                 uppersempt = 0
-               
+
             else
                 lowersempt = 0
                 if typeof(ind) == DummyPatternIndex
                     lowers *= "?"
                 end
-                lowers = lowers * latexstring(ind.name)*" "
+                lowers = lowers * (ind.name) * " "
             end
         end
         if !uppersempt
@@ -2165,7 +2317,7 @@ function to_latex(T::TensorSuperType)
             out *= "_{" * lowers * "}"
         end
     end
-    return Base.replace(out*" ", "\$" => "")
+    return Base.replace(out * " ", "\$" => "")
 end
 
 

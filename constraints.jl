@@ -3,6 +3,8 @@ using LaTeXStrings
 
 w1=1
 w2=2
+
+# println(to_latex(res))
 # for w1 in range(1,4)
 #     for w2 in range(1,4)
     t11=get_weighted_terms(get_weighted_terms(res,"θ",w1),"Θ",w2)
@@ -24,7 +26,7 @@ w2=2
     #         println(get_free_indices(summand[2]))
     # end
     # println("constraint:")
-    out=eliminate_epsilon(eliminate_kronecker(out))
-    println("\$\$\\theta=",w1,",\\bar{\\theta}=",w2,"\\quad : ",to_latex(out),"\$\$")
+    out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*eliminate_kronecker(out)))))
+    println(out)
     # end
 # end
