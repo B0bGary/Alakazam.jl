@@ -168,7 +168,25 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     # println(operand)
                     # println(typeof(operand))
                     if typeof(operand) <: TensorSuperType || typeof(operand) <: TensorTerm || (typeof(operand) <: TensorExpression && length(operand.summands) == 1 && length(operand.summands[1][2].terms) == 1)
-                        if typeof(operand) <: TensorExpression
+                        if typeof(operand) <: TensorExpression || typeof(operand) <: OperatorSuperType
+                            op_chain=Any[tens]
+                            # note: operand is always a tensor exp
+                            # println(typeof(operand))
+                            # while typeof(operand) <:OperatorSuperType 
+                            while length(operand.summands)==1 && length(operand.summands[1][2].terms)==1 && typeof(operand.summands[1][2].terms[1])<:OperatorSuperType
+                                #if operand has one summand, and if the object is an operator
+                                push!(op_chain,operand.summands[1][2].terms[1])
+                                # println("pushed:", operand.summands[1][2].terms[1])
+                                operand=operand.summands[1][2].terms[1].operand
+                                # println("next operand:", operand)
+                                # if typeof(operand)<:TensorExpression
+                                #     if typeof(operand.summands[1][2])
+                                # end 
+                            end
+                            # println(typeof(operand))
+                            # println(operand)
+                            push!(op_chain,operand.summands[1][2].terms[1])
+                            # println(op_chain)
                             #operand is expression
                             # println("got hersssse")
                             for indpairnum in eachindex(operand.summands[1][2].terms[1].indices)
@@ -410,8 +428,21 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                                 end
                             end
 
-                            tens.operand_indices = operand.summands[1][2].terms[1].indices
-                            tens.indices = vcat(tens.operator_indices, tens.operand_indices)
+                            #operand.summands[1][2].terms[1].operand
+
+                            # println(op_chain)
+                            for oind in reverse(eachindex(op_chain))
+                                # println("doing this")
+                                if oind>1
+                                    # println( op_chain[oind-1],", ",op_chain[oind])
+                                op_chain[oind-1].operand_indices=op_chain[oind].indices
+                                op_chain[oind-1].indices=vcat( op_chain[oind-1].operator_indices,  op_chain[oind-1].operand_indices)
+                                # println(op_chain[oind-1])
+                                # println(op_chain[oind-1].indices)
+                                end
+                            end
+                            # tens.operand_indices = operand.summands[1][2].terms[1].indices
+                            # tens.indices = vcat(tens.operator_indices, tens.operand_indices)
                             # println("WEIRDDDDDD")
                             # println( tens.operand_indices)
                             # println( operand.summands[1][2].terms[1].indices)
@@ -422,6 +453,9 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                             ###################################################3#
                             ########################################################
                         else
+                            ########################################
+                            ########################################
+                            #operand is always a tensor expression!
                             #not an exp
                             # println("111111got here")
                             for indpairnum in eachindex(tens.operand.indices)
@@ -1766,7 +1800,7 @@ end
 
 
 function simplify(TEx::TensorExpression)
-    println("eiminating eps")
+
     exp = contract_metrics(TEx, EpsilonTensor)
     # for summand in exp.summands
     #     println(summand[2])
@@ -1781,9 +1815,6 @@ function simplify(TEx::TensorExpression)
     #     end
     # end
     # println("eiminating delta")
-
-    println(exp)
-    println("popping metric")
     exp = pop_metric(exp)
     # for summand in exp.summands
     #     println(summand[2])
@@ -1797,10 +1828,8 @@ function simplify(TEx::TensorExpression)
     #         end
     #     end
     # end
-    println("sorting")
     sort(exp)
     exp = eliminate_epsilon(exp)
-
     exp = rename_dummies(exp)
     # println("renamed:",exp)
     new_exp = zero
@@ -1816,7 +1845,6 @@ function simplify(TEx::TensorExpression)
     end
 
     new_exp = eliminate_kronecker(new_exp)
-    new_exp = copy(new_exp)
     # rename_dummies(rename_dummies(new_exp))
     # ##println("renamed: ",new_exp)
     # eliminate_epsilon(new_exp)
@@ -2076,6 +2104,68 @@ function term2strpos(Term::TensorTerm)
         push!(out, tens2str(Term.terms[tind]) => tind)
     end
     return out
+end
+
+
+function to_latex(T::TensorTerm)
+    out=""
+    for tens in T.terms
+        out*=to_latex(tens)
+    end
+    return Base.replace(out*" ", "\$" => "")
+end
+
+function to_latex(T::TensorExpression)
+    out=""
+    it = Iterators.Stateful(T.summands)
+    for tens in it
+        out*=string( tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : string(tens[1]))
+        # println(string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "*"))
+        out*= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
+        out*=to_latex(tens[2])
+        next = peek(it)
+        if next !== nothing
+            # println(next[1])
+            if !isreal(next[1]) || real(next[1]) >= 0
+               out*= "+"
+            end
+        end
+    end
+    return Base.replace(out*" ", "\$" => "")
+end
+
+function to_latex(T::TensorSuperType)
+    out=""
+    out *= latexstring(T.name) *" "
+    if !isempty(T.indices)
+        lowers = ""
+        uppers = ""
+        lowersempt::Bool = 1
+        uppersempt::Bool = 1
+        for (ind, pos) in T.indices
+            if pos.position == 0
+                if typeof(ind) == DummyPatternIndex
+                    uppers *= "?"
+                end
+                uppers = uppers * latexstring(ind.name) *" "
+                uppersempt = 0
+               
+            else
+                lowersempt = 0
+                if typeof(ind) == DummyPatternIndex
+                    lowers *= "?"
+                end
+                lowers = lowers * latexstring(ind.name)*" "
+            end
+        end
+        if !uppersempt
+            out *= "^{" * uppers * "}"
+        end
+        if !lowersempt
+            out *= "_{" * lowers * "}"
+        end
+    end
+    return Base.replace(out*" ", "\$" => "")
 end
 
 

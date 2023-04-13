@@ -198,47 +198,41 @@ covar=Derivative("D",zero, [x,θ], [j => upper, β => lower])
 println("our superfield expansions is: ", SUPERFIELD)
 
 #apply our derivative
+println("Computing Symmetrised deriv: ")
 D_SUPERFIELD=Derivative("D",SUPERFIELD, [x,θ], [s => upper, τ => lower])
-println("We want to compute: ", D_SUPERFIELD)
-
-println("Appyling the derivative:")
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 out=apply_derivative(out)
-println(out)
-
-# out=contract_metrics(out,EpsilonTensor)
-# println(out)
-# println("Eliminating deltas")
-# out=eliminate_kronecker(out)
-# println(out)
-# println("Renaming dummies")
-# out=rename_dummies(out)
-# println(out)
-println("Simplifying")
 out=simplify(out)
-println(out)
-
 DD_SUPERFIELD=Derivative("D",out,[x,θ], [r => upper, ρ => lower])
-println("We want to compute: ", DD_SUPERFIELD)
-println("Appyling the derivative:")
+
 out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
 out=apply_derivative(out)
-println(out)
-println("applying eps")
 out=EpsilonTensor([τ=>upper,ρ=>upper])*out
-println(out)
-println("elim")
+
 out=eliminate_epsilon(out)
-println(out)
-# println("Simplifying")
-# out=simplify(out)
-# println(out)
 
+D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θ], [r => upper, τ => lower])
+out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
+out2=apply_derivative(out2)
+out2=simplify(out2)
+DD_SUPERFIELD2=Derivative("D",out2,[x,θ], [s => upper, ρ => lower])
 
-t11=get_weighted_terms(get_weighted_terms(out,"θ",1),"Θ",1)
+out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
+out2=apply_derivative(out2)
+out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
+
+out2=eliminate_epsilon(out2)
+
+println("Result:")
+res=simplify(out+out2)
+println(res)
+res=copy(res)
+
+t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",2)
 println("t11 weight:")
 println(merge_sum(t11))
 
+t11=copy(t11)
 println("rearrange")
 t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
 println(t11)
@@ -261,7 +255,7 @@ println(out)
 #         println(get_free_indices(summand[2]))
 # end
 println("constraint:")
-println(eliminate_epsilon(eliminate_kronecker(out)))
+println(copy(eliminate_epsilon(eliminate_kronecker(out))))
 
 
 
