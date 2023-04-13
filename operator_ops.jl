@@ -51,7 +51,41 @@ end
 ##############################################################################################################################
 
 # printing and display
-
+function to_latex(T::OperatorSuperType)
+    out=""
+    # println(io, T.operator_indices)
+    # println(io, T.operand_indices)
+    # println(io, T.indices)
+    if !isempty(T.operator_indices)
+        lowers=""
+        uppers=""
+        lowersempt::Bool=1
+        uppersempt::Bool=1
+        # println("oper inds")
+        # println(T.operator_indices)
+        for (ind, pos) in T.operator_indices
+            if pos.position==0
+                uppers=uppers*ind.name
+                uppersempt=0
+                lowers=lowers * ""
+            else
+                uppers=uppers * ""
+                lowersempt=0
+                lowers=lowers * ind.name 
+            end
+        end
+        if !uppersempt
+            out*="^{"*uppers*"}"
+        end
+        if !lowersempt
+            out*= "_{"*lowers*"}"
+        end
+    end
+    out*="\\Big("
+    out*=to_latex(T.operand)
+    out*="\\Big)"
+    return Base.replace(out * " ", "\$" => "")
+end
 
 function Base.show(io::IO, T::OperatorSuperType)
     print(io, T.name)

@@ -1013,8 +1013,8 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
 
                         end
 
+        
                     end
-                    
 
                 end
             end
@@ -1100,7 +1100,7 @@ end
 #addition
 
 function +(A::TensorSuperType, B::TensorSuperType)
-    if get_free_indices(A) == get_free_indices(B)
+    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression([A, B])
     else
         throw(FreeIndexMismatch())
@@ -1109,7 +1109,7 @@ function +(A::TensorSuperType, B::TensorSuperType)
 end
 
 function +(A::TensorSuperType, B::TensorExpression)
-    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(TensorExpression(A), B)
     else
         throw(FreeIndexMismatch())
@@ -1117,7 +1117,7 @@ function +(A::TensorSuperType, B::TensorExpression)
 end
 
 function +(A::TensorExpression, B::TensorSuperType)
-    if isZeroTens(A) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(A) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(A, TensorExpression(B))
     else
         throw(FreeIndexMismatch())
@@ -1130,16 +1130,16 @@ function +(A::TensorExpression, B::TensorExpression)
     ##println(isZeroTens(A))
     ##println(isZeroTens(B))
     ##println(A.summands)
-    if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(A) || isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(A, B)
     else
-        println(get_free_indices(A), ":", get_free_indices(B))
+        println(get_free_indices_nopos(A), ":", get_free_indices_nopos(B))
         println(A)
         println(B)
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)
-                println(get_free_indices(tens))
+                println(get_free_indices_nopos(tens))
             end
         end
 
@@ -1150,7 +1150,7 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(TensorExpression(A), B)
     else
 
@@ -1162,7 +1162,7 @@ end
 
 function +(A::TensorTerm, B::TensorTerm)
 
-    if get_free_indices(A) == get_free_indices(B)
+    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(A) + TensorExpression(B)
     else
         throw(FreeIndexMismatch())
@@ -1173,7 +1173,7 @@ end
 
 function +(A::TensorTerm, B::TensorSuperType)
 
-    if get_free_indices(A) == get_free_indices(B)
+    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression(A) + TensorExpression(B)
     else
         ###println(get_free_indices(A))
@@ -1325,6 +1325,8 @@ function *(TEx::TensorExpression, T::TensorSuperType)
     end
     for summandind in eachindex(TEx.summands)
         ###println(TEx.summands[summandind])
+        # println("thuis")
+        # println(T)
         TEx.summands[summandind] = TEx.summands[summandind][1] => TEx.summands[summandind][2] * T
         ###println(TEx.summands[summandind])
         ###println("here")

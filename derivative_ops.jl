@@ -121,7 +121,10 @@ function same_tensor_mod_pattern(T1::T, T2::T_2, index_dict::Dict{Index,Index}) 
     for ind in eachindex(ind1)
         # println(ind)
         if ind1[ind][2]!=ind2[ind][2]
-            return (false, Dict()) 
+            return (false, Dict()) #wrong positions
+        end
+        if ind1[ind][1].index_set!=ind2[ind][1].index_set
+            return (false, Dict()) #wrong index set
         end
         if haskey(index_dict, ind1[ind][1])#check if already in pattern
             temp = index_dict[ind1[ind][1]]
@@ -205,6 +208,7 @@ function apply_derivative(TEX::TensorExpression)
         nt=summand[1]
         for term in summand[2].terms
             if typeof(term)<:DerivativeSuperType
+              
                 nt*=apply_derivative(term)
             else
                 nt*=term
@@ -242,6 +246,7 @@ function apply_derivative(D::DerivativeSuperType)
                 else
                     #println("old term pre: ", term)
                     # println("performing action")
+                    # println(tensor)
                     out1 = perform_derivative_action(tensor)
                     #println("output of perofrming deriv action,", out1)
                     # # do the subs rules

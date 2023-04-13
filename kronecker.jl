@@ -15,6 +15,9 @@ mutable struct KroneckerDelta<:KroneckerSuperType
         if indices[1][2]==indices[2][2]
             throw(InvalidKroneckerIndices())
         end
+        if indices[1][1].index_set!=indices[2][1].index_set
+            throw(InvalidKroneckerIndices())
+        end
         new("δ",indices,Dict{String,Number}(),[])
     end
  end
