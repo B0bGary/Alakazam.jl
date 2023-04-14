@@ -31,8 +31,8 @@ w2=3
     #         println(get_free_indices(summand[2]))
     # end
     # println("constraint:")
-    out=eliminate_epsilon(eliminate_kronecker(out))
- #out=eliminate_epsilon(EpsilonTensor([k=>lower,p=>lower])*(EpsilonTensor([μ=>upper,γ=>upper])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*(EpsilonTensor([k=>lower,s=>lower])*out))))
+    out=eliminate_epsilon(eliminate_epsilon(eliminate_kronecker(out)))
+ out=eliminate_epsilon(EpsilonTensor([μ=>upper,ν=>upper])*(EpsilonTensor([ρ=>upper,τ=>upper])*(KroneckerDelta([n=>lower,p=>upper])*(EpsilonTensor([q=>lower,l=>lower])*out))))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))

@@ -28,3 +28,6 @@ end
 
 struct MixedWeightOperandTerms <: Exception
 end
+
+struct SameLevelDummieError <: Exception
+end

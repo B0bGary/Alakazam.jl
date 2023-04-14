@@ -43,7 +43,12 @@ function product_rule(O::LeibnizOperatorSuperType)
 end
 
 
-
+function update_indices(O::OperatorSuperType)
+    update_indices(O.operand)
+    O.operand_indices=O.operand.summands[1][2].indices
+    O.indices=vcat(O.operator_indices,O.operand_indices)
+    return 0
+end
 
 
 
@@ -52,7 +57,7 @@ end
 
 # printing and display
 function to_latex(T::OperatorSuperType)
-    out=""
+    out=""*T.name
     # println(io, T.operator_indices)
     # println(io, T.operand_indices)
     # println(io, T.indices)

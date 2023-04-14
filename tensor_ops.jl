@@ -143,6 +143,13 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                     break
                 end
             end
+            if typeof(metric) <: EpsilonTensorSuperType
+                if index1 == index2 # contracts same index kroneckers
+                    factor *= 0
+                    flag = true
+                    break
+                end
+            end
 
             for tens in non_metrics #try to contract with each other tensor
                 ###println(tens)
@@ -1130,16 +1137,16 @@ function +(A::TensorExpression, B::TensorExpression)
     ##println(isZeroTens(A))
     ##println(isZeroTens(B))
     ##println(A.summands)
-    if isZeroTens(A) || isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
     else
-        println(get_free_indices_nopos(A), ":", get_free_indices_nopos(B))
+        println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
         println(B)
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)
-                println(get_free_indices_nopos(tens))
+                println(get_free_indices(tens))
             end
         end
 
@@ -1150,7 +1157,7 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(TensorExpression(A), B)
     else
 
@@ -1162,7 +1169,7 @@ end
 
 function +(A::TensorTerm, B::TensorTerm)
 
-    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A) + TensorExpression(B)
     else
         throw(FreeIndexMismatch())
@@ -1173,7 +1180,7 @@ end
 
 function +(A::TensorTerm, B::TensorSuperType)
 
-    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A) + TensorExpression(B)
     else
         ###println(get_free_indices(A))
@@ -1380,6 +1387,12 @@ end
 
 
 function ×(T2::TensorExpression, T1::TensorExpression)
+    used_inds=union(get_dummies(T2),get_free_indices_nopos(T1))
+    #need to make sure all different terms have the same free inds
+    unused_flav=Vector(setdiff(flavour_indices.indices,used_inds))
+    unused_spin=Vector(setdiff(spinor_indices.indices,used_inds))
+    unused_conj=Vector(setdiff(spinor_conj_indices.indices,used_inds)) 
+    ## something like this for all index sets in the the expression
 
     vec = []
     for summand2 in T2.summands
@@ -1685,8 +1698,20 @@ function get_dummies(T::Union{TensorSuperType,TensorTerm})
         ordered_counts[pair] += 1
     end
     duplicates = filter(kv -> kv[2] == 2, ordered_counts)
-    # for ind in T.indices
-    #     if cind 
+    poscheck=Dict()
+    for ind in T.indices
+        if haskey(duplicates,ind[1])
+            if haskey(poscheck,ind[1])
+                if poscheck[ind[1]]==ind[2]  
+                    println(T)
+                    println(ind)
+                throw(SameLevelDummieError())
+                end
+            else
+                poscheck[ind[1]]=ind[2]
+            end
+        end
+    end
     return collect(keys(duplicates))
 end
 
@@ -1740,6 +1765,7 @@ end
 function rename_dummies(T::TensorSuperType)
     T = copy(T)
     dummies = get_dummies(T) #returns all the dummies attached to the tensor
+    # println(dummies)
     all_indices::OrderedSet{Index} = OrderedSet([i[1] for i in T.indices]) #set of all the indices attached to the tensor
     index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
     for set in index_sets #for each type of dummie index
@@ -1837,6 +1863,7 @@ function rename_dummies(T::TensorTerm)
     T = copy(T)
     # println(T)
     dummies = get_dummies(T) #returns all the dummies attached to the tensor
+    # println(dummies)
     # println("dummies are,",dummies)
     ###println("dummies")
     ###println(dummies)
@@ -1909,6 +1936,12 @@ end
 function update_dummies(T::TensorSuperType, reps::Pair{Index,Index})
     ###println(T)
     ###println(reps)
+    if typeof(T)<:OperatorSuperType
+        update_dummies(T.operand,reps)
+        T.operator_indices=[Pair((x == reps[1] ? reps[2] : x), y) for (x, y) in T.operator_indices]
+        T.operand_indices=[Pair((x == reps[1] ? reps[2] : x), y) for (x, y) in T.operand_indices]
+    end
+
     if !isempty(T.indices)
         T.indices = [Pair((x == reps[1] ? reps[2] : x), y) for (x, y) in T.indices]
     end
@@ -1956,6 +1989,7 @@ end
 function simplify(TEx::TensorExpression)
 
     exp = contract_metrics(TEx, EpsilonTensor)
+
     # for summand in exp.summands
     #     println(summand[2])
     #     for t in summand[2].terms
@@ -1970,6 +2004,7 @@ function simplify(TEx::TensorExpression)
     # end
     # println("eiminating delta")
     exp = pop_metric(exp)
+
     # for summand in exp.summands
     #     println(summand[2])
     #     for t in summand[2].terms
@@ -1983,8 +2018,11 @@ function simplify(TEx::TensorExpression)
     #     end
     # end
     sort(exp)
+
     exp = eliminate_epsilon(exp)
+
     exp = rename_dummies(exp)
+
     # println("renamed:",exp)
     new_exp = zero
     for summand in exp.summands

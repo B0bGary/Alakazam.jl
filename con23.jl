@@ -11,24 +11,40 @@ w2=3
     t11=get_weighted_terms(get_weighted_terms(res,"θ",w1),"Θ",w2)
     # println("t:",w1,", tbar:",w2)
     merge_sum(t11)
+    println(t11)
+    # for summand in t11.summands
+    #   println(get_free_indices(summand[2]))
+    # end
 
     t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
 
     t11=merge_sum(eliminate_kronecker(t11))
+    # println(t11)
     # for summand in t11.summands
     #     println(summand)
     #     println(get_free_indices(summand[2]))
     # end
     out=merge_sum(sort(pop_metric(t11)))
-
+    # println("prestrip")
+    # # println(out)
+    println("stripping")
     out=strip_thetas(out)
-    println(copy(out))
+    # println(out)
+    # for summand in out.summands
+    #   println(get_free_indices(summand[2]))
+    # end
+    # println(copy(out))
     # for summand in out.summands
     #         println(get_free_indices(summand[2]))
     # end
     # println("constraint:")
-    out=eliminate_epsilon(eliminate_kronecker(out))
- #out=eliminate_epsilon(EpsilonTensor([m=>lower,r=>lower])*(EpsilonTensor([μ=>upper,γ=>upper])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*(EpsilonTensor([k=>lower,s=>lower])*out))))
+    out=copy(eliminate_kronecker(out))
+    out=eliminate_epsilon(out)
+    # out=copy(out)
+    # println("working to here")
+    # println(out)
+    println("working to here")
+ out=rename_dummies(eliminate_epsilon((eliminate_epsilon(EpsilonTensor([l=>lower,q=>lower])*(EpsilonTensor([m=>lower,r=>lower])*(EpsilonTensor([μ=>upper,ν=>upper])*(EpsilonTensor([νdot=>lower,μdot=>lower])*(EpsilonTensor([k=>lower,s=>lower])*out))))))))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))

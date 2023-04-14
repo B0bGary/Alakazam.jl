@@ -20,7 +20,7 @@ w2=4
     #     println(get_free_indices(summand[2]))
     # end
     out=merge_sum(sort(pop_metric(t11)))
-
+    println(copy(out))
     out=strip_thetas(out)
     println(copy(out))
     # for summand in out.summands
@@ -28,7 +28,7 @@ w2=4
     # end
     # println("constraint:")
     out=eliminate_epsilon(eliminate_kronecker(out))
- out=eliminate_epsilon(EpsilonTensor([νdot=>lower,τdot=>lower])*(KroneckerDelta([m=>lower,n=>upper])*(EpsilonTensor([μdot=>lower,ρdot=>lower])*(EpsilonTensor([u=>lower,q=>lower])*out))))
+ out=eliminate_epsilon(EpsilonTensor([σdot=>lower,τdot=>lower])*(KroneckerDelta([m=>lower,n=>upper])*(EpsilonTensor([μdot=>lower,νdot=>lower])*(EpsilonTensor([u=>lower,q=>lower])*out))))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))

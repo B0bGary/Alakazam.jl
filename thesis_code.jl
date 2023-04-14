@@ -18,15 +18,23 @@ function strip_thetas(TEx::TensorExpression)
                 for indexes in eachindex(term.indices)
                     if term.indices[indexes][2]==upper
                         if term.indices[indexes][1].index_set==flavour_indices
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>lower])
+                            dl=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>lower])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         else
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>lower])
+                            dl=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>lower])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         end
                     else
                         if term.indices[indexes][1].index_set==flavour_indices
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>upper])
+                            dl=KroneckerDelta([term.indices[indexes], unused_flav[2*tcounter-1]=>upper])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         else
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>upper])
+                            dl=KroneckerDelta([term.indices[indexes], unused_spin[tcounter]=>upper])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         end
                     end
                     
@@ -38,15 +46,23 @@ function strip_thetas(TEx::TensorExpression)
                 for indexes in eachindex(term.indices)
                     if term.indices[indexes][2]==upper
                         if term.indices[indexes][1].index_set==flavour_indices
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>lower])
+                            dl=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>lower])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         else
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>lower])
+                            dl=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>lower])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         end
                     else
                         if term.indices[indexes][1].index_set==flavour_indices
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>upper])
+                            dl=KroneckerDelta([term.indices[indexes], unused_flav[2*tbcounter]=>upper])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         else
-                            new_term*=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>upper])
+                            dl=KroneckerDelta([term.indices[indexes], unused_conj[tbcounter]=>upper])
+                            #println("replacing ",term," with ",dl )
+                            new_term*=dl
                         end
                     end
                     
@@ -155,6 +171,10 @@ barθupij=Tensor("Θ",[i=>upper, μdot=>upper],θbar)*Tensor("Θ",[j=>upper, μd
 barθᵅᵝ=Tensor("Θ",[z=>upper, αdot=>upper],θbar)*Tensor("Θ",[z=>lower, βdot=>upper],θbar)
 barθᵦᵧ =Tensor("Θ",[z=>upper, βdot=>lower],θbar)*Tensor("Θ",[z=>lower, γdot=>lower],θbar)
 θiβ=Tensor("θ",[i=>lower, β=>upper],θ)
+barθjα=Tensor("Θ",[j=>upper,αdot=>lower],θbar)
+barθjk=Tensor("Θ",[j=>lower, νdot=>upper],θbar)*Tensor("Θ",[k=>lower, νdot=>lower],θbar)
+θjk=Tensor("θ",[j=>lower, ν=>upper],θ)*Tensor("θ",[k=>lower, ν=>lower],θ)
+θʲᵏ=Tensor("θ",[j=>upper, ν=>upper],θ)*Tensor("θ",[k=>upper, ν=>lower],θ)
 # define a basic proof of concept derivative
 grassman_deriv_normalrep=Derivative("∂",zero, [θ], [j => upper, β => lower])
 grassman_deriv_conjrep=Derivative("𝝏",zero, [θbar], [j => lower, βdot => upper])
@@ -198,10 +218,31 @@ SUPERFIELD=(Tensor("j", x)
 +barθαi*θ4*Tensor("X",[i=>lower, αdot=>upper],x)
 +barθupij*Tensor("θ",[k=>upper, μ=>upper],θ)*Tensor("θ",[l=>upper, μ=>lower],θ)*Tensor("θ",[l=>lower, α=>upper],θ)*Tensor("Y",[k=>lower,α =>lower, i=>lower, j=>lower],x)
 +barθupij*θ4*SymmetricTensor("Z",[i=>lower, j=>lower],x)
-+Tensor("Θ",[j=>upper, αdot=>lower],θbar)*barθij*θ4*Tensor("E",[i=>lower, αdot=>upper],x)
++Tensor("Θ",[j=>upper, αdot=>lower],θbar)*barθij*θ4*Tensor("E",[i=>upper, αdot=>upper],x)
 +θᵦᵧ*SymmetricTensor("Ω",[β=>upper,γ=>upper],x)
-+θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
+# +θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
 +barθᵦᵧ*Tensor("Λ",[βdot=>upper,γdot=>upper],x)
+# +barθαi*barθᵅᵝ*Tensor("Ξ",[i=>lower,βdot=>lower],x)
++θᵦᵧ*barθαi*Tensor("𝒜",[β=>upper, γ=>upper,i=>lower,αdot=>upper],x)
++θᵦᵧ*barθij*Tensor("ℬ",[β=>upper, γ=>upper,i=>upper,j=>upper],x)
++θᵦᵧ*barθαi*barθij*Tensor("𝒢",[β=>upper, γ=>upper,j=>upper,αdot=>upper],x)
++θᵦᵧ*θbar4*SymmetricTensor("𝒞",[β=>upper, γ=>upper],x)
++θᵦᵧ*barθᵦᵧ*Tensor("ℋ",[β=>upper, γ=>upper,βdot=>upper, γdot=>upper],x)
+# +θᵦᵧ*barθαi*barθᵅᵝ*Tensor("ℱ",[β=>upper, γ=>upper,i=>lower,βdot=>lower],x)
+# +θiβ*θᵦᵧ*barθjα*Tensor("𝒲",[i=>upper, γ=>upper,j=>lower,αdot=>upper],x)
+# +θiβ*θᵦᵧ*barθjk*Tensor("𝒵",[i=>upper, γ=>upper,j=>upper,k=>upper],x)
+# +θiβ*θᵦᵧ*barθjα*barθjk*Tensor("ℰ",[i=>upper, γ=>upper,αdot=>upper,k=>upper],x)
+# +θiβ*θᵦᵧ*θbar4*Tensor("ℛ",[i=>upper, γ=>upper],x)
+# +θiβ*θᵦᵧ*barθᵦᵧ*Tensor("𝒴",[i=>upper, γ=>upper,βdot=>upper,γdot=>upper],x)
+# +θiβ*θᵦᵧ*barθjα*barθᵅᵝ*Tensor("𝒦",[i=>upper, γ=>upper,j=>lower,βdot=>lower],x)
++barθᵦᵧ*θiα*Tensor("ℒ",[i=>upper, α =>lower,βdot=>upper,γdot=>upper],x)
++barθᵦᵧ*θij*Tensor("ℳ",[i=>upper, j =>upper,βdot=>upper,γdot=>upper],x)
++barθᵦᵧ*θjα*θupij*Tensor("𝒩",[i=>lower, α =>lower,βdot=>upper,γdot=>upper],x)
++barθᵦᵧ*θ4*SymmetricTensor("𝒮",[βdot=>upper,γdot=>upper],x)
+# +barθαi*barθᵅᵝ*θjα*Tensor("𝒫",[j=>upper,α =>lower,i=>lower,βdot=>lower],x)
+# +barθαi*barθᵅᵝ*θjk*Tensor("𝒬",[j=>upper,k =>upper,i=>lower,βdot=>lower],x)
+# +barθαi*barθᵅᵝ*θjα*θʲᵏ*Tensor("𝒳",[k =>lower,α =>lower,i=>lower,βdot=>lower],x)
+# +barθαi*barθᵅᵝ*θ4*Tensor("𝒱",[i=>lower,βdot=>lower],x)
 )
 
 custom_sort_order(["θ","Θ","ϵ"])
