@@ -33,10 +33,11 @@ w2=4
    
     out=eliminate_epsilon(eliminate_kronecker(out))
     println(copy(out))
-    #out=eliminate_epsilon(EpsilonTensor([μdot=>lower,νdot=>lower])*((EpsilonTensor([σdot=>lower,τdot=>lower])*(EpsilonTensor([l=>lower,q=>lower])*out))))
+   out=eliminate_epsilon(EpsilonTensor([u=>lower,n=>lower])*(EpsilonTensor([μdot=>lower,νdot=>lower])*((EpsilonTensor([σdot=>lower,τdot=>lower])*(EpsilonTensor([l=>lower,q=>lower])*out)))))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))
     println("=0\$\$")
+    println(out)
     # end
 # end

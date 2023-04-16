@@ -28,7 +28,7 @@ w2=3
     # end
     # println("constraint:")
     out=eliminate_epsilon(eliminate_kronecker(out))
-  out=eliminate_epsilon(EpsilonTensor([μdot=>lower,νdot=>lower])*(EpsilonTensor([l=>lower,n=>lower])*out))
+  out=sort(eliminate_epsilon(EpsilonTensor([μdot=>lower,νdot=>lower])*(EpsilonTensor([l=>lower,n=>lower])*out)))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))
