@@ -17,6 +17,10 @@ function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:Derivati
     ind1 = D1.operator_indices
     ind2 = D2.operator_indices
     doubles = Dict{Index,Index}()#####
+    if length(ind1)!=length(ind2)
+        return (false => doubles)
+    end
+    
     for ind in eachindex(ind1)
         if ind1[ind][1].index_set == ind2[ind][1].index_set && ind1[ind][2].position == ind2[ind][2].position
             if haskey(doubles, ind1[ind][1])

@@ -7,7 +7,7 @@
 # Pkg.add("DataStructures")
 using Symbolics
 using OrderedCollections
-using Revise
+# using Revise
 using StatsBase
 import SymbolicUtils
 import Base.:*

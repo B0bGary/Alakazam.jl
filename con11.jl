@@ -33,5 +33,6 @@ w2=1
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))
     println("=0\$\$")
+    println(out)
     # end
 # end

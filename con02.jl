@@ -11,7 +11,7 @@ w2=2
     t11=get_weighted_terms(get_weighted_terms(res,"θ",w1),"Θ",w2)
     # println("t:",w1,", tbar:",w2)
     merge_sum(t11)
-
+  println(t11)
     t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
 
     t11=merge_sum(eliminate_kronecker(t11))
@@ -28,8 +28,9 @@ w2=2
     # end
     # println("constraint:")
     out=eliminate_epsilon(eliminate_kronecker(out))
-  #out=eliminate_epsilon(EpsilonTensor([γdot=>lower,ρdot=>lower])*out)
-  #out=eliminate_epsilon(EpsilonTensor([ρdot=>lower,γdot=>lower])*(EpsilonTensor([s=>lower,l=>lower])*out))
+  out=eliminate_epsilon(EpsilonTensor([s=>lower,r=>lower])*out)
+  #  out=eliminate_epsilon(EpsilonTensor([γdot=>lower,ρdot=>lower])*out)
+  #out=eliminate_epsilon(EpsilonTensor([n=>lower,r=>lower])*(EpsilonTensor([s=>lower,l=>lower])*out))
   #  out=rename_dummies(eliminate_epsilon(eliminate_epsilon(EpsilonTensor([k=>lower,r=>lower])*(EpsilonTensor([γdot=>lower,ρdot=>lower])*out))))
     println("\$\$\\theta :",w1,",\\quad \\bar{\\theta}:",w2,"\\quad :\\quad")
     println(to_latex(out))

@@ -91,7 +91,8 @@ function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorT
             use_this = pop!(spare)
             dummy = use_this => index[1].index_set.default_position == upper ? lower : upper
             push!(used_indices, use_this)
-            if false #dummy[1].grading == 0
+            if dummy[1].index_set.name == "spacetime"
+                # println("is space index")
                 metric = Metric("η", [index, dummy])
             else
                 metric = EpsilonTensor([index, dummy])
@@ -137,11 +138,19 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             index2 = metric.indices[2][1]
             # println(metric)
             if typeof(metric) <: KroneckerSuperType
+                if index1.index_set.name=="lightcone"
+                    if index1 != index2
+                        factor *= 0
+                    end
+                    flag = true
+                    break
+                else
                 if index1 == index2 # contracts same index kroneckers
                     factor *= index1.index_set.range
                     flag = true
                     break
                 end
+            end
             end
             if typeof(metric) <: EpsilonTensorSuperType
                 if index1 == index2 # contracts same index kroneckers
@@ -1139,6 +1148,9 @@ function +(A::TensorExpression, B::TensorExpression)
     ##println(A.summands)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
+
+    elseif isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
+        return TensorExpression(A, B)
     else
         println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
@@ -1157,7 +1169,7 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
         return TensorExpression(TensorExpression(A), B)
     else
 
@@ -1169,7 +1181,7 @@ end
 
 function +(A::TensorTerm, B::TensorTerm)
 
-    if get_free_indices(A) == get_free_indices(B)
+    if get_free_indices(A) == get_free_indices(B)|| isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
         return TensorExpression(A) + TensorExpression(B)
     else
         throw(FreeIndexMismatch())
@@ -1180,7 +1192,7 @@ end
 
 function +(A::TensorTerm, B::TensorSuperType)
 
-    if get_free_indices(A) == get_free_indices(B)
+    if get_free_indices(A) == get_free_indices(B)|| isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
         return TensorExpression(A) + TensorExpression(B)
     else
         ###println(get_free_indices(A))
@@ -1652,8 +1664,12 @@ function update_indices(T::TensorTerm)
     duplicates = filter(kv -> kv[2] > 2, ordered_counts)
     ###println(duplicates)
     if !isempty(duplicates)
-        # println(duplicates)
-        throw(OverusedIndices())
+        for d in duplicates
+            if d[1].index_set.name != "lightcone"
+                println(duplicates)
+                throw(OverusedIndices())
+            end
+        end
     end
     return T
 end
@@ -1777,14 +1793,18 @@ function get_dummies(T::Union{TensorSuperType,TensorTerm})
     poscheck = Dict()
     for ind in T.indices
         if haskey(duplicates, ind[1])
-            if haskey(poscheck, ind[1])
-                if poscheck[ind[1]] == ind[2]
-                    println(T)
-                    println(ind)
-                    throw(SameLevelDummieError())
+            if ind[1].index_set.name != "lightcone"
+                if haskey(poscheck, ind[1])
+                    if poscheck[ind[1]] == ind[2]
+                        println(T)
+                        println(ind)
+                        throw(SameLevelDummieError())
+                    end
+                else
+                    poscheck[ind[1]] = ind[2]
                 end
             else
-                poscheck[ind[1]] = ind[2]
+                pop!(duplicates,ind[1])
             end
         end
     end
@@ -2113,9 +2133,11 @@ function simplify(TEx::TensorExpression)
     end
 
     new_exp = eliminate_kronecker(new_exp)
-    # rename_dummies(rename_dummies(new_exp))
+    # rename_dummies()
     # ##println("renamed: ",new_exp)
     # eliminate_epsilon(new_exp)
+    new_exp = rename_dummies(new_exp)
+    contract_metrics(new_exp, Metric)
     return new_exp
 end
 
