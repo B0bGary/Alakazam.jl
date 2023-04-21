@@ -99,7 +99,7 @@ function specify_indices(TEx::TensorExpression, reps::Dict{Index,Index})
                 tens.indices=[ haskey(reps,ind[1]) ? reps[ind[1]]=>ind[2] : ind[1]=>ind[2]  for ind in tens.indices]
             end
             if !(typeof(term)<:SymorNum) && ((typeof(term)<:TensorTerm && tens in term.terms) || (typeof(term)<:TensorExpression && tens in term.summands[1][2].terms) )
-                term=0
+                term=zero
                 break
             else
                 term=term*tens
