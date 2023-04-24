@@ -12,5 +12,8 @@ mutable struct Metric <:SymMetricSuperType
     function Metric(name::String="η", indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}())
         new(name, indices)
     end
+    function Metric(indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}())
+        new("η", indices)
+    end
  end
 
