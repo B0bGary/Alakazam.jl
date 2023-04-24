@@ -140,7 +140,7 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
                 if typeof(tens)<:OperatorSuperType
                     if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
                         flag=1
-                        println("ignoring term", summand[2])
+                     #   println("ignoring term", summand[2])
                         break
                     end
                 end
@@ -184,13 +184,16 @@ x = Coordinate("x", [spacetime_indices, spacetime_indices])
 θ = Coordinate("θ", [spacetime_indices])
 θbar = Coordinate("Θ", [spacetime_indices])
 
-
+grassman_deriv=Derivative("𝛛",zero, [θ], [a => lower])
 grassman_deriv_bar=Derivative("∂",zero, [θbar], [a => lower])
 spatial_deriv=Derivative("∇",zero, [x], [a => lower, b => lower])
 
 add_derivative_action(grassman_deriv_bar,Tensor("Θ",[c=>upper],θbar),KroneckerDelta([a =>lower, c=>upper]))
+add_derivative_action(grassman_deriv,Tensor("θ",[c=>upper],θ),KroneckerDelta([a =>lower, c=>upper]))
+
 
 covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
+covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[b=>upper],θbar)*spatial_deriv
 covar=Derivative("̄D",zero, [x,θbar], [a => lower])
 
 
@@ -208,22 +211,30 @@ SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
+# +Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
 )
 
 
 D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
-
+o=out
 out=apply_derivative(out)
 println("Found deriv: ", out)
 println("Elim delta: ")
 out=eliminate_kronecker(out)
 println(out)
 
+# res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
 res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
 
 println(res)
 
 t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
+
+
+res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDpp,Dict(a=>m,b=>m))
+
+
+final=get_weighted_terms(get_weighted_terms(res2,"θ",2),"Θ",2)
+final=to_lc_expression(sort(final),Dict{Index, Index}())
