@@ -150,7 +150,6 @@ e = Index("e", spacetime_indices)
 f = Index("f", spacetime_indices)
 g = Index("g", spacetime_indices)
 
-
 #define coordinates, tensors will be functions of these coordinates (for use in derivatives)
 x = Coordinate("x", spacetime_indices)
 θ = Coordinate("θ", [flavour_indices, spinor_indices])
