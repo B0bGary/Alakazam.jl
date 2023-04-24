@@ -107,6 +107,14 @@ F = Tensor("F", [i => upper, α => lower, β => upper], x)
 G = Tensor("G", [i => lower, i => upper, j => lower], x)
 
 exp=E×F×G
+
+A = Tensor("A", [i => upper, j => lower], x)
+ηjk = Metric([j => upper, k => upper])
+
+exp = ηjk*A
+
+out = contract_metrics(TensorExpression(exp))
+
 # out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 # out=apply_derivative(out)
 
