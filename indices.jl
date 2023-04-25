@@ -50,7 +50,7 @@ mutable struct DummyPatternIndex<:IndexSuperType
  end
 
  function DummyPatternIndex(name::String, grading::Int=0)
-   new(name,IndexSet("",[]),grading)
+   new(name,IndexSet(""),grading)
  end
 end
 
