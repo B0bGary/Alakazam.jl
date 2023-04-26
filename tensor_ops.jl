@@ -2433,11 +2433,19 @@ function to_latex(T::TensorSuperType)
         lowersempt::Bool = 1
         uppersempt::Bool = 1
         for (ind, pos) in T.indices
+            if ind.name=="±"
+                ntemp="\\pm"
+            elseif ind.name=="∓"
+                ntemp="\\mp"
+            else
+                ntemp=ind.name
+            end
             if pos.position == 0
                 if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
-                uppers = uppers * (ind.name) * " "
+               
+                uppers = uppers * (ntemp) * " "
                 uppersempt = 0
 
             else
@@ -2445,7 +2453,7 @@ function to_latex(T::TensorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     lowers *= "?"
                 end
-                lowers = lowers * (ind.name) * " "
+                lowers = lowers * (ntemp) * " "
             end
         end
         if !uppersempt

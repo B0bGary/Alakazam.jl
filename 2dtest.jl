@@ -108,27 +108,24 @@ function specify_indices(TEx::TensorExpression, reps::Dict{Index,Index})
         new_exp+=term
     end
 
-
-    #delete terms with repeated thetas
-
-
-
     return new_exp
 end
 
 function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
     #replace non-dummies
     exp=specify_indices(TEx, reps)
-    println(exp)
+    # println(exp)
     #cookery for dummies....
     new_exp=zero
 
     for summand in exp.summands
         dums=get_dummies(summand[2])
         tempterm=TensorExpression(summand[2])
+        # println("reset",tempterm)
         while !isempty(dums)
             dum=pop!(dums)
             tempterm=specify_indices(tempterm, Dict(dum => p))+specify_indices(tempterm, Dict(dum => m))
+            # println(tempterm)
         end
 
         new_exp+=summand[1]*tempterm
@@ -140,7 +137,7 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
                 if typeof(tens)<:OperatorSuperType
                     if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
                         flag=1
-                        println("ignoring term", summand[2])
+                     #   println("ignoring term", summand[2])
                         break
                     end
                 end
@@ -150,7 +147,29 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
             end
     end
 
-    return res_ex
+    # end
+    out_exp=zero
+    flag=0
+    for summand in new_exp.summands
+        for tens in summand[2].terms
+            if typeof(tens)<:OperatorSuperType
+                if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
+                    
+                    flag=1
+                    break
+                end
+            end
+        end
+        if flag==0
+            # println("got here, ",summand[2] )
+        out_exp+=summand[1]*summand[2]
+        end
+        flag=0
+    end
+
+
+
+    return out_exp
 end
 
 
@@ -164,7 +183,6 @@ lightcone_indices = IndexSet("lightcone", 2,lower)
 ∓ = Index("∓", lightcone_indices, 1)
 p = Index("+", lightcone_indices, 1)
 m = Index("-", lightcone_indices, 1)
-
 
 a = Index("a", spacetime_indices, 1)
 b = Index("b", spacetime_indices,1)
@@ -184,13 +202,16 @@ x = Coordinate("x", [spacetime_indices, spacetime_indices])
 θ = Coordinate("θ", [spacetime_indices])
 θbar = Coordinate("Θ", [spacetime_indices])
 
-
+grassman_deriv=Derivative("𝛛",zero, [θ], [a => lower])
 grassman_deriv_bar=Derivative("∂",zero, [θbar], [a => lower])
 spatial_deriv=Derivative("∇",zero, [x], [a => lower, b => lower])
 
 add_derivative_action(grassman_deriv_bar,Tensor("Θ",[c=>upper],θbar),KroneckerDelta([a =>lower, c=>upper]))
+add_derivative_action(grassman_deriv,Tensor("θ",[c=>upper],θ),KroneckerDelta([a =>lower, c=>upper]))
+
 
 covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
+covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[b=>upper],θbar)*spatial_deriv
 covar=Derivative("̄D",zero, [x,θbar], [a => lower])
 
 
@@ -208,22 +229,30 @@ SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
+# +Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
 )
 
 
 D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
-
+o=out
 out=apply_derivative(out)
 println("Found deriv: ", out)
 println("Elim delta: ")
 out=eliminate_kronecker(out)
 println(out)
 
+# res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
 res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
 
 println(res)
 
-t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",1)
+t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
+
+
+res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDpp,Dict(a=>m,b=>m))
+
+
+final=get_weighted_terms(get_weighted_terms(res2,"θ",2),"Θ",2)
+final=to_lc_expression(sort(final),Dict{Index, Index}())
