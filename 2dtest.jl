@@ -226,4 +226,4 @@ res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
 
 println(res)
 
-t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
+t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",1)
