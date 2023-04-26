@@ -105,7 +105,7 @@ function specify_indices(TEx::TensorExpression, reps::Dict{Index,Index})
                 term=term*tens
             end
         end
-        new_exp+=term
+        new_exp+=summand[1]*term
     end
 
     return new_exp
@@ -130,22 +130,22 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
 
         new_exp+=summand[1]*tempterm
     end
-    res_ex=zero
-    for summand in new_exp.summands
-        flag=0
-            for tens in summand[2].terms
-                if typeof(tens)<:OperatorSuperType
-                    if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
-                        flag=1
-                     #   println("ignoring term", summand[2])
-                        break
-                    end
-                end
-            end
-            if flag==0 &&term_weight(summand[2], "θ")<=2 && term_weight(summand[2], "Θ")<=2
-                res_ex+=summand[1]*summand[2]
-            end
-    end
+    # res_ex=zero
+    # for summand in new_exp.summands
+    #     flag=0
+    #         for tens in summand[2].terms
+    #             if typeof(tens)<:OperatorSuperType
+    #                 if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
+    #                     flag=1
+    #                  #   println("ignoring term", summand[2])
+    #                     break
+    #                 end
+    #             end
+    #         end
+    #         if flag==0 &&term_weight(summand[2], "θ")<=2 && term_weight(summand[2], "Θ")<=2
+    #             res_ex+=summand[1]*summand[2]
+    #         end
+    # end
 
     # end
     out_exp=zero
@@ -210,7 +210,7 @@ add_derivative_action(grassman_deriv_bar,Tensor("Θ",[c=>upper],θbar),Kronecker
 add_derivative_action(grassman_deriv,Tensor("θ",[c=>upper],θ),KroneckerDelta([a =>lower, c=>upper]))
 
 
-covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
+covar_expansion=-1*grassman_deriv_bar#+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
 covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[b=>upper],θbar)*spatial_deriv
 covar=Derivative("̄D",zero, [x,θbar], [a => lower])
 
@@ -237,6 +237,7 @@ D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 o=out
+println("leibd: ",product_rule(o))
 out=apply_derivative(out)
 println("Found deriv: ", out)
 println("Elim delta: ")
