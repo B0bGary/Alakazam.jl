@@ -210,7 +210,7 @@ add_derivative_action(grassman_deriv_bar,Tensor("Θ",[c=>upper],θbar),Kronecker
 add_derivative_action(grassman_deriv,Tensor("θ",[c=>upper],θ),KroneckerDelta([a =>lower, c=>upper]))
 
 
-covar_expansion=-1*grassman_deriv_bar#+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
+covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
 covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[b=>upper],θbar)*spatial_deriv
 covar=Derivative("̄D",zero, [x,θbar], [a => lower])
 
@@ -245,7 +245,7 @@ out=eliminate_kronecker(out)
 println(out)
 
 # res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
-res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
+res=to_lc_expression(out,Dict(a=>m,b=>m,i=>p))
 
 println(res)
 
