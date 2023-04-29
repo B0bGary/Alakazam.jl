@@ -105,7 +105,7 @@ function specify_indices(TEx::TensorExpression, reps::Dict{Index,Index})
                 term=term*tens
             end
         end
-        new_exp+=term
+        new_exp+=summand[1]*term
     end
 
     return new_exp
@@ -130,22 +130,22 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
 
         new_exp+=summand[1]*tempterm
     end
-    res_ex=zero
-    for summand in new_exp.summands
-        flag=0
-            for tens in summand[2].terms
-                if typeof(tens)<:OperatorSuperType
-                    if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
-                        flag=1
-                     #   println("ignoring term", summand[2])
-                        break
-                    end
-                end
-            end
-            if flag==0 &&term_weight(summand[2], "θ")<=2 && term_weight(summand[2], "Θ")<=2
-                res_ex+=summand[1]*summand[2]
-            end
-    end
+    # res_ex=zero
+    # for summand in new_exp.summands
+    #     flag=0
+    #         for tens in summand[2].terms
+    #             if typeof(tens)<:OperatorSuperType
+    #                 if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
+    #                     flag=1
+    #                  #   println("ignoring term", summand[2])
+    #                     break
+    #                 end
+    #             end
+    #         end
+    #         if flag==0 &&term_weight(summand[2], "θ")<=2 && term_weight(summand[2], "Θ")<=2
+    #             res_ex+=summand[1]*summand[2]
+    #         end
+    # end
 
     # end
     out_exp=zero
@@ -225,11 +225,11 @@ SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("S",[c => lower, a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("̄S",[c => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("T",[c => lower,d => lower, a =>lower, b => lower], x)
-+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
-+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-# +Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
+#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
+#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
 )
 
 
@@ -237,6 +237,7 @@ D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 o=out
+println("leibd: ",product_rule(o))
 out=apply_derivative(out)
 println("Found deriv: ", out)
 println("Elim delta: ")
@@ -244,7 +245,7 @@ out=eliminate_kronecker(out)
 println(out)
 
 # res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
-res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
+res=to_lc_expression(out,Dict(a=>m,b=>m,i=>p))
 
 println(res)
 
