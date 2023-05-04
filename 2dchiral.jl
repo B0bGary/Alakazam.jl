@@ -105,7 +105,11 @@ function specify_indices(TEx::TensorExpression, reps::Dict{Index,Index})
                 term=term*tens
             end
         end
+<<<<<<< HEAD
         new_exp+=summand[1]*term
+=======
+        new_exp+=term
+>>>>>>> 6b7c3bc089835e0d31840f40ced0a510c1e46269
     end
 
     return new_exp
@@ -130,6 +134,7 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
 
         new_exp+=summand[1]*tempterm
     end
+<<<<<<< HEAD
     # res_ex=zero
     # for summand in new_exp.summands
     #     flag=0
@@ -146,6 +151,24 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
     #             res_ex+=summand[1]*summand[2]
     #         end
     # end
+=======
+    res_ex=zero
+    for summand in new_exp.summands
+        flag=0
+            for tens in summand[2].terms
+                if typeof(tens)<:OperatorSuperType
+                    if tens.operator_indices[1][1].name!=tens.operator_indices[2][1].name
+                        flag=1
+                     #   println("ignoring term", summand[2])
+                        break
+                    end
+                end
+            end
+            if flag==0 &&term_weight(summand[2], "θ")<=2 && term_weight(summand[2], "Θ")<=2
+                res_ex+=summand[1]*summand[2]
+            end
+    end
+>>>>>>> 6b7c3bc089835e0d31840f40ced0a510c1e46269
 
     # end
     out_exp=zero
@@ -172,7 +195,31 @@ function to_lc_expression(TEx::TensorExpression, reps::Dict{Index,Index})
     return out_exp
 end
 
+<<<<<<< HEAD
 
+=======
+function to_chiral_part(TEx::TensorExpression, reps::Index)
+    new_exp=zero
+
+    for summand in TEx.summands
+        term=1
+
+        for tens in summand[2].terms
+            if tens.name=="θ" || tens.name=="Θ"
+                if tens.indices[1][1].name!=reps.name
+                    term=zero
+                    break
+                end
+            end
+            term*=tens
+        end
+
+        new_exp+=term
+    end
+
+    return new_exp
+end
+>>>>>>> 6b7c3bc089835e0d31840f40ced0a510c1e46269
 
 #define index sets
 
@@ -225,6 +272,7 @@ SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("S",[c => lower, a =>lower, b => lower], x)
 +Tensor("Θ",[c=>upper],θbar)*Tensor("̄S",[c => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("T",[c => lower,d => lower, a =>lower, b => lower], x)
+<<<<<<< HEAD
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
@@ -238,6 +286,20 @@ D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 o=out
 println("leibd: ",product_rule(o))
+=======
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
++Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
++Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
+)
+
+
+D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x], [i => lower, j=>lower])
+
+out=expand_derivative(D_SUPERFIELD,spatial_deriv,1*spatial_deriv)
+o=out
+>>>>>>> 6b7c3bc089835e0d31840f40ced0a510c1e46269
 out=apply_derivative(out)
 println("Found deriv: ", out)
 println("Elim delta: ")
@@ -245,6 +307,7 @@ out=eliminate_kronecker(out)
 println(out)
 
 # res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
+<<<<<<< HEAD
 res=to_lc_expression(out,Dict(a=>m,b=>m,i=>p))
 
 println(res)
@@ -257,3 +320,25 @@ res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDp
 
 final=get_weighted_terms(get_weighted_terms(res2,"θ",2),"Θ",2)
 final=to_lc_expression(sort(final),Dict{Index, Index}())
+=======
+res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m, j=>m))
+
+println(to_chiral_part(res,p))
+
+# t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
+
+SUPERFIELDpp=(Tensor("j",[p =>lower, p => lower], x)
++Tensor("θ",[p=>upper],θ)*Tensor("S",[p => lower, p =>lower, p => lower], x)
++Tensor("Θ",[p=>upper],θbar)*Tensor("̄s",[p => lower, p =>lower, p => lower], x)
++Tensor("θ",[p=>upper],θ)*Tensor("Θ",[p=>upper],θbar)*Tensor("T",[p => lower,p => lower, p =>lower, p => lower], x))
+SUPERFIELDll=(Tensor("j",[p =>upper, p => upper], x)
++Tensor("θ",[p=>lower],θ)*Tensor("S",[p => upper, p =>upper, p => upper], x)
++Tensor("Θ",[p=>lower],θbar)*Tensor("̄s",[p => upper, p =>upper, p => upper], x)
++Tensor("θ",[p=>lower],θ)*Tensor("Θ",[p=>lower],θbar)*Tensor("T",[p => upper,p => upper, p =>upper, p => upper], x))
+
+res2=SUPERFIELDpp*SUPERFIELDpp
+
+
+final=get_weighted_terms(get_weighted_terms(res2,"θ",1),"Θ",1)
+# final=to_lc_expression(sort(final),Dict{Index, Index}())
+>>>>>>> 6b7c3bc089835e0d31840f40ced0a510c1e46269
