@@ -1153,6 +1153,7 @@ function +(A::TensorExpression, B::TensorExpression)
         return TensorExpression(A, B)
     else
         println(get_free_indices(A), ":", get_free_indices(B))
+        println(setdiff(A,B))
         println(A)
         println(B)
         for summand in B.summands

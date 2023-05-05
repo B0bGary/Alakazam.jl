@@ -1,5 +1,5 @@
 
-t=2
+t=1
 tb=2
 
 t11=get_weighted_terms(get_weighted_terms(res,"θ",t),"Θ",tb)
