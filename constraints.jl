@@ -1,5 +1,4 @@
-using Latexify
-using LaTeXStrings
+
 
 w1=1
 w2=2
@@ -19,7 +18,7 @@ w2=2
     #     println(get_free_indices(summand[2]))
     # end
     out=merge_sum(sort(pop_metric(t11)))
-
+println(out)
     out=strip_thetas(out)
 
     # for summand in out.summands

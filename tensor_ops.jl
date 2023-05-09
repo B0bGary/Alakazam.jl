@@ -1153,9 +1153,9 @@ function +(A::TensorExpression, B::TensorExpression)
         return TensorExpression(A, B)
     else
         println(get_free_indices(A), ":", get_free_indices(B))
-        println(setdiff(A,B))
         println(A)
         println(B)
+        println(setdiff(A,B))
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)
@@ -1402,9 +1402,9 @@ end
 function ×(T2::TensorExpression, T1::TensorExpression)
     used_inds = union(get_dummies(T2), get_free_indices_nopos(T1))
     #need to make sure all different terms have the same free inds
-    unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
-    unused_spin = Vector(setdiff(spinor_indices.indices, used_inds))
-    unused_conj = Vector(setdiff(spinor_conj_indices.indices, used_inds))
+    # unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
+    # unused_spin = Vector(setdiff(spinor_indices.indices, used_inds))
+    # # unused_conj = Vector(setdiff(spinor_conj_indices.indices, used_inds))
     ## something like this for all index sets in the the expression
 
     vec = []
