@@ -147,8 +147,8 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                 else
                 if index1 == index2 # contracts same index kroneckers
                     factor *= index1.index_set.range
-                    flag = true
-                    break
+                    flag = true #something here breaks!!!!! 
+             #       break #idk why but having the break screws things up, make it drop terms in front of the delta?? weird behaviour
                 end
             end
             end
@@ -1155,7 +1155,7 @@ function +(A::TensorExpression, B::TensorExpression)
         println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
         println(B)
-        println(setdiff(A,B))
+        println(setdiff(get_free_indices(A),get_free_indices(B)))
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)

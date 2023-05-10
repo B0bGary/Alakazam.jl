@@ -12,9 +12,10 @@ function strip_thetas(TEx::TensorExpression)
         new_term=summand[1]
         tcounter=1
         tbcounter=1
+        println("stripping summand")
         for term in summand[2].terms
             if term.name=="θ"
-                # println(term)
+                println(term)
                 for indexes in eachindex(term.indices)
                     if term.indices[indexes][2]==upper
                         if term.indices[indexes][1].index_set==flavour_indices
@@ -134,13 +135,13 @@ spatial_deriv=Derivative("∇",zero, [x])
 
 # add_derivative_action(grassman_deriv_bar,Tensor("Θ",[c=>upper, j=>upper],θbar),KroneckerDelta([a =>lower, c=>upper])*KroneckerDelta([i =>lower, j=>upper]))
 add_derivative_action(grassman_deriv,Tensor("θ",[ j=>lower, b=>lower],θ),KroneckerDelta([j =>lower, i=>upper])*KroneckerDelta([b =>lower, a=>upper]))
-add_derivative_action(grassman_deriv,Tensor("θ",[ j=>upper, b=>lower],θ),EpsilonTensor([i =>upper, j=>upper])*KroneckerDelta([b =>lower, a=>upper]))
-add_derivative_action(grassman_deriv,Tensor("θ",[ j=>lower, b=>upper],θ),KroneckerDelta([j =>lower, i=>upper])*EpsilonTensor([a =>upper, b=>upper]))
-add_derivative_action(grassman_deriv,Tensor("θ",[ j=>upper, b=>upper],θ),EpsilonTensor([i =>upper, j=>upper])*EpsilonTensor([a =>upper, b=>upper]))
+add_derivative_action(grassman_deriv,Tensor("θ",[ j=>upper, b=>lower],θ),EpsilonTensor([j =>upper, i=>upper])*KroneckerDelta([b =>lower, a=>upper]))
+add_derivative_action(grassman_deriv,Tensor("θ",[ j=>lower, b=>upper],θ),KroneckerDelta([j =>lower, i=>upper])*EpsilonTensor([b =>upper, a=>upper]))
+add_derivative_action(grassman_deriv,Tensor("θ",[ j=>upper, b=>upper],θ),EpsilonTensor([j =>upper, i=>upper])*EpsilonTensor([b =>upper, a=>upper]))
 
 
 # covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper, i=>lower],θ)*spatial_deriv
-covar_unbar_expansion=grassman_deriv-im/2*Tensor("θ",[ i=>upper, a=>upper],θ)*spatial_deriv
+covar_unbar_expansion=1*grassman_deriv#-im/2*Tensor("θ",[ i=>upper, a=>upper],θ)*spatial_deriv
 covar=Derivative("D",zero, [x,θ], [ i => upper, a=>upper])
 # covar_bar=Derivative("D",zero, [x,θbar], [a => lower, i=>lower])
 
