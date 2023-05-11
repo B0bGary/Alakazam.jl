@@ -155,6 +155,8 @@ h = Index("h", spacetime_indices)
 A = Index("A", spacetime_indices)
 B = Index("B", spacetime_indices)
 C = Index("C", spacetime_indices)
+D = Index("D", spacetime_indices)
+E = Index("E", spacetime_indices)
 
 #define coordinates, tensors will be functions of these coordinates (for use in derivatives)
 x = Coordinate("x", spacetime_indices)
@@ -272,6 +274,7 @@ out=apply_derivative(out)
 out=EpsilonTensor([τ=>upper,ρ=>upper])*out
 DD_SUPERFIELD=Derivative("D",out,[x,θ], [t => upper, σ => lower])
 out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
+println(out)
 out=apply_derivative(out)
 
 out=simplify(out)
