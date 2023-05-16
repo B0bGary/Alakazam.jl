@@ -511,7 +511,7 @@ function product_rule(O::LeibnizOperatorSuperType)
        ##println("summand is: ",summand)
        ##println("zero is , ", zero)
         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
-            grd = (-1)^(grad * grading(O))
+            grd = (-1)^(grad)
             operator_on_tensor = typeof(O)(O.name, summand[2].terms[tensorind], O.coord, O.operator_indices) #operator on nth term
             # #println("this is the op on a tens")
             # #println(operator_on_tensor)
@@ -555,7 +555,7 @@ function product_rule(O::LeibnizOperatorSuperType)
                ##println(new_summand, "addition problem??")
             end
 
-            grad = (grad + grading(summand[2].terms[tensorind])) % 2
+            grad = (grad + grading(summand[2].terms[tensorind])*op_grading(O)) % 2
            ##println("where..........")
         end
 

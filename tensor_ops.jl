@@ -2289,12 +2289,14 @@ function Base.sort(TEx::TensorExpression)
     new_exp = zero
     for summand in TEx.summands
         new_term = summand[1]
-        ###println(summand[1])
-        fac = bubble_sort_with_grading!(summand[2].terms)
-        new_term *= fac * summand[2]
-        ###println(fac)
-        ###println(summand[2])
-        ###println(new_term)
+        # println("orig coef",summand[1])
+        # println("orgin term",summand[2])
+        new_terms=copy(summand[2])
+        fac = bubble_sort_with_grading!(new_terms.terms)
+        new_term *= (fac * new_terms)
+        # println(fac)
+        # ###println(summand[2])
+        # println(new_term)
         new_exp += new_term
     end
     return new_exp
@@ -2312,8 +2314,9 @@ end
 
 
 function Base.sort(term::TensorTerm)
-    fac = bubble_sort_with_grading!(term.terms)
-    return fac * term
+    new_terms=copy(term)
+    fac = bubble_sort_with_grading!(new_terms.terms)
+    return fac * new_terms
 end
 
 

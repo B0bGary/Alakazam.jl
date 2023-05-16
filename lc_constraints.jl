@@ -1,5 +1,5 @@
 
-t=3
+t=4
 tb=0
 println(res)
 t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",t),"Θ",tb))

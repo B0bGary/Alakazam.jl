@@ -108,6 +108,7 @@ add_derivative_action(grassman_deriv,Tensor("θ",[c=>upper],θ),KroneckerDelta([
 covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[b=>upper],θ)*spatial_deriv
 covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[b=>upper],θbar)*spatial_deriv
 covar=Derivative("̄D",zero, [x,θbar], [a => lower])
+covar_unbar=Derivative("D",zero, [x,θ], [a => lower])
 
 
 θgrass=Tensor("θ",[a=>upper],θ)
@@ -118,7 +119,7 @@ custom_sort_order(["θ","Θ","ϵ"])
 #last two indices are the spacetime ones
 SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("S",[c => lower, a =>lower, b => lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("̄S",[c => lower, a =>lower, b => lower], x)
+-1*Tensor("Θ",[c=>upper],θbar)*Tensor("̄s",[c => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("T",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
@@ -129,7 +130,7 @@ SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 
 SUPERFIELDmmmm=(Tensor("T",[a =>lower, b => lower,k => lower, l =>lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("B",[c => lower, a =>lower, b => lower,k => lower, l =>lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("̄B",[c => lower, a =>lower, b => lower,k => lower, l =>lower], x)
+-1*Tensor("Θ",[c=>upper],θbar)*Tensor("̄b",[c => lower, a =>lower, b => lower,k => lower, l =>lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("C",[c => lower,d => lower, a =>lower, b => lower,k => lower, l =>lower], x)
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
@@ -140,7 +141,7 @@ SUPERFIELDmmmm=(Tensor("T",[a =>lower, b => lower,k => lower, l =>lower], x)
 
 SUPERFIELDm=(Tensor("w",[a =>lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("F",[c => lower, a =>lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("̄F",[c => lower, a =>lower], x)
+#+Tensor("Θ",[c=>upper],θbar)*Tensor("H",[c => lower, a =>lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("G",[c => lower,d => lower, a =>lower], x)
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
 #+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
@@ -149,29 +150,42 @@ SUPERFIELDm=(Tensor("w",[a =>lower], x)
 #+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
 )
 
+SUPERFIELDmbar=(Tensor("̄w",[a =>lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("̄H",[c => lower, a =>lower], x)
++1*Tensor("Θ",[c=>upper],θbar)*Tensor("̄f",[c => lower, a =>lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄G",[c => lower,d => lower, a =>lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
+#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
+#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
+#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
+)
 
-D_SUPERFIELD=Derivative("̄D",SUPERFIELDmmmm, [x], [i => lower])
 
-out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+D_SUPERFIELD=Derivative("̄D",SUPERFIELDmbar, [x], [i => lower])
+
+out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
 o=out
-println("leibd: ",product_rule(o))
-out=apply_derivative(out)
+o=product_rule(o)
+println("leibd: ",o)
+out=apply_derivative(o)
 println("Found deriv: ", out)
 println("Elim delta: ")
 out=eliminate_kronecker(out)
 println(out)
 
 # res=to_lc_expression(out,Dict(a=>p,b=>p,i=>m))
-res=to_lc_expression(out,Dict(a=>m,b=>m,k=>m,l=>m,i=>p))
-
+#res=to_lc_expression(out,Dict(a=>m,b=>m,k=>m,l=>m,i=>p, j=>p))
+res=to_lc_expression(out,Dict(a=>m,i=>p))
 println(res)
-
-# t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
 res=to_chiral_part(res,p)
 # res2=to_lc_expression(out2,Dict(a=>m,b=>m,k=>m,l=>m,i=> j=>p))
-# res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDmmmm,Dict(a=>m,b=>m, k=>m, l=>m))
+res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDmmmm,Dict(a=>m,b=>m, k=>m, l=>m))-to_lc_expression(SUPERFIELDmbar,Dict(a=>m))*to_lc_expression(SUPERFIELDm,Dict(a=>m))
+println(res2)
 
-
-# final=get_weighted_terms(get_weighted_terms(res2,"θ",1),"Θ",1)
+final=get_weighted_terms(get_weighted_terms(res2,"θ",1),"Θ",1)
+println(final)
+println(sort(final))
+println(to_latex(sort(final)))
 # final=to_chiral_part(final,p)
 # # final=to_lc_expression(sort(final),Dict{Index, Index}())
