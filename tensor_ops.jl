@@ -1,3 +1,6 @@
+using Latexify
+set_default(convert_unicode = true)
+
 include("tensor_term.jl")
 include("kronecker.jl")
 include("epsilon_tensor.jl")
@@ -147,8 +150,8 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                 else
                 if index1 == index2 # contracts same index kroneckers
                     factor *= index1.index_set.range
-                    flag = true
-                    break
+                    flag = true #something here breaks!!!!! 
+             #       break #idk why but having the break screws things up, make it drop terms in front of the delta?? weird behaviour
                 end
             end
             end
@@ -1155,6 +1158,7 @@ function +(A::TensorExpression, B::TensorExpression)
         println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
         println(B)
+        println(setdiff(get_free_indices(A),get_free_indices(B)))
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)
@@ -1401,9 +1405,9 @@ end
 function ×(T2::TensorExpression, T1::TensorExpression)
     used_inds = union(get_dummies(T2), get_free_indices_nopos(T1))
     #need to make sure all different terms have the same free inds
-    unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
-    unused_spin = Vector(setdiff(spinor_indices.indices, used_inds))
-    unused_conj = Vector(setdiff(spinor_conj_indices.indices, used_inds))
+    # unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
+    # unused_spin = Vector(setdiff(spinor_indices.indices, used_inds))
+    # # unused_conj = Vector(setdiff(spinor_conj_indices.indices, used_inds))
     ## something like this for all index sets in the the expression
 
     vec = []
@@ -2288,12 +2292,14 @@ function Base.sort(TEx::TensorExpression)
     new_exp = zero
     for summand in TEx.summands
         new_term = summand[1]
-        ###println(summand[1])
-        fac = bubble_sort_with_grading!(summand[2].terms)
-        new_term *= fac * summand[2]
-        ###println(fac)
-        ###println(summand[2])
-        ###println(new_term)
+        # println("orig coef",summand[1])
+        # println("orgin term",summand[2])
+        new_terms=copy(summand[2])
+        fac = bubble_sort_with_grading!(new_terms.terms)
+        new_term *= (fac * new_terms)
+        # println(fac)
+        # ###println(summand[2])
+        # println(new_term)
         new_exp += new_term
     end
     return new_exp
@@ -2311,8 +2317,9 @@ end
 
 
 function Base.sort(term::TensorTerm)
-    fac = bubble_sort_with_grading!(term.terms)
-    return fac * term
+    new_terms=copy(term)
+    fac = bubble_sort_with_grading!(new_terms.terms)
+    return fac * new_terms
 end
 
 
@@ -2424,7 +2431,23 @@ function to_latex(T::TensorExpression)
     return Base.replace(out * " ", "\$" => "")
 end
 
-function to_latex(T::TensorSuperType)
+
+function uni_to_TeX(charr::String)
+    out=""
+    # dot=false
+    # println(charr[1])
+    if charr[1]=='\u0307'
+        out*="\\dot{"
+        out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
+        out*="}"
+        return out
+    else
+        # println("not dotted")
+    return Base.replace(latexify(charr),"#\"L"=>"")
+    end
+end
+
+function to_latex_basic(T::TensorSuperType)
     out = ""
     out *= (T.name) * " "
     if !isempty(T.indices)
@@ -2438,7 +2461,49 @@ function to_latex(T::TensorSuperType)
             elseif ind.name=="∓"
                 ntemp="\\mp"
             else
-                ntemp=ind.name
+                ntemp=(ind.name)
+            end
+            if pos.position == 0
+                if typeof(ind) == DummyPatternIndex
+                    uppers *= "?"
+                end
+               
+                uppers = uppers * (ntemp) * " "
+                uppersempt = 0
+
+            else
+                lowersempt = 0
+                if typeof(ind) == DummyPatternIndex
+                    lowers *= "?"
+                end
+                lowers = lowers * (ntemp) * " "
+            end
+        end
+        if !uppersempt
+            out *= "^{" * uppers * "}"
+        end
+        if !lowersempt
+            out *= "_{" * lowers * "}"
+        end
+    end
+    return Base.replace(out * " ", "\$" => "")
+end
+
+function to_latex(T::TensorSuperType)
+    out = ""
+    out *= uni_to_TeX(T.name) * " "
+    if !isempty(T.indices)
+        lowers = ""
+        uppers = ""
+        lowersempt::Bool = 1
+        uppersempt::Bool = 1
+        for (ind, pos) in T.indices
+            if ind.name=="±"
+                ntemp="\\pm"
+            elseif ind.name=="∓"
+                ntemp="\\mp"
+            else
+                ntemp=uni_to_TeX(ind.name)
             end
             if pos.position == 0
                 if typeof(ind) == DummyPatternIndex
