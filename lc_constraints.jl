@@ -1,7 +1,7 @@
 
 t=4
-tb=0
-println(res)
+tb=4
+#println(res)
 t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",t),"Θ",tb))
 #     # println("t:",w1,", tbar:",w2)
 #     merge_sum(t11)
@@ -16,11 +16,14 @@ t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",t),"Θ",tb))
 #     t11=rename_dummies(sort(merge_sum(sort(pop_metric(t11)))))
 println(sort(rename_dummies(t11)))
 # # println("\$\$",to_latex(eliminate_epsilon(t11)),"=0\$\$")
-#  t11=rename_dummies(pop_metric(t11))
-# t11=rename_dummies(sort(t11))
-# t11=strip_thetas(t11)
-#  println(t11)
-#  t11=merge_sum(eliminate_epsilon(EpsilonTensor([e=>upper, c=>upper])*eliminate_kronecker(merge_sum(t11))))
+t11=rename_dummies(pop_metric(t11))
+ t11=rename_dummies(sort(t11))
+ println(t11)
+ t11=strip_thetas(t11)
+ t11=eliminate_kronecker(t11)
+ t11=eliminate_epsilon(t11)
+ println(t11)
+ #t11=merge_sum(eliminate_epsilon(eliminate_kronecker(KroneckerDelta([c=>upper, g=>lower])*(KroneckerDelta([d=>upper, f=>lower])*((EpsilonTensor([r=>lower, s=>lower])*(EpsilonTensor([k=>upper, n=>upper])*t11)))))))
 #t11=merge_sum(eliminate_epsilon(KroneckerDelta([f=>lower, b=>upper])*(EpsilonTensor([j =>upper, l=> upper])*eliminate_kronecker(merge_sum(t11)))))
 # println(t11)
 # #n=4,0 2,0
@@ -29,6 +32,6 @@ println(sort(rename_dummies(t11)))
 # # t11=eliminate_epsilon(EpsilonTensor([d=>upper,c=>upper])*eliminate_kronecker(rename_dummies((t11))))
 
 println("\$\$ \\theta=",t,"\\quad \\overline{\\theta}=",tb,":\$\$")
-println("\$\$",to_latex(t11),"=0\$\$")
-println(t11)
+println("\\begin{dmath}",to_latex(t11),"=0\\end{dmath}")
+#println(t11)
 

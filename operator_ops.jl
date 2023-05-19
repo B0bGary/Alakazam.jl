@@ -66,7 +66,7 @@ end
 
 # printing and display
 function to_latex(T::OperatorSuperType)
-    out=""*T.name
+    out=""*uni_to_TeX(T.name)
     # println(io, T.operator_indices)
     # println(io, T.operand_indices)
     # println(io, T.indices)
@@ -79,13 +79,13 @@ function to_latex(T::OperatorSuperType)
         # println(T.operator_indices)
         for (ind, pos) in T.operator_indices
             if pos.position==0
-                uppers=uppers*ind.name
+                uppers=uppers*uni_to_TeX(ind.name)
                 uppersempt=0
                 lowers=lowers * ""
             else
                 uppers=uppers * ""
                 lowersempt=0
-                lowers=lowers * ind.name 
+                lowers=lowers * uni_to_TeX(ind.name) 
             end
         end
         if !uppersempt

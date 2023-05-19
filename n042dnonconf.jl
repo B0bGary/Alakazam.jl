@@ -220,13 +220,13 @@ out=apply_derivative(out)
 out=eliminate_kronecker(out)
 res1=eliminate_epsilon(out)
 
-D_SUPERFIELD=Derivative("D",Tens, [x,θ], [ s=>upper, f=>upper])
+D_SUPERFIELD=Derivative("D",Tens, [x,θ], [ r=>upper, g=>upper])
 out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
 o=out
 out=apply_derivative(out)
 out=eliminate_kronecker(out)
 res=eliminate_epsilon(out)
-D_SUPERFIELD2=Derivative("D",res, [x,θ], [ r=>upper, g=>upper])
+D_SUPERFIELD2=Derivative("D",res, [x,θ], [ s=>upper, f=>upper])
 out=expand_derivative(D_SUPERFIELD2,covar,covar_unbar_expansion)
 o=out
 out=apply_derivative(out)

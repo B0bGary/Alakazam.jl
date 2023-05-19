@@ -1,3 +1,6 @@
+using Latexify
+set_default(convert_unicode = true)
+
 include("tensor_term.jl")
 include("kronecker.jl")
 include("epsilon_tensor.jl")
@@ -2428,7 +2431,23 @@ function to_latex(T::TensorExpression)
     return Base.replace(out * " ", "\$" => "")
 end
 
-function to_latex(T::TensorSuperType)
+
+function uni_to_TeX(charr::String)
+    out=""
+    # dot=false
+    # println(charr[1])
+    if charr[1]=='\u0307'
+        out*="\\dot{"
+        out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
+        out*="}"
+        return out
+    else
+        # println("not dotted")
+    return Base.replace(latexify(charr),"#\"L"=>"")
+    end
+end
+
+function to_latex_basic(T::TensorSuperType)
     out = ""
     out *= (T.name) * " "
     if !isempty(T.indices)
@@ -2442,7 +2461,49 @@ function to_latex(T::TensorSuperType)
             elseif ind.name=="∓"
                 ntemp="\\mp"
             else
-                ntemp=ind.name
+                ntemp=(ind.name)
+            end
+            if pos.position == 0
+                if typeof(ind) == DummyPatternIndex
+                    uppers *= "?"
+                end
+               
+                uppers = uppers * (ntemp) * " "
+                uppersempt = 0
+
+            else
+                lowersempt = 0
+                if typeof(ind) == DummyPatternIndex
+                    lowers *= "?"
+                end
+                lowers = lowers * (ntemp) * " "
+            end
+        end
+        if !uppersempt
+            out *= "^{" * uppers * "}"
+        end
+        if !lowersempt
+            out *= "_{" * lowers * "}"
+        end
+    end
+    return Base.replace(out * " ", "\$" => "")
+end
+
+function to_latex(T::TensorSuperType)
+    out = ""
+    out *= uni_to_TeX(T.name) * " "
+    if !isempty(T.indices)
+        lowers = ""
+        uppers = ""
+        lowersempt::Bool = 1
+        uppersempt::Bool = 1
+        for (ind, pos) in T.indices
+            if ind.name=="±"
+                ntemp="\\pm"
+            elseif ind.name=="∓"
+                ntemp="\\mp"
+            else
+                ntemp=uni_to_TeX(ind.name)
             end
             if pos.position == 0
                 if typeof(ind) == DummyPatternIndex

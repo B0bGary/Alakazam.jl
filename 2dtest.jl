@@ -223,19 +223,19 @@ custom_sort_order(["θ","Θ","ϵ"])
 #last two indices are the spacetime ones
 SUPERFIELDpp=(Tensor("j",[a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("S",[c => lower, a =>lower, b => lower], x)
-+Tensor("Θ",[c=>upper],θbar)*Tensor("̄S",[c => lower, a =>lower, b => lower], x)
+-1*Tensor("Θ",[c=>upper],θbar)*Tensor("̄S",[c => lower, a =>lower, b => lower], x)
 +Tensor("θ",[c=>upper],θ)*Tensor("Θ",[d=>upper],θbar)*Tensor("T",[c => lower,d => lower, a =>lower, b => lower], x)
-#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
-#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
-#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-#+Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
-#+Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("K",[c => lower,d => lower, a =>lower, b => lower], x)
+-1*Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("̄K",[c => lower,d => lower, a =>lower, b => lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
+-1*Tensor("Θ",[c=>upper],θbar)*Tensor("Θ",[d=>upper],θbar)*Tensor("θ",[e=>upper],θ)*Tensor("̄H",[c => lower,d => lower,e => lower, a =>lower, b => lower], x)
++Tensor("θ",[c=>upper],θ)*Tensor("θ",[d=>upper],θ)*Tensor("Θ",[e=>upper],θbar)*Tensor("Θ",[f=>upper],θbar)*Tensor("F",[c => lower,d => lower,e => lower, f=>lower, a =>lower, b => lower], x)
 )
 
 
 D_SUPERFIELD=Derivative("̄D",SUPERFIELDpp, [x,θbar], [i => lower])
 
-out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
+out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
 o=out
 println("leibd: ",product_rule(o))
 out=apply_derivative(out)
@@ -249,11 +249,16 @@ res=to_lc_expression(out,Dict(a=>m,b=>m,i=>p))
 
 println(res)
 
-t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
+# t11=get_weighted_terms(get_weighted_terms(res,"θ",2),"Θ",1)
 
 
-res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDpp,Dict(a=>m,b=>m))
+# res2=to_lc_expression(SUPERFIELDpp,Dict(a=>p,b=>p))*to_lc_expression(SUPERFIELDpp,Dict(a=>m,b=>m))
 
 
-final=get_weighted_terms(get_weighted_terms(res2,"θ",2),"Θ",2)
-final=to_lc_expression(sort(final),Dict{Index, Index}())
+# final=get_weighted_terms(get_weighted_terms(res2,"θ",2),"Θ",2)
+# println(final)
+# final=to_lc_expression(sort(final),Dict{Index, Index}())
+# println(final)
+# final=sort(final)
+# println(final)
+# println(to_latex(final))

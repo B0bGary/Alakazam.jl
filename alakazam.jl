@@ -16,6 +16,7 @@ import Base.:copy
 import Base.:/
 import Base.:(==)
 import Base.:-
+import Base.:replace
 import DataStructures
 include("indices.jl")
 include("custom_exceptions.jl")
