@@ -188,6 +188,9 @@ add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>upper]
 add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>lower],θ),EpsilonTensor([i=>upper,j=>upper])*EpsilonTensor([α=>lower,β=>lower]))
 
 add_derivative_action(grassman_deriv_conjrep,barθαi,KroneckerDelta([i=>upper,j=>lower])*KroneckerDelta([βdot=>upper,αdot=>lower]))
+add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>lower,αdot=>lower],θbar),EpsilonTensor([i=>lower,j=>lower])*KroneckerDelta([βdot=>upper,αdot=>lower]))
+add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>upper,αdot=>upper],θbar),KroneckerDelta([i=>upper,j=>lower])*EpsilonTensor([αdot=>upper,βdot=>upper]))
+add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>lower,αdot=>upper],θbar),EpsilonTensor([i=>lower,j=>lower])*EpsilonTensor([αdot=>upper,βdot=>upper]))
 
 
 #define our superfield expansions tensors
@@ -222,7 +225,7 @@ SUPERFIELD=(Tensor("j", x)
 +barθupij*θ4*SymmetricTensor("Z",[i=>lower, j=>lower],x)
 +Tensor("Θ",[j=>upper, αdot=>lower],θbar)*barθij*θ4*Tensor("E",[i=>upper, αdot=>upper],x)
 +θᵦᵧ*SymmetricTensor("Ω",[β=>upper,γ=>upper],x)
-+θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
+#+θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
 +barθᵦᵧ*Tensor("Λ",[βdot=>upper,γdot=>upper],x)
 # +barθαi*barθᵅᵝ*Tensor("Ξ",[i=>lower,βdot=>lower],x)
 +θᵦᵧ*barθαi*Tensor("𝒜",[β=>upper, γ=>upper,i=>lower,αdot=>upper],x)
@@ -254,31 +257,34 @@ custom_sort_order(["θ","Θ","ϵ"])
 
 covar_expansion=grassman_deriv_normalrep-im*Tensor("σ",[b =>upper, γdot=>upper, β =>lower])*Tensor("Θ",[j=>upper,γdot=>lower,],θbar)*spatial_deriv
 covar=Derivative("D",zero, [x,θ], [j => upper, β => lower])
+covar_expansion_bar=grassman_deriv_conjrep-im*Tensor("σ",[b =>upper, βdot=>upper, β =>lower])*Tensor("θ",[j=>lower,β=>upper,],θ)*spatial_deriv
+covar_bar=Derivative("̄D",zero, [x,θbar], [j => lower, βdot => upper])
 println("our superfield expansions is: ", SUPERFIELD)
 
 #apply our derivative
-println("Computing Symmetrised deriv: ")
-D_SUPERFIELD=Derivative("D",SUPERFIELD, [x,θ], [s => upper, τ => lower])
-out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
+ println("Computing Symmetrised deriv: ")
+
+D_SUPERFIELD=Derivative("̄D",SUPERFIELD, [x,θbar], [s => lower, τdot => upper])
+out=expand_derivative(D_SUPERFIELD,covar_bar,covar_expansion_bar)
 out=apply_derivative(out)
 out=simplify(out)
-DD_SUPERFIELD=Derivative("D",out,[x,θ], [r => upper, ρ => lower])
+DD_SUPERFIELD=Derivative("̄D",out,[x,θbar], [r => lower, ρdot => upper])
 
-out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
+out=expand_derivative(DD_SUPERFIELD,covar_bar,covar_expansion_bar)
 out=apply_derivative(out)
-out=EpsilonTensor([τ=>upper,ρ=>upper])*out
+out=EpsilonTensor([τdot=>lower,ρdot=>lower])*out
 
 out=eliminate_epsilon(out)
 out=copy(out)
-D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θ], [r => upper, τ => lower])
-out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
+D_SUPERFIELD2=Derivative("̄D",SUPERFIELD, [x,θbar], [r => lower, τdot => upper])
+out2=expand_derivative(D_SUPERFIELD2,covar_bar,covar_expansion_bar)
 out2=apply_derivative(out2)
 out2=simplify(out2)
-DD_SUPERFIELD2=Derivative("D",out2,[x,θ], [s => upper, ρ => lower])
+DD_SUPERFIELD2=Derivative("̄D",out2,[x,θbar], [s => lower, ρdot => upper])
 
-out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
+out2=expand_derivative(DD_SUPERFIELD2,covar_bar,covar_expansion_bar)
 out2=apply_derivative(out2)
-out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
+out2=EpsilonTensor([τdot=>lower,ρdot=>lower])*out2
 
 out2=eliminate_epsilon(out2)
 out2=copy(out2)
@@ -286,6 +292,34 @@ println("Result:")
 println(out+out2)
 res=simplify(out+out2)
 println(res)
+# D_SUPERFIELD=Derivative("D",SUPERFIELD, [x,θ], [s => upper, τ => lower])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
+# out=apply_derivative(out)
+# out=simplify(out)
+# DD_SUPERFIELD=Derivative("D",out,[x,θ], [r => upper, ρ => lower])
+
+# out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
+# out=apply_derivative(out)
+# out=EpsilonTensor([τ=>upper,ρ=>upper])*out
+
+# out=eliminate_epsilon(out)
+# out=copy(out)
+# D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θ], [r => upper, τ => lower])
+# out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
+# out2=apply_derivative(out2)
+# out2=simplify(out2)
+# DD_SUPERFIELD2=Derivative("D",out2,[x,θ], [s => upper, ρ => lower])
+
+# out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
+# out2=apply_derivative(out2)
+# out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
+
+# out2=eliminate_epsilon(out2)
+# out2=copy(out2)
+# println("Result:")
+# println(out+out2)
+# res=simplify(out+out2)
+# println(res)
 
 t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",2)
 println("t11 weight:")

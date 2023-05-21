@@ -2435,9 +2435,15 @@ end
 function uni_to_TeX(charr::String)
     out=""
     # dot=false
-    # println(charr[1])
+    #   println(charr[1])
+    #   println(codepoint(charr[1]))
     if charr[1]=='\u0307'
         out*="\\dot{"
+        out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
+        out*="}"
+        return out
+    elseif codepoint(charr[1])==772
+        out*="\\overline{"
         out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
         out*="}"
         return out
