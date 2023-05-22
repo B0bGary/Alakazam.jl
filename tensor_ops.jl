@@ -1403,6 +1403,7 @@ end
 
 
 function ×(T2::TensorExpression, T1::TensorExpression)
+    new=zero
     used_inds = union(get_dummies(T2), get_free_indices_nopos(T1))
     #need to make sure all different terms have the same free inds
     # unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
@@ -1410,14 +1411,13 @@ function ×(T2::TensorExpression, T1::TensorExpression)
     # # unused_conj = Vector(setdiff(spinor_conj_indices.indices, used_inds))
     ## something like this for all index sets in the the expression
 
-    vec = []
     for summand2 in T2.summands
         for summand1 in T1.summands
-            push!(vec, summand2[1] * summand1[1] => summand2[2] × summand1[2])
+            new+= (summand2[1] * summand1[1])*(summand2[2] × summand1[2])
         end
     end
-    T2.summands = vec
-    return T2
+
+    return new
 end
 
 

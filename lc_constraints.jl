@@ -1,8 +1,8 @@
 
-tt=2
+tt=4
 tb=0
 #println(res)
-t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",tt),"Θ",tb))
+t11=rename_dummies(get_weighted_terms(get_weighted_terms(final,"θ",tt),"Θ",tb))
 println(t11)
 #     # println("t:",w1,", tbar:",w2)
 #     merge_sum(t11)
@@ -15,19 +15,22 @@ println(t11)
 #     #     println(get_free_indices(summand[2]))
 #     # end
 #     t11=rename_dummies(sort(merge_sum(sort(pop_metric(t11)))))
-t11=θab*Tensor("N",[r=>upper, f=>upper,  a=>upper, b=>upper],x)+t11#+θij*Tensor("P",[r=>upper, f=>upper,  i=>upper,j=>upper],x)
+#t11=θab*Tensor("N",[r=>upper, f=>upper,  a=>upper, b=>upper],x)+t11+θij*Tensor("P",[r=>upper, f=>upper,  i=>upper,j=>upper],x)
 # t11=t11+θ3*Tensor("Q",[r=>upper, f=>upper,  b=>upper, j=>upper],x)
 # t11=t11+θ4*Tensor("R",[r=>upper, f=>upper],x)
+# t11=t11+θ3*Tensor("S",[  b=>upper, j=>upper],x)
 println(sort(rename_dummies(t11)))
 
 # # println("\$\$",to_latex(eliminate_epsilon(t11)),"=0\$\$")
-t11=rename_dummies(pop_metric(t11))
- t11=rename_dummies(sort(t11))
- println(t11)
-#  t11=strip_thetas(t11)
-#  t11=eliminate_kronecker(t11)
-# t11=eliminate_epsilon(t11)
- println(t11)
+ t11=rename_dummies(pop_metric(t11))
+  t11=rename_dummies(sort(t11))
+t11=rename_dummies(sort(t11))
+#  println(t11)
+   t11=strip_thetas(t11)
+   t11=eliminate_kronecker(t11)
+ t11=eliminate_epsilon(t11)
+#  println(t11)
+#  t11=rename_dummies(t11)
  #t11=merge_sum(eliminate_epsilon(eliminate_kronecker(KroneckerDelta([c=>upper, g=>lower])*(KroneckerDelta([d=>upper, f=>lower])*((EpsilonTensor([r=>lower, s=>lower])*(EpsilonTensor([k=>upper, n=>upper])*t11)))))))
 #t11=simplify(merge_sum(eliminate_epsilon(EpsilonTensor([πdot =>lower, ωdot=> lower])*(EpsilonTensor([C =>lower, y=> lower])*(EpsilonTensor([A =>lower, u=> lower])*(EpsilonTensor([τdot =>lower, σdot=> lower])*(EpsilonTensor([s =>lower, t=> lower])*(EpsilonTensor([σ =>upper, τ=> upper])*(EpsilonTensor([r =>lower, v=> lower])*eliminate_kronecker(merge_sum(t11)))))))))))
 #t11=merge_sum(simplify(merge_sum(eliminate_epsilon(EpsilonTensor([ πdot=>lower, ωdot=> lower])*(EpsilonTensor([ B=>lower, v=> lower])*(EpsilonTensor([ τdot=>lower, σdot=> lower])*(EpsilonTensor([ s=>lower, q=> lower])*(EpsilonTensor([ z=>lower, t=> lower])*eliminate_kronecker(merge_sum(t11))))))))))
@@ -47,10 +50,11 @@ t11=rename_dummies(pop_metric(t11))
 # t11=merge_sum(simplify(merge_sum(eliminate_epsilon(eliminate_kronecker(EpsilonTensor([a=>upper, e=>upper])*((EpsilonTensor([j=>upper, n=>upper])*(EpsilonTensor([b=>upper, g=>upper])*(EpsilonTensor([i=>upper, t=>upper])*merge_sum(t11))))))))))
 
 
-t11=contract_metrics(t11)
+# t11=contract_metrics(t11)
 # t11=merge_sum(simplify(merge_sum(eliminate_epsilon(eliminate_kronecker(EpsilonTensor([v=>upper, t=>upper])*((EpsilonTensor([h=>upper, e=>upper])*(EpsilonTensor([g=>upper, a=>upper])*(EpsilonTensor([i=>upper, n=>upper])*merge_sum(t11))))))))))
 
-
+ t11=merge_sum(simplify(merge_sum(eliminate_epsilon(eliminate_kronecker((EpsilonTensor([F=>upper, D=>upper])*(EpsilonTensor([X2=>upper, H=>upper])*(EpsilonTensor([B=>upper, v=>upper])*(EpsilonTensor([z=>upper, Y=>upper])*merge_sum(t11))))))))))
+t11=1/16*t11
 
 # #n=4,0 2,0
 # # t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([b=>upper,c=>upper])*(EpsilonTensor([j=>upper,l=>upper])*eliminate_kronecker(t11)))))
