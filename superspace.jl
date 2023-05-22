@@ -27,8 +27,8 @@ function project_component(exp::TensorExpression, thet::Coordinate, derivinds::V
         println("eps ma")  
         println(out)
 
-        exp1=simplify(EpsilonTensor([usind[1][1]=>op_pos(usind[1][2]), usind2[1][1]=>op_pos(usind2[1][2]) ])*out)
-        exp2=simplify(EpsilonTensor([usind[2][1]=>op_pos(usind[2][2]), usind2[2][1]=>op_pos(usind2[2][2]) ])*out)
+        exp1=-1/2*simplify(EpsilonTensor([usind[1][1]=>op_pos(usind[1][2]), usind2[1][1]=>op_pos(usind2[1][2]) ])*out)
+        exp2=-1/2*simplify(EpsilonTensor([usind[2][1]=>op_pos(usind[2][2]), usind2[2][1]=>op_pos(usind2[2][2]) ])*out)
         println("ici")
         # o1= get_weighted_terms(exp1, "θ", 0)
         # o2= get_weighted_terms(exp2, "θ", 0)
@@ -52,7 +52,7 @@ elseif theta_weight==3
     # println("ici")
     # # o1= get_weighted_terms(exp1, "θ", 0)
     # # o2= get_weighted_terms(exp2, "θ", 0)
-    return exp1
+    return -1*exp1/9
 elseif theta_weight==4
     res=partially_project_component(exp,thet,derivinds)
     out=res[1]
@@ -73,7 +73,7 @@ elseif theta_weight==4
     (EpsilonTensor([usind2[2][1]=>op_pos(usind2[2][2]), usind[2][1]=>op_pos(usind[2][2]) ])
     *(EpsilonTensor([usind4[1][1]=>op_pos(usind4[1][2]), usind2[1][1]=>op_pos(usind2[1][2]) ])
     *(EpsilonTensor([usind3[1][1]=>op_pos(usind3[1][2]), usind[1][1]=>op_pos(usind[1][2]) ])*out))))
-    return exp1
+    return exp1/144
 end
     
 end
