@@ -81,8 +81,18 @@ end
 
 
 
+
 upper=IndexPosition(0)
 lower=IndexPosition(1)
+
+
+function op_pos(ip::IndexPosition)
+   if ip==upper
+      return lower
+   else
+      return upper
+   end
+end
 
 
 function ==(a::Index, b::Index)

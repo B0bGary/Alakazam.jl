@@ -1707,7 +1707,12 @@ function get_unused_indices(T::TensorExpression, IS::IndexSet)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
     ###println("doing this for some reason")
-    return setdiff(IS.indices, Set(i[1] for i in T.summands[1][2].indices))
+    temp=IS.indices
+    for summand in T.summands
+        temp=setdiff(temp,Set(i[1] for i in summand[2].indices))
+    end
+
+    return temp
 end
 
 #finding free indices
@@ -2512,27 +2517,37 @@ function to_latex(T::TensorSuperType)
                 ntemp=uni_to_TeX(ind.name)
             end
             if pos.position == 0
+
+                out *= "{ }^{"
+
                 if typeof(ind) == DummyPatternIndex
-                    uppers *= "?"
+                    out *= "?"
                 end
                
-                uppers = uppers * (ntemp) * " "
-                uppersempt = 0
-
+                # uppers = uppers * (ntemp) * " "
+                # uppersempt = 0
+                out*=ntemp
+                out *= "}"
             else
-                lowersempt = 0
+                # lowersempt = 0
+
+                out *= "{ }_{"
+
                 if typeof(ind) == DummyPatternIndex
-                    lowers *= "?"
+                    out *= "?"
                 end
-                lowers = lowers * (ntemp) * " "
+                # lowers = lowers * (ntemp) * " "
+
+                out*=ntemp
+                out *= "}"
             end
         end
-        if !uppersempt
-            out *= "^{" * uppers * "}"
-        end
-        if !lowersempt
-            out *= "_{" * lowers * "}"
-        end
+        # if !uppersempt
+        #     out *= "^{" * uppers * "}"
+        # end
+        # if !lowersempt
+        #     out *= "_{" * lowers * "}"
+        # end
     end
     return Base.replace(out * " ", "\$" => "")
 end

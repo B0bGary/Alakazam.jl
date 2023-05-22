@@ -1,5 +1,5 @@
 include("alakazam.jl")
-
+include("superspace.jl")
 #define index sets
 #thesis specific code to get constraints
 function strip_thetas(TEx::TensorExpression)
@@ -111,11 +111,11 @@ h = Index("h", flavour2_indices,1)
 X = Index("x", flavour2_indices,1)
 y = Index("y", flavour2_indices,1)
 z = Index("z", flavour2_indices,1)
-H = Index("H", flavour2_indices,1)
-X2 = Index("X", flavour2_indices,1)
-Y = Index("Y", flavour2_indices,1)
-Z = Index("Z", flavour2_indices,1)
-# h = Index("h", flavour2_indices,1)
+# H = Index("H", flavour2_indices,1)
+# X2 = Index("X", flavour2_indices,1)
+# Y = Index("Y", flavour2_indices,1)
+# Z = Index("Z", flavour2_indices,1)
+# # h = Index("h", flavour2_indices,1)
 
 i = Index("i", flavour_indices,0)
 j = Index("j", flavour_indices,0)
@@ -128,13 +128,13 @@ s = Index("s", flavour_indices,0)
 t = Index("t", flavour_indices,0)
 u = Index("u", flavour_indices,0)
 v = Index("v", flavour_indices,0)
-A = Index("A", flavour_indices,0)
-B = Index("B", flavour_indices,0)
-C = Index("C", flavour_indices,0)
-D = Index("D", flavour_indices,0)
-E = Index("E", flavour_indices,0)
-F = Index("F", flavour_indices,0)
-G = Index("G", flavour_indices,0)
+# A = Index("A", flavour_indices,0)
+# B = Index("B", flavour_indices,0)
+# C = Index("C", flavour_indices,0)
+# D = Index("D", flavour_indices,0)
+# E = Index("E", flavour_indices,0)
+# F = Index("F", flavour_indices,0)
+# G = Index("G", flavour_indices,0)
 
 x = Coordinate("x", [spacetime_indices, spacetime_indices])
 θ = Coordinate("θ", [spacetime_indices, flavour_indices, flavour2_indices])
@@ -325,13 +325,13 @@ Wm=(Tensor("J",[   l=>upper, d=>upper], x)
 ################## W---
 
 
-# D_SUPERFIELD=Derivative("D",Wmmm, [x,θ], [ r=>upper, f=>upper])
-# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
-# o=out
-# out=apply_derivative(out)
-# out=eliminate_kronecker(out)
-# out=EpsilonTensor([r=>lower, k=>lower])*(EpsilonTensor([f=>lower, c=>lower])*out)
-# res=simplify(eliminate_epsilon(out))
+D_SUPERFIELD=Derivative("D",Wmmm, [x,θ], [ r=>upper, f=>upper])
+out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+o=out
+out=apply_derivative(out)
+out=eliminate_kronecker(out)
+out=EpsilonTensor([r=>lower, k=>lower])*(EpsilonTensor([f=>lower, c=>lower])*out)
+res=simplify(eliminate_epsilon(out))
 
 
 
@@ -392,12 +392,12 @@ Wm=(Tensor("J",[   l=>upper, d=>upper], x)
 
 #######SC2
 
-res=Tens×Scalar+EpsilonTensor([l=>lower, k=>lower])*(EpsilonTensor([d=>lower, c=>lower])*(Wm×Wmmm))
-res2=simplify(res)
-println(res2)
-final=get_weighted_terms(get_weighted_terms(res2,"θ",4),"Θ",0)
-final=to_lc_expression(sort(final),Dict{Index, Index}())
-
+# res=Tens×Scalar+EpsilonTensor([l=>lower, k=>lower])*(EpsilonTensor([d=>lower, c=>lower])*(Wm×Wmmm))
+# # res2=simplify(res)
+# # println(res2)
+# # final=get_weighted_terms(get_weighted_terms(res2,"θ",4),"Θ",0)
+# # final=to_lc_expression(sort(final),Dict{Index, Index}())
+# project_component(res,θ,[i=>upper, a=>upper],4,0)
 
 
 
