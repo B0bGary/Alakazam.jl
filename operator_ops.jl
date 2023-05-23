@@ -143,3 +143,12 @@ function operator_weight(O::OperatorSuperType,w::String)
         throw(MixedWeightOperandTerms())
     end
 end
+
+function ==(a::OperatorSuperType, b::OperatorSuperType)
+    if a.name == b.name && a.indices == b.indices && a.operand==b.operand
+        return true
+    else
+
+        return false
+    end
+end

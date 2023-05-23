@@ -1,8 +1,8 @@
 
-tt=3
+tt=0
 tb=0
 #println(res)
-t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",tt),"Θ",tb))
+t11=rename_dummies(get_weighted_terms(get_weighted_terms(res2,"θ",tt),"Θ",tb))
 println(t11)
 #     # println("t:",w1,", tbar:",w2)
 #     merge_sum(t11)
@@ -18,11 +18,11 @@ println(t11)
 #t11=θab*Tensor("N",[r=>upper, f=>upper,  a=>upper, b=>upper],x)+t11+θij*Tensor("P",[r=>upper, f=>upper,  i=>upper,j=>upper],x)
 # t11=t11+θ3*Tensor("Q",[r=>upper, f=>upper,  b=>upper, j=>upper],x)
 # t11=t11+θ4*Tensor("R",[r=>upper, f=>upper],x)
-  t11=t11+θ3*Tensor("S",[  b=>upper, j=>upper],x)
+#   t11=t11+θ3*Tensor("S",[  b=>upper, j=>upper],x)
  #t11+=θia*Tensor("ψ",[   i=>upper, a=>upper],x)
 # t11+=θ4*Tensor("Tp",x)
 # println(sort(rename_dummies(t11)))
-t11=project_component(t11,θ,[i=>upper, a=>upper],tt,tb)
+  # t11=project_component(t11,θ,[i=>upper, a=>upper],tt,tb)
 # t11=t11[1]
 # # # println("\$\$",to_latex(eliminate_epsilon(t11)),"=0\$\$")
 #  t11=rename_dummies(pop_metric(t11))
@@ -66,6 +66,8 @@ t11=project_component(t11,θ,[i=>upper, a=>upper],tt,tb)
 
 #t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([t=>upper,r=>upper])*(EpsilonTensor([B=>upper,v=>upper])*((EpsilonTensor([y=>upper,g=>upper])*(EpsilonTensor([X=>upper,h=>upper])*eliminate_kronecker(t11))))))))
 #t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([r=>lower,s=>lower])*eliminate_kronecker(t11))))
+
+# t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([z=>lower,f=>lower])*(EpsilonTensor([z=>lower,f=>lower])*eliminate_kronecker(t11)))))
 
 
 

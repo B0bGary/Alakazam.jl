@@ -2,6 +2,8 @@
 # θ = Coordinate("θ", [flavour_indices, flavour2_indices])
 # θbar = Coordinate("Θ", [flavour_conj_indices, spinor_conj_indices])
 
+θMAX=4
+θbarMAX=4
 
 function project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{Index,IndexPosition}}, theta_weight::Integer,theta_bar_weight::Integer)
     # println(exp)
@@ -17,19 +19,19 @@ function project_component(exp::TensorExpression, thet::Coordinate, derivinds::V
         # out = get_weighted_terms(out, "Θ", 0)
         return out
     elseif theta_weight==2
-        println("aqui")
+        # println("aqui")
         res=partially_project_component(exp,thet,derivinds)
         out=res[1]
         usind=res[2]
         res2=partially_project_component(out,thet,derivinds)
         out=res2[1]
         usind2=res2[2]
-        println("eps ma")  
-        println(out)
+        # println("eps ma")  
+        # println(out)
 
         exp1=-1/2*simplify(EpsilonTensor([usind[1][1]=>op_pos(usind[1][2]), usind2[1][1]=>op_pos(usind2[1][2]) ])*out)
         exp2=-1/2*simplify(EpsilonTensor([usind[2][1]=>op_pos(usind[2][2]), usind2[2][1]=>op_pos(usind2[2][2]) ])*out)
-        println("ici")
+        # println("ici")
         # o1= get_weighted_terms(exp1, "θ", 0)
         # o2= get_weighted_terms(exp2, "θ", 0)
         return exp1=>exp2
@@ -79,7 +81,7 @@ end
 end
 
 function partially_project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{Index,IndexPosition}})
-    println("doing this")  
+    # println("doing this")  
         d_indices = Vector{Pair{Index,IndexPosition}}()
         for pr in derivinds
             ty = pr[1].index_set
@@ -92,9 +94,9 @@ function partially_project_component(exp::TensorExpression, thet::Coordinate, de
         elseif thet.name == θbar.name
             n_deriv = Derivative("∂", exp, [θbar], d_indices)
         end
-        println("dont drink and derive")  
+        # println("dont drink and derive")  
         out = apply_derivative(n_deriv)
         out = simplify(out)
-        println("got here")  
+        # println("got here")  
         return (out, d_indices)
 end

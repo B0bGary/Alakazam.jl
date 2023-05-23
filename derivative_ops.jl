@@ -244,9 +244,10 @@ function apply_derivative(D::DerivativeSuperType)
                 #println(operands, "should be a single term else liebniz wrong")
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
                 if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
-                    # #println(summand[1])
+                #    println(tens)
+                #    print
                     term*= zero #annihilate the term
-                   ##println("term:: ",term)
+                #    println("term:: ",term)
                 else
                     #println("old term pre: ", term)
                     # println("performing action")
@@ -508,16 +509,16 @@ function product_rule(O::LeibnizOperatorSuperType)
     for summandind = eachindex(O.operand.summands) #for each sum term in the expression
         summand = O.operand.summands[summandind] #get the summand (tensor term)
         grad = 0 #initialise grading
-       ##println("summand is: ",summand)
+    #    println("summand is: ",summand)
        ##println("zero is , ", zero)
         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
             grd = (-1)^(grad)
             operator_on_tensor = typeof(O)(O.name, summand[2].terms[tensorind], O.coord, O.operator_indices) #operator on nth term
-            # #println("this is the op on a tens")
-            # #println(operator_on_tensor)
+        #     println("this is the op on a tens")
+        # println(operator_on_tensor)
             # #println("help")
             new_prod = 1
-           ##println(summand[2].terms)
+        #    println(summand[2].terms)
            ##println("zero is now , ", zero)
             for indsss in eachindex(summand[2].terms)
                 ###println("looking a thte ", indsss," summand: ", summand[2].terms[indsss])
@@ -533,13 +534,13 @@ function product_rule(O::LeibnizOperatorSuperType)
                    ##println("zero is wwaasfd, ", zero)
                 end
             end
-           ##println("we am HERE")
-            # new_prod=[t  where t=summand[2].terms]
-            # #println(new_prod)
+        #    println("we am HERE")
+        #     # new_prod=[t  where t=summand[2].terms]
+        #    println(new_prod)
             # new_prod.terms[tensorind]=operator_on_tensor
             if new_summand == Nothing
                 new_summand = zero+ grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
-               ##println(new_summand, "lets see if meessing up")
+            #    println(new_summand, "lets see if meessing up")
             else
                ##println(new_summand)
                ##println(new_summand.summands)
@@ -552,7 +553,7 @@ function product_rule(O::LeibnizOperatorSuperType)
                ##println(typeof(grd * summand[1] * new_prod))
                ##println("poo")
                 new_summand = new_summand + grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
-               ##println(new_summand, "addition problem??")
+            #    println(new_summand, "addition problem??")
             end
 
             grad = (grad + grading(summand[2].terms[tensorind])*op_grading(O)) % 2

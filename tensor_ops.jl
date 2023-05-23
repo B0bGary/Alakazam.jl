@@ -1236,7 +1236,15 @@ function get_weighted_terms(T::TensorExpression, w::String, value::Number)
     return new_exp
 end
 
-
+function drop_weight_above(T::TensorExpression, w::String, value::Number)
+    new_exp = zero
+    i=0
+    while i<value
+        new_exp+= get_weighted_terms(T,w,i)
+        i+=1
+    end
+    return new_exp
+end
 
 # function +(N::SymorNum, T::TensorExpression)
 
@@ -2183,10 +2191,11 @@ function merge_sum(TEx::TensorExpression)
 
         for i in eachindex(new_merged)
             if summand[2] == new_merged[i][2]
-                ###println("got here")
-                ###println(summand[1])
-                ###println(new_merged[i][1])
-                ###println(summand[2])
+                # println("got here")
+                # println(summand[1])
+                # println(new_merged[i][1])
+                # println(summand[2])
+                # println(new_merged[i][2])
                 new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
                 # ##println("sum is")
                 # ##println(new_merged[i])
