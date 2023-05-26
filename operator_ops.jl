@@ -145,7 +145,11 @@ function operator_weight(O::OperatorSuperType,w::String)
 end
 
 function ==(a::OperatorSuperType, b::OperatorSuperType)
+    # println(a,b,"a.operand==b.operand",a.operand==b.operand)
     if a.name == b.name && a.indices == b.indices && a.operand==b.operand
+        # println("got here ever???")
+        # println(a)
+        # println(b)
         return true
     else
 

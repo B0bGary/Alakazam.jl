@@ -24,10 +24,10 @@ mutable struct Derivative <:DerivativeSuperType
         new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds),coord)
     end
     function Derivative(name::String, operand::TensorSuperType, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
-        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     end
     function Derivative(name::String, operand::TensorTerm, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate} 
-       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices))
+       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     
     end
        function Derivative(name::String, operand::TensorExpression, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}

@@ -1646,6 +1646,29 @@ function ==(a::TensorSuperType, b::TensorSuperType)
     end
 end
 
+function ==(a::TensorExpression, b::TensorExpression)
+    if length(a.summands)!=length(b.summands)
+        # println("stop here")
+        # println(a)
+        # println(b)
+        return false
+    end 
+    # println("not stop here")
+    # println(a)
+    # println(b)
+    aa=a.summands
+    bb=b.summands
+    for inde in eachindex(aa)
+        if aa[inde][1]!=bb[inde][1] || aa[inde][2]!=bb[inde][2]
+            return false
+        end
+    end
+    
+    return true
+   
+end
+
+
 
 
 ##############################################################################################################################
@@ -2080,6 +2103,11 @@ end
 
 function sort_symmetric(T::TensorSuperType)
     if typeof(T) <: TotallySymmetricSuperType
+        if T.indices[1][1]==T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
+            # println("deleting?????????")
+            return zero
+        end
+
         indsorted = sortperm(T.indices)
         newinds = T.indices[indsorted]
         T.indices = newinds
@@ -2137,17 +2165,7 @@ function simplify(TEx::TensorExpression)
     exp = rename_dummies(exp)
 
     # println("renamed:",exp)
-    new_exp = zero
-    for summand in exp.summands
-        new_term = summand[1]
-        for tens in summand[2].terms
-
-            new_term *= sort_symmetric(tens)
-        end
-        ##println(new_exp)
-        ##println(new_term)
-        new_exp += new_term
-    end
+    new_exp=simp_ops_n_sym(exp)
 
     new_exp = eliminate_kronecker(new_exp)
     # rename_dummies()
@@ -2158,6 +2176,36 @@ function simplify(TEx::TensorExpression)
     return new_exp
 end
 
+function simp_ops_n_sym(exp::TensorExpression)
+    new_exp = zero
+    for summand in exp.summands
+        # println("start ",summand)
+        new_term = summand[1]
+        for tens in summand[2].terms
+            temp=tens
+            if typeof(tens)<:OperatorSuperType
+                # println("old oprd: ", tens.operand)
+                op=simp_ops_n_sym(tens.operand)
+                #  println("new oprd: ",op)
+                if op==zero || op===nothing
+                    new_term*=zero
+                else
+                   tens.operand=op #operator on nth term
+                   temp=tens
+                   new_term *= sort_symmetric(temp)
+                end
+            else
+            # println(temp)
+            # println(new_term)
+            new_term *= sort_symmetric(temp)
+            end
+        end
+        ##println(new_exp)
+        ##println(new_term)
+        new_exp += new_term
+    end
+    return new_exp
+end
 
 
 
