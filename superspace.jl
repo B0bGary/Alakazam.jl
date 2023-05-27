@@ -50,7 +50,7 @@ elseif theta_weight==3
     # println(out)
 
     exp1=simplify(EpsilonTensor([usind2[2][1]=>op_pos(usind2[2][2]), usind3[2][1]=>op_pos(usind3[2][2]) ])*(EpsilonTensor([usind2[1][1]=>op_pos(usind2[1][2]), usind[1][1]=>op_pos(usind[1][2]) ])*out))
-
+  #  exp1=(out)
     # println("ici")
     # # o1= get_weighted_terms(exp1, "θ", 0)
     # # o2= get_weighted_terms(exp2, "θ", 0)
