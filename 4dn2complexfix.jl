@@ -204,7 +204,8 @@ add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>lower,αdot=>upper]
 SUPERFIELD=(Tensor("j", x)
 +θiα*Tensor("ψ",[i=>upper, α=>lower],x)
 # +θij*SymmetricTensor("F",[i=>upper, j=>upper],x)
-# +(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)+θij*θupij*Tensor("H",x)
+# +(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)
+# +θij*θupij*Tensor("H",x)
 +θjα*barθαi*Tensor("K",[j=>upper, α=>lower,i => lower, αdot =>upper],x)
 +Tensor("θ",[k=>lower, α=>upper],θ)*barθupij*Tensor("L",[k=>upper, α =>lower, i=>lower,j => lower],x)
 +Tensor("θ",[k=>lower, α=>upper],θ)*barθαi*barθij*Tensor("M",[k=>upper, j=>upper, α =>lower, αdot=> upper],x)
@@ -227,13 +228,13 @@ SUPERFIELD=(Tensor("j", x)
 -1*Tensor("Θ",[j=>upper, αdot=>lower],θbar)*barθij*θ4*Tensor("̄E",[i=>upper, αdot=>upper],x)
 +θᵅᵝ*SymmetricTensor("Ω",[α=>lower,β=>lower],x)
 #+θiβ*θᵦᵧ*Tensor("Σ",[i=>upper,γ=>upper],x)
-+barθᵦᵧ*Tensor("̄Ω",[βdot=>upper,γdot=>upper],x)
++barθᵦᵧ*SymmetricTensor("̄Ω",[βdot=>upper,γdot=>upper],x)
 # +barθαi*barθᵅᵝ*Tensor("Ξ",[i=>lower,βdot=>lower],x)
 +θᵅᵝ*barθαi*Tensor("A",[α=>lower, β=>lower,i=>lower,αdot=>upper],x)
 +θᵅᵝ*barθupij*Tensor("B",[α=>lower, β=>lower,i=>lower,j=>lower],x)
 +θᵅᵝ*barθαi*barθij*Tensor("U",[α=>lower, β=>lower,j=>upper,αdot=>upper],x)
 +θᵅᵝ*θbar4*SymmetricTensor("C",[α=>lower, β=>lower],x)
-+θᵅᵝ*barθᵦᵧ*Tensor("T",[α=>lower, β=>lower,βdot=>upper, γdot=>upper],x)
++θᵅᵝ*barθᵦᵧ*SymmetricTensor("T",[α=>lower, β=>lower,βdot=>upper, γdot=>upper],x)
 # +θᵦᵧ*barθαi*barθᵅᵝ*Tensor("ℱ",[β=>upper, γ=>upper,i=>lower,βdot=>lower],x)
 # +θiβ*θᵦᵧ*barθjα*Tensor("𝒲",[i=>upper, γ=>upper,j=>lower,αdot=>upper],x)
 # +θiβ*θᵦᵧ*barθjk*Tensor("𝒵",[i=>upper, γ=>upper,j=>upper,k=>upper],x)
@@ -293,7 +294,7 @@ out2=eliminate_epsilon(out2)
 out2=copy(out2)
 println("Result:")
 println(out+out2)
-res=simplify(out+out2)
+res=simplify(out+out2)/2
 println(res)
 
 
@@ -342,34 +343,34 @@ println(res)
 
 
 
-t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",2)
-println("t11 weight:")
-println(merge_sum(t11))
+# t11=get_weighted_terms(get_weighted_terms(res,"θ",1),"Θ",2)
+# println("t11 weight:")
+# println(merge_sum(t11))
 
-t11=copy(t11)
-println("rearrange")
-t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
-println(t11)
+# t11=copy(t11)
+# println("rearrange")
+# t11=merge_sum(sort(rename_dummies(eliminate_epsilon(rename_dummies(sort(pop_metric(t11)))))))
+# println(t11)
 
-println("elim delta")
-t11=merge_sum(eliminate_kronecker(t11))
-# for summand in t11.summands
-#     println(summand)
-#     println(get_free_indices(summand[2]))
-# end
-println(t11)
-out=merge_sum(sort(pop_metric(t11)))
-println(out)
+# println("elim delta")
+# t11=merge_sum(eliminate_kronecker(t11))
+# # for summand in t11.summands
+# #     println(summand)
+# #     println(get_free_indices(summand[2]))
+# # end
+# println(t11)
+# out=merge_sum(sort(pop_metric(t11)))
+# println(out)
 
 
-println("stripping thetas")
-out=strip_thetas(out)
-println(out)
-# for summand in out.summands
-#         println(get_free_indices(summand[2]))
-# end
-println("constraint:")
-println(copy(eliminate_epsilon(eliminate_kronecker(out))))
+# println("stripping thetas")
+# out=strip_thetas(out)
+# println(out)
+# # for summand in out.summands
+# #         println(get_free_indices(summand[2]))
+# # end
+# println("constraint:")
+# println(copy(eliminate_epsilon(eliminate_kronecker(out))))
 
 
 

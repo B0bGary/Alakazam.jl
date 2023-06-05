@@ -1,5 +1,5 @@
 include("alakazam.jl")
-include("superspace.jl")
+include("superspace_old.jl")
 #define index sets
 #thesis specific code to get constraints
 function strip_thetas(TEx::TensorExpression)
@@ -111,10 +111,10 @@ h = Index("h", flavour2_indices,1)
 X = Index("x", flavour2_indices,1)
 y = Index("y", flavour2_indices,1)
 z = Index("z", flavour2_indices,1)
-# H = Index("H", flavour2_indices,1)
-# X2 = Index("X", flavour2_indices,1)
-# Y = Index("Y", flavour2_indices,1)
-# Z = Index("Z", flavour2_indices,1)
+H = Index("H", flavour2_indices,1)
+X2 = Index("X", flavour2_indices,1)
+Y = Index("Y", flavour2_indices,1)
+Z = Index("Z", flavour2_indices,1)
 # # h = Index("h", flavour2_indices,1)
 
 i = Index("i", flavour_indices,0)
@@ -128,9 +128,9 @@ s = Index("s", flavour_indices,0)
 t = Index("t", flavour_indices,0)
 u = Index("u", flavour_indices,0)
 v = Index("v", flavour_indices,0)
-# A = Index("A", flavour_indices,0)
-# B = Index("B", flavour_indices,0)
-# C = Index("C", flavour_indices,0)
+A = Index("A", flavour_indices,0)
+B = Index("B", flavour_indices,0)
+C = Index("C", flavour_indices,0)
 # D = Index("D", flavour_indices,0)
 # E = Index("E", flavour_indices,0)
 # F = Index("F", flavour_indices,0)
@@ -495,6 +495,76 @@ Wm=(Tensor("J",[   l=>upper, d=>upper], x)
 
 # # res=simplify(out2+out3)/2
 
+
+
+##### resitriction
+
+
+# # Wm2=(Tensor("J",[   r=>upper, f=>upper], x)
+# # +θia*Tensor("M",[ r=>upper, f=>upper,  i=>upper, a=>upper],x)
+# # +θab*Tensor("N",[ r=>upper, f=>upper,     a=>upper, b=>upper],x)
+# # +θij*Tensor("P",[ r=>upper, f=>upper,     i=>upper, j=>upper],x)
+# # +θ3*Tensor("Q",[ r=>upper, f=>upper,  b=>upper, j=>upper],x)
+# # +θ4*Tensor("R",[ r=>upper, f=>upper],x)
+# # )
+
+# Wm3=(Tensor("J",[   r=>upper, d=>upper], x)
+# +θia*Tensor("M",[ r=>upper, d=>upper,  i=>upper, a=>upper],x)
+# +θab*Tensor("N",[ r=>upper, d=>upper,     a=>upper, b=>upper],x)
+# +θij*Tensor("P",[ r=>upper, d=>upper,     i=>upper, j=>upper],x)
+# +θ3*Tensor("Q",[ r=>upper, d=>upper,  b=>upper, j=>upper],x)
+# +θ4*Tensor("R",[ r=>upper, d=>upper],x)
+# )
+
+
+# Wm4=(Tensor("J",[   l=>upper, f=>upper], x)
+# +θia*Tensor("M",[ l=>upper, f=>upper,  i=>upper, a=>upper],x)
+# +θab*Tensor("N",[ l=>upper, f=>upper,     a=>upper, b=>upper],x)
+# +θij*Tensor("P",[ l=>upper, f=>upper,     i=>upper, j=>upper],x)
+# +θ3*Tensor("Q",[ l=>upper, f=>upper,  b=>upper, j=>upper],x)
+# +θ4*Tensor("R",[ l=>upper, f=>upper],x)
+# )
+
+
+
+# D_SUPERFIELD=Derivative("D",Wm, [x,θ], [ r=>upper, f=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# o=out
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+
+
+
+
+# # D_SUPERFIELD2=Derivative("D",Wm4, [x,θ], [ r=>upper, d=>upper])
+# # out2=expand_derivative(D_SUPERFIELD2,covar,covar_unbar_expansion)
+# # o=out2
+# # out2=apply_derivative(out2)
+# # out2=eliminate_kronecker(out2)
+
+
+# D_SUPERFIELD3=Derivative("D",Wm3, [x,θ], [ l=>upper, f=>upper])
+# out3=expand_derivative(D_SUPERFIELD3,covar,covar_unbar_expansion)
+# out3=apply_derivative(out3)
+# out3=eliminate_kronecker(out3)
+
+# D_SUPERFIELD4=Derivative("D",Wm4, [x,θ], [ r=>upper, d=>upper])
+# out4=expand_derivative(D_SUPERFIELD4,covar,covar_unbar_expansion)
+# out4=apply_derivative(out4)
+# out4=eliminate_kronecker(out4)
+
+
+
+# res=simplify(out+out2)/2
+
+# res=simplify(out+out3)/2
+
+
+# res=simplify(out2+out3)/2
+
+# res=simplify(out+out4)/2
+
+
 ##################
 ##### D4W---=-W-
 
@@ -522,6 +592,74 @@ Wm=(Tensor("J",[   l=>upper, d=>upper], x)
 # println("4 deriv")
 # println(res2)
 # # res=res2-res
+
+
+
+
+##### D (DW)---=-W-
+
+
+###Wmmm=(Tensor("w",[   k=>upper, c=>upper], x)
+
+####Wm=(Tensor("J",[   l=>upper, d=>upper], x)
+
+Wmmm2=(Tensor("w",[   l=>upper, d=>upper], x)
++θia*Tensor("X",[  l=>upper,d=>upper,  i=>upper, a=>upper],x)
++θab*Tensor("Y",[ l=>upper,d=>upper,     a=>upper, b=>upper],x)
++θij*Tensor("Z",[ l=>upper,d=>upper,     i=>upper, j=>upper],x)
++θ3*Tensor("U",[ l=>upper,d=>upper,  b=>upper, j=>upper],x)
++θ4*Tensor("V",[ l=>upper,d=>upper],x)
+)
+
+D_SUPERFIELD=Derivative("D",Wmmm, [x,θ], [ r=>upper, f=>upper])
+out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+out=apply_derivative(out)
+out=eliminate_kronecker(out)
+D_SUPERFIELD=Derivative("D",out, [x,θ], [ l=>upper, d=>upper])
+out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+out=apply_derivative(out)
+out=eliminate_kronecker(out)
+
+
+D_SUPERFIELD=Derivative("D",Wmmm, [x,θ], [ l=>upper, f=>upper])
+out2=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+out2=apply_derivative(out2)
+out2=eliminate_kronecker(out2)
+D_SUPERFIELD=Derivative("D",out2, [x,θ], [ r=>upper, d=>upper])
+out2=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+out2=apply_derivative(out2)
+out2=eliminate_kronecker(out2)
+# D_SUPERFIELD=Derivative("D",out, [x,θ], [ t=>upper, h=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+# D_SUPERFIELD=Derivative("D",out, [x,θ], [ u=>upper, X=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+# temp=copy(out)
+out=simplify(eliminate_epsilon(EpsilonTensor([r=>lower, k=>lower])*(EpsilonTensor([f=>lower, c=>lower])*out)))
+out2=simplify(eliminate_epsilon(EpsilonTensor([r=>lower, k=>lower])*(EpsilonTensor([f=>lower, c=>lower])*out2)))
+res=Tensor("β")*out+Tensor("γ")*out2-Tensor("α")*apply_derivative(Derivative("delpp",Wmmm2,[x]))
+res2=Wm
+
+# out=EpsilonTensor([g=>lower, f=>lower])*(EpsilonTensor([X=>lower, h=>lower])*(EpsilonTensor([u=>lower, s=>lower])*(EpsilonTensor([t=>lower, r=>lower])*out)))
+# res2=simplify(eliminate_epsilon(out))/144
+# println("4 deriv")
+# println(res2)
+# res=res2-res
+
+
+#DW---
+
+# D_SUPERFIELD=Derivative("D",Wmmm, [x,θ], [ r=>upper, f=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+# out=simplify(eliminate_epsilon(EpsilonTensor([r=>lower, k=>lower])*(EpsilonTensor([f=>lower, c=>lower])*out)))
+# res=out
+
+# res2=apply_derivative(Derivative("delmm",Scalar,[x]))
 
 
 ################# D2 D T
@@ -776,13 +914,13 @@ Wm=(Tensor("J",[   l=>upper, d=>upper], x)
 # out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
 # out=apply_derivative(out)
 # out=eliminate_kronecker(out)
-D_SUPERFIELD=Derivative("D",Wm, [x,θ], [ r=>upper, f=>upper])
-out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
-out=apply_derivative(out)
-out=eliminate_kronecker(out)
- out=im*(EpsilonTensor([r=>lower, l=>lower])*(EpsilonTensor([f=>lower, d=>lower])*out)/2)
-# res=apply_derivative(Derivative("delpp",simplify(eliminate_epsilon(out)), [x]))
-res=simplify(out)
+# D_SUPERFIELD=Derivative("D",Wm, [x,θ], [ r=>upper, f=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+#  out=im*(EpsilonTensor([r=>lower, l=>lower])*(EpsilonTensor([f=>lower, d=>lower])*out)/2)
+# # res=apply_derivative(Derivative("delpp",simplify(eliminate_epsilon(out)), [x]))
+# res=simplify(out)
 
 
 
@@ -884,6 +1022,7 @@ res=simplify(out)
 # # println(red)
 # # red=simplify(red)
 # rr=(dL×Wm)
+# # rr=(dL×apply_derivative(Derivative("delmm",Wm,[x])))
 # println(get_free_indices(rr))
 # rr=eliminate_epsilon(EpsilonTensor([l=>lower, r=>lower])*(EpsilonTensor([d=>lower, f=>lower])*rr))
 # res=Tens×Scalar+rr
@@ -932,3 +1071,68 @@ res=simplify(out)
 
 # # final=get_weighted_terms(get_weighted_terms(res2,"θ",1),"Θ",1)
 # # final=to_lc_expression(sort(final),Dict{Index, Index}())
+
+
+############## another SC^2
+
+
+# Wm2=(Tensor("J",[   r=>upper, f=>upper], x)
+# +θia*Tensor("M",[ r=>upper, f=>upper,  i=>upper, a=>upper],x)
+# +θab*Tensor("N",[ r=>upper, f=>upper,     a=>upper, b=>upper],x)
+# +θij*Tensor("P",[ r=>upper, f=>upper,     i=>upper, j=>upper],x)
+# +θ3*Tensor("Q",[ r=>upper, f=>upper,  b=>upper, j=>upper],x)
+# +θ4*Tensor("R",[ r=>upper, f=>upper],x)
+# )
+
+
+
+# D_SUPERFIELD=Derivative("D",Wm×Wm2, [x,θ], [ t=>upper, h=>upper])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_unbar_expansion)
+# o=out
+# out=apply_derivative(out)
+# out=eliminate_kronecker(out)
+
+
+# D_SUPERFIELD2=Derivative("D",out, [x,θ], [ s=>upper, g=>upper])
+# out2=expand_derivative(D_SUPERFIELD2,covar,covar_unbar_expansion)
+# o=out2
+# out2=apply_derivative(out2)
+# out2=eliminate_kronecker(out2)
+
+# # exp= out2×Wm2
+# exp=out2
+
+# println(exp)
+# println(get_free_indices(exp))
+
+# exp=Tensor("κ")*(EpsilonTensor([f=>lower,h=>lower])*(EpsilonTensor([d=>lower,g=>lower])*(EpsilonTensor([l=>lower,r=>lower])*(EpsilonTensor([s=>lower,t=>lower])*exp))))
+
+# # exp=get_weighted_terms(exp,"θ",0)
+
+
+# res=Tens×Scalar-exp
+# # # res2=simplify(res)
+# println(res)
+# res=get_weighted_terms(get_weighted_terms(res,"θ",4),"Θ",0)
+# # # final=to_lc_expression(sort(final),Dict{Index, Index}())
+# println(res)
+# println("starting simplify")
+# res=simplify(res)
+# println(res)
+# println("starting projection")
+# res=project_component(res,θ,[j=>upper, b=>upper],4,0)
+# println(to_latex(res))
+
+# D_SUPERFIELD3=Derivative("D",Wm3, [x,θ], [ l=>upper, f=>upper])
+# out3=expand_derivative(D_SUPERFIELD3,covar,covar_unbar_expansion)
+# out3=apply_derivative(out3)
+# out3=eliminate_kronecker(out3)
+
+# D_SUPERFIELD4=Derivative("D",Wm4, [x,θ], [ r=>upper, d=>upper])
+# out4=expand_derivative(D_SUPERFIELD4,covar,covar_unbar_expansion)
+# out4=apply_derivative(out4)
+# out4=eliminate_kronecker(out4)
+
+
+
+# res=simplify(out+out2)/2

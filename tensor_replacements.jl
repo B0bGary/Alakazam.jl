@@ -51,135 +51,135 @@ end
 function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorTerm, repeat::Bool=true)
     exp_hist = term2histogram(exp)
     pat_hist = term2histogram(pattern)
-   # println(exp_hist)
+    # println(exp_hist)
     out = patt_match(pat_hist, exp_hist, pattern, exp) # output will be (true, [index replacements etc], dummy tensor name dict, dummy index dict)
     #println("finished algo")
     #println(out)
 
     # replacemnts are pattern => exp index pairs
     grade = 0
-    coef=1
+    coef = 1
 
 
-        if out[1] #pattern matches
-            # #println("pattern matched")
-            new_exp = TensorTerm(Vector{TensorSuperType}())
-            exp2 = copy(exp.terms)
-            # #println("exp2")
-            # println(exp2)
-            #build new exp by getting all terms that need replacement
-            
-            #println(values(out[2])) ######### may have to remove multiple things.............
-            vlast=0
-            for v in values(out[2]) #for each tensor that needs to be replaced 
-                v = v[2]
-                if vlast!=0&&vlast<v
-                            #logic for grading, and removal
-                    v-=1 #accounts for removal
-                end
-                
-                # println(v)
-                if v != 1
-                    for i in 1:(v-1)
-                        grade += grading(exp2[i])
-                        grade %= 2
-                    end
-                    grade += grading(exp2[v]) #need to account for multiple terms being moved to the front
-                end
-                splice!(exp2, v) #removes the vth element, after calculating the grading to move it to the front
-                vlast=v
+    if out[1] #pattern matches
+        # #println("pattern matched")
+        new_exp = TensorTerm(Vector{TensorSuperType}())
+        exp2 = copy(exp.terms)
+        # #println("exp2")
+        # println(exp2)
+        #build new exp by getting all terms that need replacement
+
+        #println(values(out[2])) ######### may have to remove multiple things.............
+        vlast = 0
+        for v in values(out[2]) #for each tensor that needs to be replaced 
+            v = v[2]
+            if vlast != 0 && vlast < v
+                #logic for grading, and removal
+                v -= 1 #accounts for removal
             end
 
-            # #construct the replacement
-            # println(replace)
-            rep2=copy(replace)
-            for repind in eachindex(rep2.terms)
-                rep = rep2.terms[repind]
-                # println("replacement terms non empty")
-                # println(rep)
-                rep_dum = typeof(rep) <: DummyPatternTensor
-                # rep = typeof(exp)(rep) #makes sure rep isnt a dummy if success
-
-
-                if rep_dum
-                    # println("Namema")
-                    # println(exp.name)
-                    #println(out[3])
-                    rep.name = out[3][rep.name]
-                    # println(rep.name)
+            # println(v)
+            if v != 1
+                for i in 1:(v-1)
+                    grade += grading(exp2[i])
+                    grade %= 2
                 end
-                #needs to make sure dummy indices match pattern
-                # println(rep)
-                ri = rep.indices
-                # println(ri)
-                # println("indices")
-                # println(ri)
-                # println("about to replace indices with non dummies")
-                for index in eachindex(ri)
-                    # println("indices exist")
-                    if typeof(ri[index][1]) <: DummyPatternIndex
-                        # println("dummy index found")
-                        # println("dummy")
-                        # println(temp_dummy)
-                        # println(ri[index][1])
-                        if get(out[4], ri[index][1].name, nothing) === nothing #problem with checking equality since technically different objects #use names instead
-                            throw(InvalidReplacementPattern())
-                        else
-                            #println(out[4][ri[index][1].name] )
-                            #println( ri[index][2] )
-                            ri[index] = out[4][ri[index][1].name] => ri[index][2] # maps index from original expression to replacement
-                            # #println("final assignment")##not happen
-                            # println(ri[index])
-                            # println(ri[index])
-                        end
-                    end
-
-                end
-                rep = typeof(exp.terms[1])(rep)
-                push!(new_exp.terms, rep)
-                # println(rep)
-                # println(typeof(rep))
-                # replace.terms[repind]=rep
+                grade += grading(exp2[v]) #need to account for multiple terms being moved to the front
             end
-
-
-            out=(false, out[2],out[3],out[4])
-            # println("new expressssss")
-            # println(new_exp)
-            # println(exp2)
-           
-            if repeat==true
-               tex= substitute_terms(TensorTerm(exp2), pattern, replace, repeat)
-               #println(tex)
-            #    println("here")
-               if typeof(tex)!=TensorExpression
-                tex=TensorExpression(tex)
-               end
-              #println( "this stuff")
-               #println(new_exp.terms)
-               #println(tex.summands[1][2].terms)
-               new_exp.terms = vcat(new_exp.terms, tex.summands[1][2].terms)
-                coef*=tex.summands[1][1]
-            else
-                new_exp.terms = vcat(new_exp.terms, exp2)
-            end
-
-            #println("final expression")
-            #println(new_exp)
-            return ((-1)^(grade))*coef *new_exp
-
-            
-            # for termind in eachindex(exp.terms)
-
-
-            # end
-
-            # #move all terms to be replaced to the front, accounting for grading
-
-        else
-            # out=(false, out[2],out[3],out[4])
-            return exp #if no matches, return original expression
+            splice!(exp2, v) #removes the vth element, after calculating the grading to move it to the front
+            vlast = v
         end
+
+        # #construct the replacement
+        # println(replace)
+        rep2 = copy(replace)
+        for repind in eachindex(rep2.terms)
+            rep = rep2.terms[repind]
+            # println("replacement terms non empty")
+            # println(rep)
+            rep_dum = typeof(rep) <: DummyPatternTensor
+            # rep = typeof(exp)(rep) #makes sure rep isnt a dummy if success
+
+
+            if rep_dum
+                # println("Namema")
+                # println(exp.name)
+                #println(out[3])
+                rep.name = out[3][rep.name]
+                # println(rep.name)
+            end
+            #needs to make sure dummy indices match pattern
+            # println(rep)
+            ri = rep.indices
+            # println(ri)
+            # println("indices")
+            # println(ri)
+            # println("about to replace indices with non dummies")
+            for index in eachindex(ri)
+                # println("indices exist")
+                if typeof(ri[index][1]) <: DummyPatternIndex
+                    # println("dummy index found")
+                    # println("dummy")
+                    # println(temp_dummy)
+                    # println(ri[index][1])
+                    if get(out[4], ri[index][1].name, nothing) === nothing #problem with checking equality since technically different objects #use names instead
+                        throw(InvalidReplacementPattern())
+                    else
+                        #println(out[4][ri[index][1].name] )
+                        #println( ri[index][2] )
+                        ri[index] = out[4][ri[index][1].name] => ri[index][2] # maps index from original expression to replacement
+                        # #println("final assignment")##not happen
+                        # println(ri[index])
+                        # println(ri[index])
+                    end
+                end
+
+            end
+            rep = typeof(exp.terms[1])(rep)
+            push!(new_exp.terms, rep)
+            # println(rep)
+            # println(typeof(rep))
+            # replace.terms[repind]=rep
+        end
+
+
+        out = (false, out[2], out[3], out[4])
+        # println("new expressssss")
+        # println(new_exp)
+        # println(exp2)
+
+        if repeat == true
+            tex = substitute_terms(TensorTerm(exp2), pattern, replace, repeat)
+            #println(tex)
+            #    println("here")
+            if typeof(tex) != TensorExpression
+                tex = TensorExpression(tex)
+            end
+            #println( "this stuff")
+            #println(new_exp.terms)
+            #println(tex.summands[1][2].terms)
+            new_exp.terms = vcat(new_exp.terms, tex.summands[1][2].terms)
+            coef *= tex.summands[1][1]
+        else
+            new_exp.terms = vcat(new_exp.terms, exp2)
+        end
+
+        #println("final expression")
+        #println(new_exp)
+        return ((-1)^(grade)) * coef * new_exp
+
+
+        # for termind in eachindex(exp.terms)
+
+
+        # end
+
+        # #move all terms to be replaced to the front, accounting for grading
+
+    else
+        # out=(false, out[2],out[3],out[4])
+        return exp #if no matches, return original expression
+    end
 end
 
 
@@ -220,7 +220,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
         #####all of this works!!!!!! if single tensor left in pattern!!   
         #println("trying")
         if length(first(pat)[2]) == 1 #if only one type of tensor in the pattern
-            
+
 
 
             # if first(pat)[1]==1 #if only needs to match once only one thing left to match
@@ -415,7 +415,7 @@ function patt_match(pat::OrderedDict{N,Vector{Pair{String,Vector{Number}}}} wher
 
                 end
 
-              
+
             end
 
             #println("ret5")
@@ -459,17 +459,17 @@ end
 
 
 
-function construct_index_rep_map(tenpat::OperatorSuperType,tenact::OperatorSuperType)
-    map=Dict{String,Index}()
+function construct_index_rep_map(tenpat::OperatorSuperType, tenact::OperatorSuperType)
+    map = Dict{String,Index}()
     # patdums=get_dummies(tenpat)
     for pos in eachindex(tenpat.operator_indices)
         # if  tenpat.operator_indices[pos][1] in patdums
         #     continue
         # end
-        if tenpat.operator_indices[pos][2]!=tenact.operator_indices[pos][2] || tenpat.operator_indices[pos][1].index_set!=tenact.operator_indices[pos][1].index_set #if wrong positions or wrong index set
+        if tenpat.operator_indices[pos][2] != tenact.operator_indices[pos][2] || tenpat.operator_indices[pos][1].index_set != tenact.operator_indices[pos][1].index_set #if wrong positions or wrong index set
             throw(InvalidReplacementPattern())
         end
-        map[tenpat.indices[pos][1].name]= tenact.operator_indices[pos][1] 
+        map[tenpat.indices[pos][1].name] = tenact.operator_indices[pos][1]
 
     end
     # println("mapping is" ,map)

@@ -1,8 +1,9 @@
+include("superspace_old.jl")
 
-tt=3
+tt=0
 tb=0
 #println(res)
-t11=rename_dummies(get_weighted_terms(get_weighted_terms(res,"θ",tt),"Θ",tb))
+t11=rename_dummies(get_weighted_terms(get_weighted_terms(res2,"θ",tt),"Θ",tb))
 println(t11)
 #     # println("t:",w1,", tbar:",w2)
 #     merge_sum(t11)
@@ -21,9 +22,14 @@ println(t11)
 #   t11=t11+θ3*Tensor("S",[  b=>upper, j=>upper],x)
  #t11+=θia*Tensor("ψ",[   i=>upper, a=>upper],x)
 # t11+=θ4*Tensor("Tp",x)
-# # println(sort(rename_dummies(t11)))
+# # # println(sort(rename_dummies(t11)))
 
-t11=project_component(t11,θ,[i=>upper, a=>upper],tt,tb)
+ t11=project_component(t11,θ,[i=>upper, a=>upper],tt,tb)[1]
+
+
+
+#thet2::Coordinate=nothing,deriv2inds::Vector{Pair{Index,IndexPosition}}=nothing, theta1lev::Integer=1, theta2lev::Integer=1)
+    # println(exp)
 
 println(t11)
 # t11=t11[1]
@@ -70,9 +76,29 @@ println(t11)
 #t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([t=>upper,r=>upper])*(EpsilonTensor([B=>upper,v=>upper])*((EpsilonTensor([y=>upper,g=>upper])*(EpsilonTensor([X=>upper,h=>upper])*eliminate_kronecker(t11))))))))
 #t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([r=>lower,s=>lower])*eliminate_kronecker(t11))))
 
-#  t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([y=>lower,z=>lower])*(EpsilonTensor([t=>lower,u=>lower])*eliminate_kronecker(t11)))))
+# t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([y=>lower,z=>lower])*(EpsilonTensor([t=>lower,u=>lower])*eliminate_kronecker(t11)))))
+
+t11=rename_dummies(contract_metrics(simplify(eliminate_epsilon(eliminate_kronecker(t11)))))
 
 
+
+#  t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([s=>upper, F=>upper])*(EpsilonTensor([E=>upper, r=>upper])*eliminate_kronecker(t11)))))
+
+
+# t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(KroneckerDelta([s=>upper, F=>lower])*(EpsilonTensor([r=>upper, D=>upper])*eliminate_kronecker(t11)))))
+
+
+
+
+
+#    t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([Z=>lower, d=>lower])*(EpsilonTensor([C=>lower, l=>lower])*eliminate_kronecker(t11)))))
+
+# t11=eliminate_epsilon(rename_dummies(eliminate_epsilon((EpsilonTensor([Z=>lower, d=>lower])*eliminate_kronecker(t11)))))
+
+
+
+#   t11=eliminate_epsilon(rename_dummies(eliminate_epsilon(eliminate_kronecker(KroneckerDelta([s=>upper, E=>upper])*res))))
+# temp=eliminate_epsilon(rename_dummies(eliminate_epsilon(EpsilonTensor([r=>lower, E=>lower])*(EpsilonTensor([s=>lower, F=>lower])*eliminate_kronecker(bt242)))))
 
 println("\$\$ \\theta=",tt,"\\quad \\overline{\\theta}=",tb,":\$\$")
 println("\\begin{dmath}",to_latex(t11),"=0\\end{dmath}")
