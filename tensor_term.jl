@@ -36,6 +36,7 @@ mutable struct Tensor<:TensorSuperType
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
+    tableaux::Vector{YoungTableau}
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
@@ -43,7 +44,7 @@ mutable struct Tensor<:TensorSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,w)
+        new(name, indices,function_of,w, Vector{YoungTableau}())
     end
     
 
@@ -53,7 +54,7 @@ mutable struct Tensor<:TensorSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, indices,[function_of],w)
+        new(name, indices,[function_of],w,Vector{YoungTableau}())
     end
 
     function Tensor(name::String,
@@ -62,15 +63,15 @@ mutable struct Tensor<:TensorSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w,Vector{YoungTableau}())
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
         
-        new(name, indices,[],Dict{String, Number}())
+        new(name, indices,[],Dict{String, Number}(),Vector{YoungTableau}())
     end
     function Tensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of,T.weights)
+        new(T.name,T.indices,T.function_of,T.weights,Vector{YoungTableau}())
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
@@ -79,7 +80,7 @@ mutable struct Tensor<:TensorSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,merge(w,weights))
+        new(name, indices,function_of,merge(w,weights),Vector{YoungTableau}())
     end
     
 
@@ -90,7 +91,7 @@ mutable struct Tensor<:TensorSuperType
             w[function_of.name]=1
         end
 
-        new(name, indices,[function_of],merge(w,weights))
+        new(name, indices,[function_of],merge(w,weights),Vector{YoungTableau}())
     end
 
     function Tensor(name::String,
@@ -99,11 +100,11 @@ mutable struct Tensor<:TensorSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights),Vector{YoungTableau}())
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[],weights)
+        new(name, indices,[],weights,Vector{YoungTableau}())
     end
 
     # weights::Dict{String,Number}=Dict()
@@ -120,6 +121,7 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
+    tableaux::Vector{YoungTableau}
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
@@ -127,7 +129,7 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,w)
+        new(name, indices,function_of,w, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
     
 
@@ -137,7 +139,7 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, indices,[function_of],w)
+        new(name, indices,[function_of],w, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function SymmetricTensor(name::String,
@@ -146,15 +148,15 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
         
-        new(name, indices,[],Dict{String, Number}())
+        new(name, indices,[],Dict{String, Number}(), [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
     function SymmetricTensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of,T.weights)
+        new(T.name,T.indices,T.function_of,T.weights, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
@@ -163,7 +165,7 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,merge(w,weights))
+        new(name, indices,function_of,merge(w,weights), [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
     
 
@@ -174,7 +176,7 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
             w[function_of.name]=1
         end
 
-        new(name, indices,[function_of],merge(w,weights))
+        new(name, indices,[function_of],merge(w,weights), [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function SymmetricTensor(name::String,
@@ -183,11 +185,11 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights), [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[],weights)
+        new(name, indices,[],weights, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     # weights::Dict{String,Number}=Dict()
@@ -201,6 +203,7 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
+    tableaux::Vector{YoungTableau}
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
@@ -208,7 +211,7 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,w)
+        new(name, indices,function_of,w, [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
     
 
@@ -218,7 +221,7 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, indices,[function_of],w)
+        new(name, indices,[function_of],w, [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function AntisymmetricTensor(name::String,
@@ -227,15 +230,15 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w)
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w, [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices
         
-        new(name, indices,[],Dict{String, Number}())
+        new(name, indices,[],Dict{String, Number}(), [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
     function AntisymmetricTensor(T::DummyPatternTensor) #
-        new(T.name,T.indices,T.function_of,T.weights)
+        new(T.name,T.indices,T.function_of,T.weights, [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition},}()  ,
@@ -244,7 +247,7 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
         for coord in function_of
             w[coord.name]=1
         end
-        new(name, indices,function_of,merge(w,weights))
+        new(name, indices,function_of,merge(w,weights), [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
     
 
@@ -255,7 +258,7 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
             w[function_of.name]=1
         end
 
-        new(name, indices,[function_of],merge(w,weights))
+        new(name, indices,[function_of],merge(w,weights), [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function AntisymmetricTensor(name::String,
@@ -264,11 +267,11 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights))
+        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],merge(w,weights), [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(),weights::Dict{String,Number}=Dict{String, Number}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices,[],weights)
+        new(name, indices,[],weights, [YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
     # weights::Dict{String,Number}=Dict()
