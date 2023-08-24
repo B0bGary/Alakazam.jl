@@ -38,6 +38,16 @@ mutable struct Tensor<:TensorSuperType
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
 
+ function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}},yt::YoungTableau) where {I<:IndexSuperType}
+    w=Dict{String,Number}()
+
+    # for coord in function_of
+    #     w[coord.name]=1
+    # end
+     new(name, indices,Vector{Coordinate}(),w, [yt])
+ end
+
+
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}} =Vector{Pair{IndexSuperType, IndexPosition}}()  ,
         function_of::Vector{Coordinate}=Vector{Coordinate}())  where {I<:IndexSuperType}#lets you have scalars with no indices
         w=Dict{String,Number}()
