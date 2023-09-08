@@ -1,3 +1,4 @@
+
 mutable struct YoungTableau
     row_lengths::Vector{Integer}
     index_assignment::Vector{Integer}

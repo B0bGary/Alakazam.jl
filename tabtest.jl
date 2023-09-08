@@ -10,3 +10,11 @@ S=Tensor("T", [n=> lower, m => upper, p => upper, q=> upper, r=> upper,s=>upper,
 # A.tableaux[1].tableau
 S.tableaux[1].tableau
 S.tableaux[1].adj_matrix
+
+
+T1=Tensor("T", [n=> upper, m => upper, p => upper, q=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
+T2=Tensor("T", [m=> upper, n => upper, p => upper, q=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
+
+same_tensor_mod_tableaux(T1,T2)
+
+2*T1+5*T2

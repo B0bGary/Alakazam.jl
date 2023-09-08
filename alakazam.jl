@@ -31,6 +31,7 @@ include("derivative_ops.jl")
 include("kronecker.jl")
 include("epsilon_tensor.jl")
 include("tensor_replacements.jl")
+include("simplify_tableaux.jl")
 include("lightcone.jl")
 
 

@@ -1474,8 +1474,8 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::T) where {T<:TensorSuperT
     ###println(typeof(T1)) #some different behaviour between tensor and tensor term. tensor works..
     ###println(T2)
     T2 = copy(T2)
-    t1inds = OrderedSet{Index}()
-    t2inds = OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
+    t1inds = OrderedSet{IndexSuperType}()
+    t2inds = OrderedSet{Pair{Integer,IndexSuperType}}() #all indices, numbered in order
     # t2ok=Set{Index}()
     for inds in T1.indices
         push!(t1inds, inds[1])
@@ -1489,14 +1489,14 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::T) where {T<:TensorSuperT
     end
     # we now have all the indices we need to replace and where they are on the tensor
     sets = get_index_sets(T2) #Set{IndexSet}()
-    avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
+    avail = Dict{IndexSet,OrderedSet{IndexSuperType}}() #pairs of index sets, with the unused indices
     for set in sets
-        a = OrderedSet{Index}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
+        a = OrderedSet{IndexSuperType}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
         push!(avail, set => a) #ones we can replace with
     end
     ###println(avail)
     ###println(T2.indices)
-    dummie_matchup = Dict{Index,Index}()
+    dummie_matchup = Dict{IndexSuperType,IndexSuperType}()
 
     t2dums = get_dummies(T2)
 
@@ -1542,22 +1542,22 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
     ###println(typeof(T1)) #some different behaviour between tensor and tensor term. tensor works..
     ###println(T2)
     T2 = copy(T2)
-    t1inds = OrderedSet{Index}()
-    t2inds = OrderedSet{Pair{Integer,Index}}() #all indices, numbered in order
+    t1inds = OrderedSet{IndexSuperType}()
+    t2inds = OrderedSet{Pair{Integer,IndexSuperType}}() #all indices, numbered in order
     # t2ok=Set{Index}()
     for inds in T1.indices
         push!(t1inds, inds[1])
     end
 
     sets = get_index_sets(T2) #Set{IndexSet}()
-    avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
+    avail = Dict{IndexSet,OrderedSet{IndexSuperType}}() #pairs of index sets, with the unused indices
     for set in sets
-        a = OrderedSet{Index}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
+        a = OrderedSet{IndexSuperType}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
         push!(avail, set => a) #ones we can replace with
     end
     ###println(avail)
     ###println(T2.indices)
-    dummie_matchup = Dict{Index,Index}()
+    dummie_matchup = Dict{IndexSuperType,IndexSuperType}()
 
     t2dums = get_dummies(T2)
 
@@ -1723,14 +1723,14 @@ end
 function get_unused_indices(T::TensorSuperType, IS::IndexSet)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
-    return setdiff(IS.indices, Set(i[1] for i in T.indices))
+    return OrderedSet(ordered_setdiff(IS.indices, Set(i[1] for i in T.indices)))
 end
 
 function get_unused_indices(T::TensorTerm, IS::IndexSet)
     ###println("indices of tensor term are: ",T.indices)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
-    return setdiff(IS.indices, Set(i[1] for i in T.indices))
+    return OrderedSet(ordered_setdiff(IS.indices, Set(i[1] for i in T.indices)))
 end
 
 
@@ -1740,16 +1740,22 @@ function get_unused_indices(T::TensorExpression, IS::IndexSet)
     ###println("doing this for some reason")
     temp=IS.indices
     for summand in T.summands
-        temp=setdiff(temp,Set(i[1] for i in summand[2].indices))
+        temp=OrderedSet(ordered_setdiff(temp,Set(i[1] for i in summand[2].indices)))
     end
 
     return temp
 end
 
+
+function get_index_index(T::TensorSuperType)
+    return OrderedSet([T.indices[i][1]=> i for i in 1:size(T.indices)[1]])
+end
+
+
 #finding free indices
 
 function get_free_indices(T::TensorSuperType)
-    return Set(setdiff(T.indices, get_dummies_positional(T)))
+    return OrderedSet(ordered_setdiff(T.indices, get_dummies_positional(T)))
 end
 
 function get_free_indices(T::TensorTerm)
@@ -1759,19 +1765,19 @@ function get_free_indices(T::TensorTerm)
     # ###println(d)
     # ###println("free")
     ###println(Set(intersect(T.indices,d)))
-    return Set(setdiff(T.indices, d))
+    return OrderedSet(ordered_setdiff(T.indices, d))
 end
 
 function get_free_indices(T::TensorExpression)
     if T == zero
         return Set()
     end
-    return Set(setdiff(T.summands[1][2].indices, get_dummies_positional(T.summands[1][2])))#all tensors should have matching free indices in a sum already
+    return OrderedSet(ordered_setdiff(T.summands[1][2].indices, get_dummies_positional(T.summands[1][2])))#all tensors should have matching free indices in a sum already
 end
 
 function get_free_indices_nopos(T::Union{TensorExpression,TensorSuperType,TensorTerm})
     inds = get_free_indices(T)
-    ind = Set()
+    ind = OrderedSet()
     for d in inds
         push!(ind, d[1])
     end
@@ -1783,7 +1789,7 @@ end
 #finding dummie indices
 
 function get_dummies_positional(T::TensorSuperType)
-    dum::OrderedSet{Pair{Index,IndexPosition}} = Set()
+    dum::OrderedSet{Pair{IndexSuperType,IndexPosition}} = OrderedSet()
     for d in get_dummies(T)
         push!(dum, d => upper)
         push!(dum, d => lower)
@@ -1792,7 +1798,7 @@ function get_dummies_positional(T::TensorSuperType)
 end
 
 function get_dummies_positional(T::TensorTerm)
-    dum::OrderedSet{Pair{Index,IndexPosition}} = Set()
+    dum::OrderedSet{Pair{IndexSuperType,IndexPosition}} = OrderedSet()
     for d in get_dummies(T)
         push!(dum, d => upper)
         push!(dum, d => lower)
@@ -1812,7 +1818,7 @@ end
 
 
 function get_dummies(T::TensorExpression)
-    out = Set()
+    out = OrderedSet()
     for summand in T.summands
         out = union(out, get_dummies(summand[2]))
     end
@@ -1902,7 +1908,7 @@ function rename_dummies(T::TensorSuperType)
     T = copy(T)
     dummies = get_dummies(T) #returns all the dummies attached to the tensor
     # println(dummies)
-    all_indices::OrderedSet{Index} = OrderedSet([i[1] for i in T.indices]) #set of all the indices attached to the tensor
+    all_indices::OrderedSet{IndexSuperType} = OrderedSet([i[1] for i in T.indices]) #set of all the indices attached to the tensor
     index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
     for set in index_sets #for each type of dummie index
 
@@ -2003,7 +2009,7 @@ function rename_dummies(T::TensorTerm)
     # println("dummies are,",dummies)
     ###println("dummies")
     ###println(dummies)
-    all_indices::OrderedSet{Index} = OrderedSet([i[1] for t in T.terms for i in t.indices]) #set of all the indices attached to the tensor
+    all_indices::OrderedSet{IndexSuperType} = OrderedSet([i[1] for t in T.terms for i in t.indices]) #set of all the indices attached to the tensor
     index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
     for set in index_sets #for each type of dummie index
 
@@ -2069,7 +2075,7 @@ function rename_dummies(T::TensorExpression)
 end
 
 
-function update_dummies(T::TensorSuperType, reps::Pair{Index,Index})
+function update_dummies(T::TensorSuperType, reps::Pair{IndexSuperType,IndexSuperType})
     ###println(T)
     ###println(reps)
     if typeof(T) <: OperatorSuperType
@@ -2083,12 +2089,12 @@ function update_dummies(T::TensorSuperType, reps::Pair{Index,Index})
     end
 end
 
-function update_dummies(T::TensorTerm, reps::Pair{Index,Index})
+function update_dummies(T::TensorTerm, reps::Pair{IndexSuperType,IndexSuperType})
     for t in T.terms
         update_dummies(t, reps)
     end
 end
-function update_dummies(TEX::TensorExpression, reps::Pair{Index,Index})
+function update_dummies(TEX::TensorExpression, reps::Pair{IndexSuperType,IndexSuperType})
     for summand in TEX.summands
         for t in summand[2].terms
             update_dummies(t, reps)
@@ -2248,6 +2254,12 @@ function merge_sum(TEx::TensorExpression)
                 # ##println("sum is")
                 # ##println(new_merged[i])
                 # ##println(new_merged) #not editting in place apparaently....
+                found = true
+                break
+            end
+            (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
+            if res
+                new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
                 found = true
                 break
             end
@@ -2702,7 +2714,7 @@ function copy(T::TensorTerm)
 end
 
 function copy(T::TensorSuperType)
-    return typeof(T)(T.name, copy(T.indices), T.function_of)
+    return typeof(T)(T.name, copy(T.indices), T.function_of, T.weights, T.tableaux)
 end
 
 function copy(T::TensorExpression)
@@ -2730,7 +2742,7 @@ end
 #     function_of::Vector{T} where {T<:Coordinate}
 
 
-function copy(V::Vector{Pair{Index,IndexPosition}})
+function copy(V::Vector{Pair{IndexSuperType,IndexPosition}})
     return [pair[1] => pair[2] for pair in V]
 end
 function copy(T::SymMetricSuperType)
@@ -2776,7 +2788,48 @@ end
 #     end
 # end
 
+function ordered_setdiff(set1::OrderedSet{T1}, set2::OrderedSet{T2}) where {T1, T2}
+    result = OrderedSet{Union{T1, T2}}()
+    for item in set1
+        if !(item in set2)
+            push!(result, item)
+        end
+    end
+    return result
+end
 
+# Method for vectors
+function ordered_setdiff(arr1::Vector{T1}, arr2::Vector{T2}) where {T1, T2}
+    result = OrderedSet{Union{T1, T2}}()
+    for item in arr1
+        if !(item in arr2)
+            push!(result, item)
+        end
+    end
+    return result
+end
+
+# Method to handle ordered set and vector combination
+function ordered_setdiff(set1::OrderedSet{T1}, arr2::Vector{T2}) where {T1, T2}
+    result = OrderedSet{Union{T1, T2}}()
+    for item in set1
+        if !(item in arr2)
+            push!(result, item)
+        end
+    end
+    return result
+end
+
+# Method to handle vector and ordered set combination
+function ordered_setdiff(arr1::Vector{T1}, set2::OrderedSet{T2}) where {T1, T2}
+    result = OrderedSet{Union{T1, T2}}()
+    for item in arr1
+        if !(item in set2)
+            push!(result, item)
+        end
+    end
+    return result
+end
 
 function first_element(arr, elem1, elem2)
     idx1 = findfirst(x -> x == elem1, arr)

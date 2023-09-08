@@ -117,6 +117,17 @@ mutable struct Tensor<:TensorSuperType
         new(name, indices,[],weights,Vector{YoungTableau}())
     end
 
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(), function_of::Vector{Coordinate}=Vector{Coordinate}(),
+        weights::Dict{String,Number}=Dict{String, Number}() ,tableaux::Vector{YoungTableau}=Vector{YoungTableau}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,function_of,weights,tableaux)
+    end
+
+    # name::String
+    # indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
+    # function_of::Vector{Coordinate}
+    # weights::Dict{String,Number}
+    # tableaux::Vector{YoungTableau}
+
     # weights::Dict{String,Number}=Dict()
 
  end
@@ -202,6 +213,11 @@ mutable struct SymmetricTensor<:TotallySymmetricSuperType
         new(name, indices,[],weights, [YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
     end
 
+    function SymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(), function_of::Vector{Coordinate}=Vector{Coordinate}(),
+        weights::Dict{String,Number}=Dict{String, Number}() ,tableaux::Vector{YoungTableau}=Vector{YoungTableau}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,function_of,weights,[YoungTableau([size(indices)[1]],collect(1:size(indices)[1]))])
+    end
+
     # weights::Dict{String,Number}=Dict()
 
  end
@@ -285,7 +301,10 @@ mutable struct AntisymmetricTensor<:TotallyAntisymmetricSuperType
     end
 
     # weights::Dict{String,Number}=Dict()
-
+    function AntisymmetricTensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}(), function_of::Vector{Coordinate}=Vector{Coordinate}(),
+        weights::Dict{String,Number}=Dict{String, Number}() ,tableaux::Vector{YoungTableau}=Vector{YoungTableau}() ) where {I<:IndexSuperType}#lets you have scalars with no indices
+        new(name, indices,function_of,weights,[YoungTableau([1 for _ in 1:size(indices)[1]],collect(1:size(indices)[1]))])
+    end
  end
 
     # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
