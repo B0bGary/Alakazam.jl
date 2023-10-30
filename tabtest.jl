@@ -12,9 +12,10 @@ S.tableaux[1].tableau
 S.tableaux[1].adj_matrix
 
 
-T1=Tensor("T", [n=> upper, m => upper, p => upper, q=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
-T2=Tensor("T", [m=> upper, n => upper, p => upper, q=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
+T1=Tensor("T", [m=> upper, n => upper, p => lower, p=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
+T2=Tensor("T", [n=> upper, m => upper, q => lower, q=> upper], YoungTableau([1,1,1,1],[1,2,3,4]))
 
-same_tensor_mod_tableaux(T1,T2)
+# same_tensor_mod_tableaux(T1,T2)
 
-2*T1+5*T2
+exp=2*T1+5*T2
+rename_dummies(exp)

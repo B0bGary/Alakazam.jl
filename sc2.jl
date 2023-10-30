@@ -212,8 +212,9 @@ add_derivative_action(grassman_deriv_conjrep,barθαi,KroneckerDelta([i=>upper,j
 # +θjα*barθαi*Tensor("K",[j=>upper, α=>lower,i => lower, αdot =>upper],x)
 # +Tensor("θ",[k=>lower, α=>upper],θ)*barθupij*Tensor("L",[k=>upper, α =>lower, i=>lower,j => lower],x)
 # )
-SUPERFIELD=(Tensor("j", x)
-+θiα*Tensor("ψ",[i=>upper, α=>lower],x)
+SUPERFIELD=(
+Tensor("j", x)+
+θiα*Tensor("ψ",[i=>upper, α=>lower],x)
 # +θij*SymmetricTensor("F",[i=>upper, j=>upper],x)
 # +(θjα*θupij)*Tensor("G",[i=>lower, α=>lower],x)
 # +θij*θupij*Tensor("H",x)

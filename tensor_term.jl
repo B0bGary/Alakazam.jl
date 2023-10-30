@@ -67,13 +67,13 @@ mutable struct Tensor<:TensorSuperType
         new(name, indices,[function_of],w,Vector{YoungTableau}())
     end
 
-    function Tensor(name::String,
-        function_of::Coordinate=nothing) #lets you have scalars with no indices
+    function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}() ,
+        function_of::Coordinate=nothing) where {I<:IndexSuperType}#lets you have scalars with no indices
         w=Dict{String,Number}()
         if function_of!=nothing
             w[function_of.name]=1
         end
-        new(name, Vector{Pair{IndexSuperType, IndexPosition}}(),[function_of],w,Vector{YoungTableau}())
+        new(name, indices,[function_of],w,Vector{YoungTableau}())
     end
 
     function Tensor(name::String, indices::Vector{Pair{I, IndexPosition}}  =Vector{Pair{IndexSuperType, IndexPosition}}()  ) where {I<:IndexSuperType}#lets you have scalars with no indices

@@ -1723,14 +1723,14 @@ end
 function get_unused_indices(T::TensorSuperType, IS::IndexSet)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
-    return OrderedSet(ordered_setdiff(IS.indices, Set(i[1] for i in T.indices)))
+    return OrderedSet(ordered_setdiff(IS.indices, OrderedSet(i[1] for i in T.indices)))
 end
 
 function get_unused_indices(T::TensorTerm, IS::IndexSet)
     ###println("indices of tensor term are: ",T.indices)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
-    return OrderedSet(ordered_setdiff(IS.indices, Set(i[1] for i in T.indices)))
+    return OrderedSet(ordered_setdiff(IS.indices, OrderedSet(i[1] for i in T.indices)))
 end
 
 
@@ -1740,7 +1740,7 @@ function get_unused_indices(T::TensorExpression, IS::IndexSet)
     ###println("doing this for some reason")
     temp=IS.indices
     for summand in T.summands
-        temp=OrderedSet(ordered_setdiff(temp,Set(i[1] for i in summand[2].indices)))
+        temp=OrderedSet(ordered_setdiff(temp,OrderedSet(i[1] for i in summand[2].indices)))
     end
 
     return temp
@@ -1856,6 +1856,37 @@ function get_dummies(T::Union{TensorSuperType,TensorTerm})
     end
     return collect(keys(duplicates))
 end
+
+# function get_dummies_indpos(T::Union{TensorSuperType,TensorTerm})
+
+#     temp = [(T.indices[ind][1],ind) for ind in 1:length(T.indices)]
+#     ###println(temp)
+#     ordered_counts = OrderedDict((pair[1], (0, pair[2])) for pair in temp)
+#     for pair in temp
+#         ordered_counts[pair[1]] = (ordered_counts[pair[1]][1]+1,ordered_counts[pair[1]][2])
+#     end
+#     println(ordered_counts)
+#     duplicates = filter(kv -> kv[2][1] == 2, ordered_counts)
+#     poscheck = Dict()
+#     for ind in T.indices
+#         if haskey(duplicates, ind[1])
+#             if ind[1].index_set.name != "lightcone"
+#                 if haskey(poscheck, ind[1])
+#                     if poscheck[ind[1]] == ind[2]
+#                         println(T)
+#                         println(ind)
+#                         throw(SameLevelDummieError())
+#                     end
+#                 else
+#                     poscheck[ind[1]] = ind[2]
+#                 end
+#             else
+#                 pop!(duplicates,ind[1])
+#             end
+#         end
+#     end
+#     return collect(keys(duplicates))
+# end
 
 # function get_dummies(T::TensorTerm)
 #     temp = [ind[1] for ind in T.indices]
@@ -2257,12 +2288,12 @@ function merge_sum(TEx::TensorExpression)
                 found = true
                 break
             end
-            (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
-            if res
-                new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
-                found = true
-                break
-            end
+            # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
+            # if res
+            #     new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
+            #     found = true
+            #     break
+            # end
         end
         # if found
         #    ##println("breaking....")
@@ -2277,6 +2308,16 @@ function merge_sum(TEx::TensorExpression)
     TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
     return isempty(TEx.summands) ? zero : TEx
 end
+
+
+
+
+function same_mod_dummies(T1::TensorTerm,T2::TensorTerm)
+
+
+end
+
+
 
 
 ##############################################################################################################################
@@ -2742,8 +2783,8 @@ end
 #     function_of::Vector{T} where {T<:Coordinate}
 
 
-function copy(V::Vector{Pair{IndexSuperType,IndexPosition}})
-    return [pair[1] => pair[2] for pair in V]
+function copy(V::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType}
+    return Vector{Pair{I,IndexPosition}}([pair[1] => pair[2] for pair in V])
 end
 function copy(T::SymMetricSuperType)
     return typeof(T)(T.name, copy(T.indices))
