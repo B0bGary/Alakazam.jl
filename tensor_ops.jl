@@ -1751,6 +1751,13 @@ function get_index_index(T::TensorSuperType)
     return OrderedSet([T.indices[i][1]=> i for i in 1:size(T.indices)[1]])
 end
 
+function get_index_index_rev(T::TensorSuperType)
+    return Dict(i => T.indices[i][1] for i in 1:size(T.indices)[1])
+end
+
+function index_index_to_dict(s::OrderedSet)
+    return Dict(p[2]=>p[1] for p in s)
+end
 
 #finding free indices
 
