@@ -1639,7 +1639,7 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
 end
 
 function ==(a::TensorSuperType, b::TensorSuperType)
-    if a.name == b.name && a.indices == b.indices
+    if (a.name == b.name && a.indices == b.indices )
         return true
     else
         return false
@@ -1801,6 +1801,13 @@ function get_dummies_with_pos_index(T::TensorSuperType)
  return  [i=>pair[1] for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
 
 end
+
+function get_dummies_with_pos_index_and_pos_ul(T::TensorSuperType)
+
+    return  [i=>pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
+   
+   end
+   
 
 
 function get_dummies_positional(T::TensorSuperType)
@@ -2302,7 +2309,15 @@ function merge_sum(TEx::TensorExpression)
                 # ##println(new_merged) #not editting in place apparaently....
                 found = true
                 break
+            elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
+                rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
+                if rescomp[1]==true
+                    # println(rescomp)
+                    new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
+                    found=true
+                end
             end
+
             # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
             # if res
             #     new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
@@ -2322,14 +2337,6 @@ function merge_sum(TEx::TensorExpression)
     TEx.summands = new_merged
     TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
     return isempty(TEx.summands) ? zero : TEx
-end
-
-
-
-
-function same_mod_dummies(T1::TensorTerm,T2::TensorTerm)
-
-
 end
 
 
@@ -2495,6 +2502,35 @@ function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
     return (-1)^(swaps)
 end
 
+function bubble_sort_index_with_grading!(T::TensorSuperType,mapping::Dict)
+
+    n = length(mapping)
+    # println(n)
+    # println(mapping)
+    swapped = true
+    swaps = 1
+    while swapped
+        swapped = false
+        for i in 1:n-1
+            # println(i)
+            if mapping[i+1]<mapping[i]
+
+                #compute grading
+                for tab in T.tableaux
+                    if tab.adj_matrix[i,i+1]!=0
+                        mapping[i],mapping[i+1]=mapping[i+1],mapping[i]
+                        swaps*=tab.adj_matrix[i,i+1]
+                        swapped=true
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    return swaps,mapping
+
+end
 
 
 ##############################################################################################################################
