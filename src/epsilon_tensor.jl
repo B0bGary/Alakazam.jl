@@ -1,6 +1,6 @@
 
-include("tensor_term.jl")
-include("metric.jl")
+# include("tensor_term.jl")
+# include("metric.jl")
 
 abstract type EpsilonTensorSuperType <: AntisymMetricSuperType end
 

@@ -1,4 +1,4 @@
-include("tensor_term.jl")
+# include("tensor_term.jl")
 
 abstract type OperatorSuperType <: TensorSuperType end
 

@@ -1,10 +1,10 @@
 using Latexify
 set_default(convert_unicode = true)
 
-include("tensor_term.jl")
+# include("tensor_term.jl")
 include("kronecker.jl")
 include("epsilon_tensor.jl")
-include("metric.jl")
+# include("metric.jl")
 
 
 ##############################################################################################################################

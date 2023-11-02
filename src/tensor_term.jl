@@ -1,5 +1,5 @@
-include("indices.jl")
-include("custom_exceptions.jl")
+# include("indices.jl")
+# include("custom_exceptions.jl")
 
 SymorNum = Union{SymbolicUtils.Symbolic,Number}
 abstract type TensorSuperType end

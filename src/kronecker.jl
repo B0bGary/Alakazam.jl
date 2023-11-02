@@ -1,5 +1,5 @@
 
-include("tensor_term.jl")
+# include("tensor_term.jl")
 include("metric.jl")
 
 abstract type KroneckerSuperType <: TotallySymmetricSuperType end
