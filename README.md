@@ -12,7 +12,7 @@ I'll give you an intro soon :)
 
 ## Support
 
-If you'd like to support me and future development of this project, please donate [here](https://www.paypal.com/donate/?business=L23N9VSVR9KB4&no_recurring=0&item_name=Thanks+for+supporting+the+development+of+great+tools%21&currency_code=USD)
+If you'd like to support me and future development of this project, please donate [here](https://www.paypal.com/donate/?business=L23N9VSVR9KB4&no_recurring=0&item_name=Thanks+for+supporting+the+development+of+great+tools%21&currency_code=USD).
 
 ## License
 Alakazam is available under the conditions of the GNU General Public License. 

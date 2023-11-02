@@ -551,7 +551,6 @@ function product_rule(O::LeibnizOperatorSuperType)
                ##println(new_prod)
                ##println(grd * summand[1] * new_prod)
                ##println(typeof(grd * summand[1] * new_prod))
-               ##println("poo")
                 new_summand = new_summand + grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
             #    println(new_summand, "addition problem??")
             end

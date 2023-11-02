@@ -74,7 +74,6 @@ function dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     # println(inds_to_move)
 
     out = do_swaps(T1, needperm1, inds_to_move)
-    # println("peepeeeeeee")
     # println(out)
 
     return out

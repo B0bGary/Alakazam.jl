@@ -1444,7 +1444,6 @@ function ×(T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression)
         t = (T2 × T1.summands[summandin][2])
         new_terms += (T1.summands[summandin][1] * t)
         ###println(t)
-        ###println("poo poo")
         ###println(T1.summands[summandin])
         # T1.summands[summandin]=T1.summands[summandin][1] => t
     end
@@ -2282,7 +2281,6 @@ function merge_sum(TEx::TensorExpression)
     end
     ##println("zero ma:",zero)
     out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
-    ##println(out, "poo poo")
     if isempty(out)
         ##println("killing")
         ##println("zero??:",zero)
