@@ -11,13 +11,18 @@ function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     dums2 = get_dummies(T2)
     #if we dont need to worry about dummies, do simple algo
     if isempty(dums1) && isempty(dums2)
-        out= dumless_same_tensor_mod_syms(T1, T2)
-        if out!=0
-            return (true,out)
+        out = dumless_same_tensor_mod_syms(T1, T2)
+        if out != 0
+            return (true, out)
+        end
+    else
+        out = same_tensor_mod_dummies(T1, T2)
+        if out != 0
+            return (true, out)
         end
     end
 
-    return (false,0)
+    return (false, 0)
 end
 
 
@@ -64,6 +69,136 @@ function dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
 
     return out
 end
+
+
+
+#now lets try and get it working if there are dummy indices
+#(so beautiful)
+
+function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
+
+    #best approach (maybe): can we swap all the dummies into correct positions first using modified version of above?
+    dums11 = get_dummies_with_pos_index(T1)
+    contractions1 = [(x[1], y[1]) for x in dums11 for y in dums11 if x[2] == y[2] && x != y]
+
+    dums22 = get_dummies_with_pos_index(T2)
+    contractions2 = [(x[1], y[1]) for x in dums22 for y in dums22 if x[2] == y[2] && x != y]
+
+    # create a multigraph representing the tensor indices. weights 1 for sym, weights -1 for antisym
+    # and a 2nd edge if there is a contraction between two indices. (with weight 2, just to make sure things play nice)
+    # then, if a graph isomorphism exists, the dummies can be permuated so that theyre in the same positions.
+    # in fact, the isomorphism will tell us exactly which ones to swap, which we'll do, and then ignore the dummies thereafter
+
+    # a lil bit of python to hold me tight
+    g1 = nx.MultiGraph()
+    g1.add_nodes_from(range(1, length(T1.indices)))
+    #add data from adj matrices
+    for tab in T1.tableaux
+        adm = tab.adj_matrix
+        dims = size(adm)[1]
+        for i in 1:dims
+            for j in (i+1):dims
+                g1.add_edge(i, j, weight=adm[i, j])
+            end
+        end
+    end
+    g2 = g1.copy()
+    #add an extra edge for contractions
+    for pair in contractions1
+        g1.add_edge(pair[1], pair[2], weight=2)
+    end
+    for pair in contractions2
+        g2.add_edge(pair[1], pair[2], weight=2)
+    end
+    # println("our graphs are")
+    # #p# Draw the graph
+
+    # plot_graph(g1)
+
+    # pos = nx.spring_layout(g2)  # Layout algorithm, you can choose other layouts too
+    # nx.draw(g2, pos, with_labels=true, node_color="skyblue", node_size=800, font_size=10, font_color="black")
+    # # Extract edge weights as labels
+    # edge_labels = Dict{Tuple{Int,Int},Float64}()
+    # for (u, v, d) in g2.edges(data=true)
+    #     edge_labels[(u, v)] = d["weight"]
+    # end
+    # # Add edge weight labels to the graph
+    # nx.draw_networkx_edge_labels(g2, pos, edge_labels=edge_labels, font_size=10)
+    # plt.title("Tensor 2")
+    # plt.show()
+
+    ISO = nx.vf2pp_isomorphism(g2, g1)
+    # println(ISO)
+
+    #so tldr from all this:
+    # we now have an iso of graphs ie we can swap indices.
+    # the iso gives a map from g2 to g1 that guarentees that dummy indices are in the same place (in the right pairs) under the mapping
+    # (but other indices are just some arb. allowed permutation)
+    # we should thus make a permutation on T2 which brings it to the form of T1. manage the grading of this
+    #also tho pay attention to which indices are upper and lower in the result since may be important?
+    #regardless, once this is done, we can just ignore dummies
+
+    if ISO==nothing
+        return 0
+    end
+
+
+
+
+
+
+    
+
+
+    # need to check this iso to find grading
+
+    ######
+
+    if ISO!=nothing
+        println("ladies and gentlemen, we have isomorphism")
+        println(ISO)
+        return 1
+    else
+        return 0
+    end
+
+end
+
+
+
+# function plot_graph(g1)
+#     @pywith g1 begin
+#         pos = nx.spring_layout(g1)  # Layout algorithm, you can choose other layouts too
+#         nx.draw(g1, pos, with_labels=true, node_color="skyblue", node_size=800, font_size=10, font_color="black")
+#         # Extract edge weights as labels
+#         edge_labels = Dict{Tuple{Int,Int},Float64}()
+#         for (u, v, d) in g1.edges(data=true)
+#             edge_labels[(u, v)] = d["weight"]
+#         end
+#         # Add edge weight labels to the graph
+#         nx.draw_networkx_edge_labels(g1, pos, edge_labels=edge_labels, font_size=10)
+#         plt.title("Tensor")
+#         plt.show()
+#     end
+# end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

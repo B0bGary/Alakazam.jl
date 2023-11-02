@@ -7,7 +7,11 @@
 # Pkg.add("DataStructures")
 using Symbolics
 using OrderedCollections
+using PyCall
+# using Graphs
+# using LightGraphs
 # using Revise
+# using MetaGraphs
 using StatsBase
 import SymbolicUtils
 import Base.:*
@@ -34,6 +38,12 @@ include("tensor_replacements.jl")
 include("simplify_tableaux.jl")
 include("lightcone.jl")
 
+@pyimport pip
+run(`$(PyCall.python) -m pip install networkx`)
+run(`$(PyCall.python) -m pip install matplotlib`)
+# pyimport("pip").pip("install networkx")
+@pyimport networkx as nx
+@pyimport matplotlib.pyplot as plt
 
 sort_order=Dict()
 

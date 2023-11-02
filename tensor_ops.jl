@@ -1795,6 +1795,14 @@ end
 
 #finding dummie indices
 
+
+function get_dummies_with_pos_index(T::TensorSuperType)
+
+ return  [i=>pair[1] for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
+
+end
+
+
 function get_dummies_positional(T::TensorSuperType)
     dum::OrderedSet{Pair{IndexSuperType,IndexPosition}} = OrderedSet()
     for d in get_dummies(T)

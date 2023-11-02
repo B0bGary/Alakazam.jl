@@ -11,8 +11,6 @@ end
 
 
     function YoungTableau(row_lengths::Vector{Int64}, index_assignment::Vector{Int64},tot_inds::Int64)
-
-
         #create tabelau in matri form
         matrix =[-1 for _ in 1:size(row_lengths)[1], _ in 1:row_lengths[1]]
         cum=1
@@ -23,10 +21,8 @@ end
 
             end
         end
-        println(matrix)
-        println("here")
-
-
+        # println(matrix)
+        # println("here")
         #add symmetric perms
         adjm =[0 for _ in 1:tot_inds, _ in 1:tot_inds]
         init=-1
@@ -78,14 +74,7 @@ end
             end
         end
     end
-
-
-        println(matrix)
-        println(adjm)
-
-
-
-
-
+        # println(matrix)
+        # println(adjm)
         YoungTableau(row_lengths, index_assignment,matrix,adjm)
     end

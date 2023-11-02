@@ -1,4 +1,5 @@
 
+
 #define indices
 i = Index("i", flavour_indices, 0)
 j = Index("j", flavour_indices)
@@ -29,11 +30,16 @@ S.tableaux[1].tableau
 S.tableaux[1].adj_matrix
 
 
-T1=Tensor("T", [m=> upper, n => upper, q => upper,p=>upper,s=>upper,r=>upper], YoungTableau([1,1,1,1,1,1],[1,2,3,4,5,6]))
-T2=Tensor("T", [s=>upper,n=> upper, q => upper,r=>upper,p=>upper, m => upper], YoungTableau([1,1,1,1,1,1],[1,2,3,4,5,6]))
+T1=Tensor("T", [n=> lower, p => upper, q => upper,n=>upper,t=>lower,t=>upper,r=>upper,j=>upper], YoungTableau([1,1,1,1,1,1,1,1],[1,2,3,4,5,6,7,8]))
+T2=Tensor("T", [t=>upper,n=> lower, q => upper,r=>upper,j=>upper, p => upper,t=>lower,n=>upper], YoungTableau([1,1,1,1,1,1,1,1],[1,2,3,4,5,6,7,8]))
 
 # same_tensor_mod_tableaux(T1,T2)
 
 exp=2*T1+5*T2
 rename_dummies(exp)
 same_tensor_mod_syms(T1,T2)
+
+
+# T3=Tensor("T", [s=>upper,n=> upper, s => lower,r=>upper,p=>upper, m => upper], YoungTableau([1,1,1,1,1,1],[1,2,3,4,5,6]))
+
+# get_dummies_with_pos_index(T3)
