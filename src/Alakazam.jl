@@ -48,12 +48,12 @@ include("tensor_replacements.jl")
 include("simplify_tableaux.jl")
 include("lightcone.jl")
 
-@pyimport pip
+pyimport(pip)
 run(`$(PyCall.python) -m pip install networkx`)
 run(`$(PyCall.python) -m pip install matplotlib`)
 # pyimport("pip").pip("install networkx")
-@pyimport networkx as nx
-@pyimport matplotlib.pyplot as plt
+nx=pyimport(networkx)
+plt=pyimport(matplotlib.pyplot)
 
 sort_order = Dict()
 
