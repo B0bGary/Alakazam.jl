@@ -13,3 +13,13 @@ PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
+[compat]
+julia = "1.9.1"
+DataStructures = "0.18.15"
+Latexify = "0.16.1"
+OrderedCollections = "1.6.2"
+PyCall = "1.96.1"
+StatsBase = "0.34.2"
+SymbolicUtils = "1.4.0"
+Symbolics = "5.10.0"
