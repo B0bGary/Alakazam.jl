@@ -1,0 +1,14 @@
+name = "Alakazam"
+uuid = "41a1aa08-1d43-4dd7-adeb-62cd7a1359ba"
+authors = ["Jesse Woods <jjw98@cam.ac.uk>"]
+version = "0.1.0"
+registry = "General"
+
+[deps]
+Symbolics = "5.5.0"
+OrderedCollections = "1.6.0"
+StatsBase = "0.34.0"
+SymbolicUtils = "1.0.5"
+DataStructures = "0.18.14"
+PyCall = "1.96.1"
+Latexify = "0.16.1"
