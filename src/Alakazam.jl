@@ -1,7 +1,5 @@
 module Alakazam
 
-using Pkg
-Pkg.instantiate()
 using Symbolics
 using OrderedCollections
 using PyCall
