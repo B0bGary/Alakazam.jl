@@ -9,23 +9,34 @@ For those working on supersymmetric theories, Alakazam can handle covariant deri
 ## Getting started
 
 To get started import the package after installing by running
-    using Alakazam
+```julia
+using Alakazam
+```
 The simplest thing you can do is create a tensor,
-    T=Tensor("T")
+```julia
+T=Tensor("T")
+```
 This creates a tensor named T. This however, isn't particularly useful. To create a tensor with indices, we can firstly create an IndexSet,
-    spacetime_indices = IndexSet("spacetime", 4,lower)
+```julia
+spacetime_indices = IndexSet("spacetime", 4,lower)
+```
 Then, we can create some index objects
-    μ = Index("μ", spacetime_indices)
-    ν = Index("ν", spacetime_indices)
-    ρ = Index("ρ", spacetime_indices)
-    τ = Index("τ", spacetime_indices)
+```julia
+μ = Index("μ", spacetime_indices)
+ν = Index("ν", spacetime_indices)
+ρ = Index("ρ", spacetime_indices)
+τ = Index("τ", spacetime_indices)
+```
 Now we can create more interesting tensor objects,
-    T = Tensor("T", [μ => upper,  ν=> lower, τ=>upper])
+```julia
+T = Tensor("T", [μ => upper,  ν=> lower, τ=>upper])
+```
 We can now begin to perform some basic operations, for example raising and lowering with a metric,
-    ηjk = Metric([ν=>upper, ρ=>upper])
-    expression = ηjk*T
-    contract_metrics(expression)
-
+```julia
+η_νρ = Metric([ν=>upper, ρ=>upper])
+expression = η_νρ*T
+contract_metrics(expression)
+```
 More important functionality includes taking covariant derivatves, pattern matching and replacements in expressions, and simplifications using symmetries of tensors.
 There is also inbuilt support for supersymmetric/fermionic objects, and some aspects of superspace.
 
