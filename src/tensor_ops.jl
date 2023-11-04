@@ -2131,7 +2131,7 @@ function rename_dummies(T::TensorExpression)
 end
 
 
-function update_dummies(T::TensorSuperType, reps::Pair{IndexSuperType,IndexSuperType})
+function update_dummies(T::TensorSuperType, reps::Pair{I,I}) where {I<:IndexSuperType}
     ###println(T)
     ###println(reps)
     if typeof(T) <: OperatorSuperType
@@ -2145,12 +2145,12 @@ function update_dummies(T::TensorSuperType, reps::Pair{IndexSuperType,IndexSuper
     end
 end
 
-function update_dummies(T::TensorTerm, reps::Pair{IndexSuperType,IndexSuperType})
+function update_dummies(T::TensorTerm, reps::Pair{I,I}) where {I<:IndexSuperType}
     for t in T.terms
         update_dummies(t, reps)
     end
 end
-function update_dummies(TEX::TensorExpression, reps::Pair{IndexSuperType,IndexSuperType})
+function update_dummies(TEX::TensorExpression, reps::Pair{I,I})where {I<:IndexSuperType}
     for summand in TEX.summands
         for t in summand[2].terms
             update_dummies(t, reps)
