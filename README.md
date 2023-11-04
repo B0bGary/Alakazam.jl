@@ -42,6 +42,8 @@ There is also inbuilt support for supersymmetric/fermionic objects, and some asp
 
 This section will be updated when an upcoming paper on this package is published.
 
+For more info, see demo.jl
+
 
 ## Support
 

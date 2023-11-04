@@ -30,7 +30,7 @@ export KroneckerDelta,KroneckerSuperType,Operator, OperatorSuperType
 export LeibnizOperatorSuperType,Metric,SymMetricSuperType,AntisymMetricSuperType
 export EpsilonTensorSuperType,EpsilonTensor,YoungTableau,DerivativeSuperType
 export PartialSuperType,CovDerivSuperType,Derivative
-export lower,upper,sort_order,custom_sort_order
+export lower,upper,sort_order,custom_sort_order,zero
 
 
 include("indices.jl")
