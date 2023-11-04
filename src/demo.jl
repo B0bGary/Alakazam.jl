@@ -159,10 +159,10 @@ custom_sort_order(["θ","Θ","ϵ"])
 ######################################
 
 # to make expressions simple, we can have a cov. derivative eg D, but then expand it out in terms of the full expression
-covar=Derivative("D",zero, [x,θ], [j => upper, β => lower])
+covar=Derivative("D",Alakazam.zero, [x,θ], [j => upper, β => lower])
 covar_expansion=grassman_deriv_normalrep-im*Tensor("σ",[b =>upper, γdot=>upper, β =>lower])*Tensor("Θ",[j=>upper,γdot=>lower],θbar)*spatial_deriv
 
-covar_bar=Derivative("̄D",zero, [x,θbar], [j => lower, βdot => upper])
+covar_bar=Derivative("̄D",Alakazam.zero, [x,θbar], [j => lower, βdot => upper])
 covar_expansion_bar=grassman_deriv_conjrep-im*Tensor("σ",[b =>upper,βdot=>upper, β =>lower])*Tensor("θ",[j=>lower,β=>upper],θ)*spatial_deriv
 
 println("our superfield expansions is: ", SUPERFIELD)
