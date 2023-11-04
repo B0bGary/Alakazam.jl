@@ -117,6 +117,10 @@ function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorT
 end
 
 
+function contract_metrics(T::TensorTerm,typ::Type=Metric)
+    contract_metrics(1*T,typ)
+end
+
 function contract_metrics(T::TensorExpression, typ::Type=Metric)
     ###println("running function")
     T = copy(T)

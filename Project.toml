@@ -1,7 +1,7 @@
 name = "Alakazam"
 uuid = "41a1aa08-1d43-4dd7-adeb-62cd7a1359ba"
 authors = ["Jesse Woods <jjw98@cam.ac.uk>"]
-version = "0.1.7"
+version = "0.1.8"
 registry = "https://github.com/JuliaRegistries/General.git"
 repo = "https://gitlab.com/B0bGary/Alakazam.jl.git"
 
