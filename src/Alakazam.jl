@@ -48,6 +48,7 @@ include("derivative_ops.jl")
 include("tensor_replacements.jl")
 include("simplify_tableaux.jl")
 include("lightcone.jl")
+include("superspace.jl")
 
 pip=pyimport("pip")
 run(`$(PyCall.python) -m pip install networkx`)
