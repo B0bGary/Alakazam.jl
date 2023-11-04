@@ -31,7 +31,7 @@ export LeibnizOperatorSuperType,Metric,SymMetricSuperType,AntisymMetricSuperType
 export EpsilonTensorSuperType,EpsilonTensor,YoungTableau,DerivativeSuperType
 export PartialSuperType,CovDerivSuperType,Derivative
 export lower,upper,sort_order,custom_sort_order,zero
-
+export project_component
 
 include("indices.jl")
 include("young.jl")
