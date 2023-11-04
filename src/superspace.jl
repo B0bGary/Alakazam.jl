@@ -272,9 +272,9 @@ function partially_project_component(exp::TensorExpression, thet::Coordinate, de
     end
 
     if thet.name == "θ"
-        n_deriv = Derivative("𝛛", exp, thet, d_indices)
+        n_deriv = Derivative("𝛛", exp, [thet], d_indices)
     elseif thet.name == "Θ"
-        n_deriv = Derivative("∂", exp, thet, d_indices)
+        n_deriv = Derivative("∂", exp, [thet], d_indices)
     end
     println("dont drink and derive")
     out = apply_derivative(n_deriv)
