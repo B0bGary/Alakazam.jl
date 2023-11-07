@@ -1269,6 +1269,11 @@ end
 -(A::TensorSuperType, B::TensorExpression) = TensorExpression(A + (-1 * B))
 -(A::TensorExpression, B::TensorSuperType) = TensorExpression(A + (-1 * B))
 -(A::TensorExpression, B::TensorExpression) = TensorExpression(A + (-1 * B))
+-(A::TensorTerm,B::TensorExpression)=1*A-B
+-(A::TensorExpression, B::TensorTerm)=A-(1*B)
+-(A::TensorTerm,B::TensorSuperType)= (1*A)-(1*B)
+-(A::TensorSuperType,B::TensorTerm)= (1*A)-(1*B)
+
 
 # function -(A::TensorSuperType, B::TensorExpression)
 #     if get_free_indices(A)==get_free_indices(B)
@@ -1345,11 +1350,11 @@ function *(TEx1::TensorExpression, TEx2::TensorExpression)
         return zero
     end
     for T in TEx1.summands
-        new_tex += update_indices(TensorExpression([sum[1] * T[1] => T[2] * sum[2] for sum in TEx2.summands]))
+        for T2 in TEx2.summands
+            new_tex += TensorExpression(T[1]*T2[1] => T[2] * T2[2])
+        end
     end
-    # println(new_tex)
-    # println("pls help me:", new_tex.summands[end][2].indices)
-    return new_tex
+    return update_indices(new_tex)
 end
 
 
