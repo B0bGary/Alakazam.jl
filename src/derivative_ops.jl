@@ -41,9 +41,25 @@ function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:Derivati
     return (true => doubles)
 end
 
+function add_derivative_action(D::T, exp::TensorTerm, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
+    
+    if length(exp.terms)!=1
+        throw(InvalidDerivativeBasis())
+    else
+        add_derivative_action(D,exp.terms[1],res)
+    end
 
+end
 
+function add_derivative_action(D::T, exp::TensorExpression, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
+    
+    if length(exp.summands)!=1 || length(exp.summands[1][2].terms)!=1
+        throw(InvalidDerivativeBasis())
+    else
+        add_derivative_action(D,exp.summands[1][2].terms[1],res)
+    end
 
+end
 
 function add_derivative_action(D::T, exp::TensorSuperType, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
     key = nothing

@@ -12,32 +12,32 @@ abstract type CovDerivSuperType <: DerivativeSuperType end
 mutable struct Derivative <:DerivativeSuperType
     name::String
     operand::TensorExpression
-    coord::Vector{T} where {T<:Coordinate}
-    operator_indices::Vector{Pair{Index, IndexPosition}}
-    operand_indices::Vector{Pair{Index, IndexPosition}}
-    indices::Vector{Pair{Index, IndexPosition}}
+    coord::Vector{T} where {T<:Coordinate} 
+    operator_indices::Vector{Pair{IndexSuperType, IndexPosition}} 
+    operand_indices::Vector{Pair{IndexSuperType, IndexPosition}} 
+    indices::Vector{Pair{IndexSuperType, IndexPosition}}
     function_of::Vector{K} where {K<:Coordinate}
 
 
-    function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
+    function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         inds=operand.summands[1][2].indices
         new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds),coord)
     end
-    function Derivative(name::String, operand::TensorSuperType, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
+    function Derivative(name::String, operand::TensorSuperType, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     end
-    function Derivative(name::String, operand::TensorTerm, coord::Vector{T}, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate} 
+    function Derivative(name::String, operand::TensorTerm, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
     
     end
-       function Derivative(name::String, operand::TensorExpression, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
+       function Derivative(name::String, operand::TensorExpression, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         inds=operand.summands[1][2].indices
         new(name, operand, [coord], operator_indices, inds, vcat(operator_indices, inds),[coord],operand.weights)
     end
-    function Derivative(name::String, operand::TensorSuperType, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate}
+    function Derivative(name::String, operand::TensorSuperType, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights)
     end
-    function Derivative(name::String, operand::TensorTerm, coord::T, operator_indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) where {T<:Coordinate} 
+    function Derivative(name::String, operand::TensorTerm, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate}  where {I<:IndexSuperType}
        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights)
     end
  end

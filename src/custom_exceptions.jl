@@ -31,3 +31,6 @@ end
 
 struct SameLevelDummieError <: Exception
 end
+
+struct InvalidDerivativeBasis <: Exception
+end

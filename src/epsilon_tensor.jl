@@ -8,11 +8,11 @@ abstract type EpsilonTensorSuperType <: AntisymMetricSuperType end
 #levi civita tensor
 mutable struct EpsilonTensor<:EpsilonTensorSuperType
     name::String
-    indices::Vector{Pair{Index, IndexPosition}}
+    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     weights::Dict{String,Number}
     function_of::Vector{Coordinate}
 
-    function EpsilonTensor(indices::Vector{Pair{Index, IndexPosition}}) #lets you have scalars with no indices
+    function EpsilonTensor(indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
         if indices[1][2]!=indices[2][2]
             throw(InvalidEpsilonIndices())
         end

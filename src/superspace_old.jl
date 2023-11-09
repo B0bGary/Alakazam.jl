@@ -4,7 +4,7 @@
 θMAX=4
 θbarMAX=4
 
-function project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{Index,IndexPosition}}, theta_weight::Integer,theta_bar_weight::Integer)
+function project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{I,IndexPosition}}, theta_weight::Integer,theta_bar_weight::Integer)where {I<:IndexSuperType}
     # println(exp)
     # println("here")
     exp= get_weighted_terms(exp, "θ", theta_weight)
@@ -80,9 +80,9 @@ end
     
 end
 
-function partially_project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{Index,IndexPosition}})
+function partially_project_component(exp::TensorExpression, thet::Coordinate, derivinds::Vector{Pair{I,IndexPosition}})where {I<:IndexSuperType}
     println("doing this")  
-        d_indices = Vector{Pair{Index,IndexPosition}}()
+        d_indices = Vector{Pair{IndexSuperType,IndexPosition}}()
         for pr in derivinds
             ty = pr[1].index_set
             ind = pop!(get_unused_indices(exp, ty))

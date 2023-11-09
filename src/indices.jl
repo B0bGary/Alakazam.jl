@@ -72,7 +72,7 @@ end
 
 
 
-function in_default_pos(i::Pair{Index,IndexPosition})
+function in_default_pos(i::Pair{I,IndexPosition}) where {I<:IndexSuperType}
    return i[2]==i[1].index_set.default_position
 
 end
