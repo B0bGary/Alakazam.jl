@@ -2588,7 +2588,7 @@ function to_latex(T::TensorExpression)
     out = ""
     it = Iterators.Stateful(T.summands)
     for tens in it
-        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : denominator(rationalize(float(Real(tens[1]))))==1 ? string(real(tens[1])) : "\\frac{"*string(numerator(rationalize(float(Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}")
+        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : denominator(rationalize(float(Real(tens[1]))))==1 ? string(real(tens[1])) : real(tens[1])<0 ? "-\\frac{"*string(numerator(rationalize(float(-1*Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}" : "\\frac{"*string(numerator(rationalize(float(Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}")
         # println(string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "*"))
         out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
         out *= to_latex(tens[2])
