@@ -2398,8 +2398,7 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : imag(tens[1])!=0 ? string(imag(tens[1])) * "im" : "") * ")" : real(tens[1]))
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "" : "*")
+        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : imag(tens[1])!=0 ? string(imag(tens[1])) * "Im" : "") * ")" : string(real(tens[1])))
         print(io, tens[2])
         next = peek(it)
         if next !== nothing
@@ -2589,7 +2588,7 @@ function to_latex(T::TensorExpression)
     out = ""
     it = Iterators.Stateful(T.summands)
     for tens in it
-        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : string(tens[1]))
+        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "i") * ")" : denominator(rationalize(float(Real(tens[1]))))==1 ? string(real(tens[1])) : "\\frac{"*string(numerator(rationalize(float(Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}")
         # println(string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "*"))
         out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
         out *= to_latex(tens[2])
