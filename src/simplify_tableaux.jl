@@ -28,7 +28,7 @@ end
 
 # this works for simple tensors with no dummies
 
-function do_swaps(T1::TensorSuperType, patt::OrderedSet, movers::Dict) where {I<:IndexSuperType}
+function do_swaps(T1::TensorSuperType, patt::OrderedSet, movers::Dict) #where {I<:IndexSuperType}
     #elemetns in patt: indiceobj, intpos
     #elemtns in mover: intpos, indiceobj
     if length(patt) ==1 || length(patt)==0

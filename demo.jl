@@ -172,54 +172,54 @@ println("our superfield expansions is: ", SUPERFIELD)
  println("Computing Symmetrised deriv: ")
 
 D_SUPERFIELD=Derivative("D",SUPERFIELD, [x,θbar], [s => upper, τ => lower])
-out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
-out=apply_derivative(out)
-out=simplify(out)
-DD_SUPERFIELD=Derivative("D",out,[x,θbar], [r => upper, ρ => lower])
+# out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
+# out=apply_derivative(out)
+# out=simplify(out)
+DD_SUPERFIELD=Derivative("D",D_SUPERFIELD,[x,θbar], [r => upper, ρ => lower])
 out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
 out=apply_derivative(out)
 out=EpsilonTensor([τ=>upper,ρ=>upper])*out
 out=eliminate_epsilon(out)
 
-D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θbar], [r => upper, τ => lower])
-out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
-out2=apply_derivative(out2)
-out2=simplify(out2)
-DD_SUPERFIELD2=Derivative("D",out2,[x,θbar], [s => upper, ρ => lower])
-out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
-out2=apply_derivative(out2)
-out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
-out2=eliminate_epsilon(out2)
+# D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θbar], [r => upper, τ => lower])
+# out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
+# out2=apply_derivative(out2)
+# out2=simplify(out2)
+# DD_SUPERFIELD2=Derivative("D",out2,[x,θbar], [s => upper, ρ => lower])
+# out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
+# out2=apply_derivative(out2)
+# out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
+# out2=eliminate_epsilon(out2)
 
 
-println("Result:")
-res2=simplify(out+out2)/2
-println(res2)
+# println("Result:")
+# res2=simplify(out+out2)/2
+# println(res2)
 
 
-#example extraction of a constraint
+# #example extraction of a constraint
 
-#theta=2, thetabar=0 term in expansion:
-tt=2
-tb=0
-constraint=rename_dummies(get_weighted_terms(get_weighted_terms(res2,
-"θ",tt),"Θ",tb))
-#get the constraint on the 2nd independant structure associated with θ^2
-constraint=project_component(constraint,θ,[i=>upper, α=>lower],tt,tb,θbar,
-[i=>lower, αdot=>upper],2,1)
-constraint=rename_dummies(contract_metrics(simplify(
-eliminate_epsilon(eliminate_kronecker(constraint)))))
-
-
-######################################
-######################################
-## compute the supercurrent squared
-######################################
+# #theta=2, thetabar=0 term in expansion:
+# tt=2
+# tb=0
+# constraint=rename_dummies(get_weighted_terms(get_weighted_terms(res2,
+# "θ",tt),"Θ",tb))
+# #get the constraint on the 2nd independant structure associated with θ^2
+# constraint=project_component(constraint,θ,[i=>upper, α=>lower],tt,tb,θbar,
+# [i=>lower, αdot=>upper],2,1)
+# constraint=rename_dummies(contract_metrics(simplify(
+# eliminate_epsilon(eliminate_kronecker(constraint)))))
 
 
-SC²=SUPERFIELD × SUPERFIELD
-out=get_weighted_terms(get_weighted_terms(SC²,"θ",4),"Θ",4)
-#integrate over superspace to obtain the supercurrent-squared term
-ttb=project_component(out,θ,[i=>upper, α=>lower],4,4,θbar,[i=>lower,
-αdot=>upper],1,1)
-println(ttb)
+# ######################################
+# ######################################
+# ## compute the supercurrent squared
+# ######################################
+
+
+# SC²=SUPERFIELD × SUPERFIELD
+# out=get_weighted_terms(get_weighted_terms(SC²,"θ",4),"Θ",4)
+# #integrate over superspace to obtain the supercurrent-squared term
+# ttb=project_component(out,θ,[i=>upper, α=>lower],4,4,θbar,[i=>lower,
+# αdot=>upper],1,1)
+# println(ttb)

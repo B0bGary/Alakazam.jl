@@ -2398,7 +2398,7 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : string(imag(tens[1])) * "im") * ")" : tens[1])
+        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : imag(tens[1])!=0 ? string(imag(tens[1])) * "im" : "") * ")" : real(tens[1]))
         print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "" : "*")
         print(io, tens[2])
         next = peek(it)

@@ -1,5 +1,7 @@
 module Alakazam
 
+#deps
+
 using Symbolics
 using OrderedCollections
 using PyCall
@@ -14,6 +16,8 @@ import Base.:-
 import Base.:replace
 import DataStructures
 
+
+#usable functions and types
 
 export pop_metric, contract_metrics, eliminate_kronecker,eliminate_epsilon,term_weight,singleterm
 export get_weighted_terms,drop_weight_above,×,update_indices,get_unused_indices
@@ -50,6 +54,8 @@ include("simplify_tableaux.jl")
 include("lightcone.jl")
 include("superspace.jl")
 
+
+#install python modules for graph theory stuff to find tensor symmetries
 pip=pyimport("pip")
 run(`$(PyCall.python) -m pip install networkx`)
 run(`$(PyCall.python) -m pip install matplotlib`)
@@ -57,6 +63,10 @@ run(`$(PyCall.python) -m pip install matplotlib`)
 nx=pyimport("networkx")
 plt=pyimport("matplotlib.pyplot")
 
+
+
+
+#allows user to define a custom canonical sort order (other than alphabetic) for tensors
 sort_order = Dict()
 
 function custom_sort_order(v::Vector{String})
