@@ -433,3 +433,22 @@ end
 # #     print(io, ")")
 # # end
 
+# Note: This one is much more complex to implement and will take more time to port.
+# "Usage: @Tensor A^μν_ντ where `A` is a symbol and `μ,ν,ρ,τ` are indices."
+# macro Tensor(expr::Expr)
+#     ...
+# end
+
+"Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
+macro Tensor(expr::Symbol)
+    length(string(expr)) == 1 && return Tensor(expr, Index[])
+    index_count = length(string(expr)) - 2
+    # split the symbol A_bc at the underscore
+    symbol, indices = split(string(expr), "_")
+    return quote
+            Tensor(
+                $(string(symbol[1])),
+                [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
+            )
+    end
+end
