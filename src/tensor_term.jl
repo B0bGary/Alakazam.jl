@@ -433,21 +433,62 @@ end
 # #     print(io, ")")
 # # end
 
-# Note: This one is much more complex to implement and will take more time to port.
-# "Usage: @Tensor A^μν_ντ where `A` is a symbol and `μ,ν,ρ,τ` are indices."
-# macro Tensor(expr::Expr)
-#     ...
-# end
+# https://docs.julialang.org/en/v1/manual/metaprogramming/
+"Usage: `@Tensor A^μν_ρ^τ` where `A` is a symbol and `μ,ν,ρ,τ` are indices."
+macro Tensor(expr::Expr)
+    # @show expr
+    symbol = string(expr)[1]
+    indices = []
+    if length(string(expr.args[2])) > 1 && 
+       string(expr.args[2])[nextind(string(expr.args[2]),1)] == '_'
+        push!(indices, [ v => lower for v in split(string(expr.args[2])[nextind(string(expr.args[2]),1,2):end], "")]...)
+    else
+        @assert length(string(expr.args[2])) == 1 "Tensor symbol must be a single character, not $(expr.args[2])"
+    end
+    head = expr.args[3]
+    while hasproperty(head, :args) && head.args[1] == :^
+        # @show head
+        indices = parse_indices(head, indices, false)
+
+        head = head.args[3]
+    end
+    # @show head
+    indices = parse_indices(head, indices, true)
+    return quote
+        Tensor(
+            $(string(symbol)),
+            [$([:($(esc(Symbol(index.first))) => $(esc(Symbol(index.second)))) for index in indices]...)]
+        )
+    end
+end
+
+function parse_indices(head, indices, leaf)
+    str_head = [ v for (i,v) in enumerate(string(leaf ? head : head.args[2])) ]
+    # @show str_head
+    if length(str_head) == 1
+            indices = [indices..., str_head[1] => upper]
+    else
+        underscore = findfirst('_' .== str_head)
+        # underscore = underscore === nothing ? length(string(head)) : underscore
+        if underscore != nothing
+            underscoreless_str = [str_head[1:underscore-1]..., str_head[underscore+1:end]...]
+            indices = [indices..., [ v => i ≥ underscore ? lower : upper for (i,v) in enumerate(underscoreless_str)]...]
+        else
+            indices = [indices..., [ v => upper for (i,v) in enumerate(str_head)]...]
+        end
+    end
+    return indices
+end
 
 "Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
 macro Tensor(expr::Symbol)
-    length(string(expr)) == 1 && return Tensor(expr, Index[])
+    length(string(expr)) == 1 && return Tensor(string(expr))
     index_count = length(string(expr)) - 2
     # split the symbol A_bc at the underscore
     symbol, indices = split(string(expr), "_")
     return quote
             Tensor(
-                $(string(symbol[1])),
+                $(string(symbol)),
                 [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
             )
     end
