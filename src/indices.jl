@@ -13,11 +13,9 @@ mutable struct IndexSet
    indices::Vector{I} where {I<:IndexSuperType}
    default_position::IndexPosition
    function IndexSet(name::String, range::Int=1, default_position::IndexPosition=upper)
-[      return new(name, range, Vector{IndexSuperType}(), default_position)
-]   end
-   function IndexSet(name::String, default_position::IndexPosition=upper)
-      return new(name, 0, Vector{IndexSuperType}(), default_position)
-   end
+      return new(name, range, Vector{IndexSuperType}(), default_position)
+  end
+
 end
 
 mutable struct Index<:IndexSuperType
