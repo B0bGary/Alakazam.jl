@@ -21,24 +21,24 @@ mutable struct Derivative <:DerivativeSuperType
 
     function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         inds=operand.summands[1][2].indices
-        new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds),coord)
+        new(name, operand, coord, operator_indices, inds, vcat(operator_indices, inds),coord,Vector{YoungTableau}())
     end
     function Derivative(name::String, operand::TensorSuperType, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
-        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
+        new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord,Vector{YoungTableau}())
     end
     function Derivative(name::String, operand::TensorTerm, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
-       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord)
+       new(name, TensorExpression(operand), coord, operator_indices, operand.indices, vcat(operator_indices, operand.indices),coord,Vector{YoungTableau}())
     
     end
        function Derivative(name::String, operand::TensorExpression, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         inds=operand.summands[1][2].indices
-        new(name, operand, [coord], operator_indices, inds, vcat(operator_indices, inds),[coord],operand.weights)
+        new(name, operand, [coord], operator_indices, inds, vcat(operator_indices, inds),[coord],operand.weights,Vector{YoungTableau}())
     end
     function Derivative(name::String, operand::TensorSuperType, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
-        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights)
+        new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights,Vector{YoungTableau}())
     end
     function Derivative(name::String, operand::TensorTerm, coord::T, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate}  where {I<:IndexSuperType}
-       new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights)
+       new(name, TensorExpression(operand), [coord], operator_indices, operand.indices, vcat(operator_indices, operand.indices),[coord],operand.weights,Vector{YoungTableau}())
     end
  end
 
