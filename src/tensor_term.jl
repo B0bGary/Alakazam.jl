@@ -37,7 +37,7 @@ mutable struct Tensor <: TensorSuperType
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
-end
+
 
 function Tensor(name::String, args...)
     indices = Vector{Pair{IndexSuperType,IndexPosition}}()
@@ -69,7 +69,9 @@ function Tensor(name::String, args...)
         w[coord.name] = 1
     end
 
-    return Tensor(name, indices, function_of, merge(w, weights), tableaux)
+    return new(name, indices, function_of, 
+    merge(w, weights), tableaux)
+end
 end
 
 

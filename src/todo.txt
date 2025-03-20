@@ -1,3 +1,28 @@
+NEW TODO:
+
+
+Add algebra of commutators for derivatives - eg partials should commute.
+
+serialisation (read exp in and out of memory)
+
+update equality checking for various cases
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################
 eachindex()
 
 
