@@ -56,7 +56,7 @@ Alakazam is available under the conditions of the GNU General Public License.
 If you use this software in part of your work, please cite: (publication coming soon)
 
 ## Contributing
-If you'd like to contribute, or have any questions in general, please get in touch at <jjw98@cam.ac.uk> :)
+If you'd like to contribute, or have any questions in general, please get in touch at <jesse.woods@unibe.ch> :)
 
 ## Authors and acknowledgment
 Written by me.
