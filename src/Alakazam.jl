@@ -55,14 +55,19 @@ include("lightcone.jl")
 include("superspace.jl")
 
 
-#install python modules for graph theory stuff to find tensor symmetries
-pip=pyimport("pip")
-run(`$(PyCall.python) -m pip install networkx`)
-run(`$(PyCall.python) -m pip install matplotlib`)
-# pyimport("pip").pip("install networkx")
-nx=pyimport("networkx")
-plt=pyimport("matplotlib.pyplot")
-
+function ensure_installed(package::String)
+    try
+        pyimport(package)
+    catch
+        run(`$(PyCall.python) -m pip install $package`)
+    end
+end
+# Ensure required packages are installed
+ensure_installed("networkx")
+ensure_installed("matplotlib")
+# Import the modules
+nx = pyimport("networkx")
+plt = pyimport("matplotlib.pyplot")
 
 
 
