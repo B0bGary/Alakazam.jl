@@ -1274,6 +1274,10 @@ end
 -(A::TensorTerm,B::TensorSuperType)= (1*A)-(1*B)
 -(A::TensorSuperType,B::TensorTerm)= (1*A)-(1*B)
 
+-(A::TensorSuperType)= -1*A
+-(A::TensorTerm)= -1*A
+-(A::TensorExpression)= -1*A
+
 
 # function -(A::TensorSuperType, B::TensorExpression)
 #     if get_free_indices(A)==get_free_indices(B)
