@@ -1,4 +1,11 @@
 
+#version to check if operators can be merged
+# function same_tensor_mod_syms(O1<:DerivativeSuperType, T2<:DerivativeSuperType)
+
+#     return (false,0)
+# end
+
+
 #since i remember nothing, lets start fresh
 
 function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)

@@ -2317,6 +2317,7 @@ function merge_sum(TEx::TensorExpression)
                 found = true
                 break
             elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
+
                 rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
                 if rescomp[1]==true
                     # println(rescomp)

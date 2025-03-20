@@ -17,7 +17,7 @@ mutable struct Derivative <:DerivativeSuperType
     operand_indices::Vector{Pair{IndexSuperType, IndexPosition}} 
     indices::Vector{Pair{IndexSuperType, IndexPosition}}
     function_of::Vector{K} where {K<:Coordinate}
-
+    tableaux::Vector{YoungTableau}
 
     function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
         inds=operand.summands[1][2].indices
