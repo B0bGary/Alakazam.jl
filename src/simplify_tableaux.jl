@@ -65,17 +65,204 @@ end
 
 
 function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
+    if get_free_indices(T1)!=get_free_indices(T2)
+        return false
+    end
 
    g1=construct_tensorterm_graph(T1)
    g2=construct_tensorterm_graph(T2)
 
+   if false #plot debug
    draw_ind_graph(g1)
    draw_ind_graph(g2)
+   end
 
    ISO=find_tensor_graph_iso(g1,g2)
 
-   #there should be an isomorphism with 
+   if !ISO.is_isomorphic()
+    return false
+   end
+
+   #there should be an isomorphism with tensor rearrange. find the grading of remapping the tensors.
+    isom_map= iterate(ISO.isomorphisms_iter())[1] # just get the first map, doesn't matter. [1] denotes the dict part of the pythonobj
+    println(isom_map)
+    filtered_even = Dict(k÷2 => v ÷ 2 for (k, v) in isom_map if iseven(k) && iseven(v)) #get just the tensors swapps
+    filtered_odd = Dict((k-1)÷2 => (v - 1) ÷ 2 for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the inidices
+    filtered_odd_undiv = Dict(k => v for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the indices
+
+    TT2=copy(T2)
+
+
+    counter=0
+    #reassign dummies first!
+    for termid in 1:length(TT2.terms)
+        ttensor=TT2.terms[termid] #get a tensor
+        for indid in 1:length(ttensor.indices)
+            wgtd=edges_with_weight(g2, 2*(indid+counter)+1, 2) # look for where this index is contracted
+            if !isempty(wgtd) #look for dummies
+                contr=wgtd[1] #we are contracted with this.
+                #if contracted, its a dummy anyway and we can just rename
+                #has a dummy.
+                #get the index from T1 so the dummies match
+                TT2.terms[termid].indices[indid] =   T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1]-1)/2)] #if was a dummy index, set to whatever the dummy is in T1
+            else
+                continue
+            end
+        end
+        counter+=length(ttensor.indices) #shift the counter
+    end
+
+    ##all dummies in TT2 shoud now be same as in T1
+    # for perm_pair in filtered_odd_undiv
+    #     wgtd=edges_with_weight(g2, permpair[1], 2) #look for dummies
+    #         if !isempty(wgtd) #look for dummies
+    #             #has a dummy.
+    #             #get the index from T1 so the dummies match
+    #             TT2.indicesnewinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
+    #         else
+    #         newinds[perm_pair[2]] =T2.indices[permpair[1]] #what is now ___ was ____
+    #         end
+    # end
+
+
+    tens_grad=perm_grading(filtered_even,TT2) #grading for swapping
+
+    newts=Vector{TensorSuperType}(undef, length(TT2.terms)) #where T<:TensorSuperType
+    for perm_pair in filtered_even
+        newts[perm_pair[2]] =TT2.terms[perm_pair[1]] #check order?
+    end
+
+    newtenter=TensorTerm(newts) #new tensor with the swaps tensors. 
+
+
+
+
+   #then, map the indices to new positions via the isomorphism
+   newinds=Vector{Pair{IndexSuperType,IndexPosition}}(undef, length(T2.indices))
+   for perm_pair in filtered_odd
+    # wgtd=edges_with_weight(g2, permpair[1], 2)
+    #     if !isempty(wgtd) #look for dummies
+    #         #has a dummy.
+    #         #get the index from T1 so the dummies match
+    #         continue #skip dummies
+    #       #  newinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
+    #     else
+        newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] #what is now ___ was ____
+        # end
+   end
+    #this should be a vector with inds in the correct spot.
+
+   #now, take our rearranged tensor and fill with the new indices
+
+#    counter=1
+#    for termmm in 1:length(newtenter.terms)
+#     newtenter.terms
+
+#    end
+
+   #now, check the sign between the rearranged tensors and the new index positions
+   counter=1
+   totgrweight=0
+   for tensid in 1:length(newtenter.terms)
+        ntensinds=newtenter.terms[tensid].indices # get the indices. now, compare to 
+        rearrinds=newinds[counter:counter+length(ntensinds)-1] # get the next subset of inds
+        curtens=newtenter.terms[tensid]
+        comptens=copy(curtens)
+        comptens.indices=rearrinds
+
+        #compare tensors!
+        println("compare:")
+        println(curtens)
+        println(comptens)
+        (same,grweight)=same_tensor_mod_syms(curtens,comptens)
+        if !same
+            println("!!! Something is wrong with the tensorterm graph algo! Inconsistent!")
+            return false
+        end
+        totgrweight*=grweight
+        #should be a perm, up to dumie inds...
+        counter+=length(ntensinds)
+   end
+
+   oversign=totgrweight+tens_grad
+   println("index perm weight:"*string(totgrweight))
+   println("tens swap weight:"*string(tens_grad))
+
+   return oversign%2==0 #same !!
+
 end
+
+
+function edges_with_weight(g, vertex_id, target_weight)
+    # Get the list of edges connected to vertex_id
+    # println("trying edge: "*string(vertex_id))
+    edges = g.edges(vertex_id, data=true)
+
+# Initialize a list to hold the linked vertex IDs
+linked_vertex_ids = []
+
+# edgeatt=nx.get_edge_attributes(g, "weight")
+# println(edgeatt)
+# Loop through the edges to check their weight
+# println(edges)
+for edge in edges
+    # println(edge)
+    
+    # If the edge has three elements (u, v, key), destructure them
+    if length(edge) == 3
+        u, v, key = edge
+        weight = key["weight"]
+    else
+        continue
+        # # If the edge has only two elements (u, v), handle accordingly
+        # u, v = edge
+        # weight = edgeatt[(u, v)]
+        
+    end
+        # Check if the edge has the specified target_weight
+        if weight == target_weight
+            # Add the other vertex (not the vertex_id itself) to the list
+            if u != vertex_id
+                push!(linked_vertex_ids, u)
+            end
+            if v != vertex_id
+                push!(linked_vertex_ids, v)
+            end
+        end
+    end
+
+    # Return the list of linked vertex IDs (or an empty list if no such edges)
+    return linked_vertex_ids
+end
+
+
+## finds the overall sign change when permuting graded tensors with a particular perm
+function perm_grading(perm_dict::Dict{Int,Int},tt::TensorTerm)
+    n = length(tt.terms)
+    
+    # Initialize inversion count
+    inv_count = 0
+    
+    # Loop over each pair of indices in the original permutation
+    for i in 1:n-1
+        for j in i+1:n
+            # Check if the elements are in reverse order in the permutation (i.e., an inversion)
+            println(perm_dict)
+            if perm_dict[i] > perm_dict[j]
+                # Check if the grading of elements at i and j are different
+                if grading(tt.terms[i]) * grading(tt.terms[j])==1
+                    inv_count += 1
+                end
+            end
+        end
+    end
+    
+    # If the number of inversions is even, return true (even permutation), else false (odd permutation)
+    return inv_count % 2 # to then do (-1)^perm_grading
+
+end
+
+
 
 
 function find_tensor_graph_iso(g1,g2)

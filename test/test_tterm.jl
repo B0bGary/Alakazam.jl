@@ -55,13 +55,34 @@ covar_unbar=Derivative("D",zero, [x,θ], [ i => lower])
 
 custom_sort_order(["θ","Θ","ϵ"])
 
-t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[i=>lower, l=>lower, m=>lower],x)*Tensor("C",[j=>lower],x)
+t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower,y=>lower],x)
 )
 
-t2=(Tensor("C",[i=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[j=>lower, m=>lower, l=>lower],x)
+t2=(Tensor("C",[w=>lower,y=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
 )
 
-same_tensorterm_mod_syms(t1,t2)
+
+same_tensorterm_mod_syms(t1,t2) #true
+
+t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
+)
+t2=(Tensor("C",[w=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
+)
+
+same_tensorterm_mod_syms(t1,t2) #false
+
+
+t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
+)
+t2=(Tensor("C",[w=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ n=>lower, l=>lower],x)
+)
+
+same_tensorterm_mod_syms(t1,t2) #true
+
+
+##something wrong w comparison
+
+
 
 # Dbar_SUPERFIELD=Derivative("̄D",SUPERFIELD_S, [x], [ t=>lower])
 # println(Dbar_SUPERFIELD)
