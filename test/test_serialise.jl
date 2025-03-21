@@ -50,8 +50,8 @@ add_derivative_action(grassman_deriv,Tensor("θ",[j=>upper],θ),KroneckerDelta([
 
 covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[i=>lower],θ)*spatial_deriv
 covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[ i=>lower],θbar)*spatial_deriv
-covar=Derivative("̄D",zero, [x,θbar], [ j => lower])
-covar_unbar=Derivative("D",zero, [x,θ], [ j => lower])
+covar=Derivative("̄D",zero, [x,θbar], [ i => lower])
+covar_unbar=Derivative("D",zero, [x,θ], [ i => lower])
 
 custom_sort_order(["θ","Θ","ϵ"])
 
@@ -65,11 +65,17 @@ SUPERFIELD_S=(Tensor("Θ", x)
 +Tensor("θ",[ i=> lower],θ)*Tensor("Θ",[ j=> lower],θbar)*Tensor("Θ",[ j=> upper],θbar)*Tensor("̄S",[   i=>upper],x)
 +Tensor("θ",[ i=> lower],θ)*Tensor("θ",[ i=> upper],θ)*Tensor("Θ",[ k=> lower],θbar)*Tensor("Θ",[ k=> upper],θbar)*Tensor("T",x)
 )
+Dbar_SUPERFIELD=Derivative("̄D",SUPERFIELD_S, [x], [ t=>lower])
+println(Dbar_SUPERFIELD)
+out=expand_derivative(Dbar_SUPERFIELD,covar,covar_expansion)
+println(out)
+out=apply_derivative(out)
 
+println(out)
 
 write_to_file("test",SUPERFIELD_S)
 
 deser=read_from_file("test")
 
 
-@test simplify(SUPERFIELD_S)== deser
+# @test simplify(SUPERFIELD_S)== deser

@@ -3,12 +3,12 @@ NEW TODO:
 
 Add algebra of commutators for derivatives - eg partials should commute.
 
-serialisation (read exp in and out of memory)
+serialisation (read exp in and out of memory) - add json version
 
 update equality checking for various cases
 
 
-
+fix derivative expansion indices
 
 
 

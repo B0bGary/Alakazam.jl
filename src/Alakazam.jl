@@ -86,12 +86,12 @@ end
 types = Union{TensorSuperType, TensorTerm, TensorExpression}
 
 function write_to_file(name::String, t::T) where T<:types
-    return serialize(name*".jls", t)
+    return serialize(name*".akzm", t)
 end
 
 
 function read_from_file(name::String) 
-    return deserialize(name*".jls")
+    return deserialize(name*".akzm")
 end
 
 

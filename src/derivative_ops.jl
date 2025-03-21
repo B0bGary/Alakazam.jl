@@ -282,11 +282,15 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
 
 #### keeping all the comments here in case something breaks in future
 
+    if(get_free_indices(D)!=get_free_indices(DExpansion))
+        println("It appears that your expansion is not compatible.")
+        throw(FreeIndexMismatch())
+    end
 
     #think about: hellish dummie indice relabeling//////
 
     new_TEX = zero #construct new expression term by term
-    TEX = 1 * TEX
+    TEX = 1 * TEX #ensures tensor exp
     avail = Dict{IndexSet,OrderedSet{Index}}() #pairs of index sets, with the unused indices
     dummymap = Dict{String,Index}()#dict of what to replace pattern indices with
     for summand in TEX.summands
@@ -297,6 +301,8 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                 # println(TensorExpression(D))
                 # println(TensorExpression(tensor))
                 mapping = construct_index_rep_map(D, tensor) #index map so we use correct indices in expansion
+                # println("deriv index remap:")
+                # println(mapping)
                 # println("mapping ", mapping)
                 replace = copy(DExpansion) #new copy of expansion to replace in our exp
 
@@ -322,13 +328,19 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                         if typeof(reptensor) <: OperatorSuperType
                             #if we found an operator,
                             #println("operators")
+                            # println(reptensor)
                             reptensor.operand = operand#set to correct operand
 
                             #dums=get_dummies(reptensor)#gets the placeholder dummy indices from the pattern
                             for pair in eachindex(reptensor.operator_indices) # replace dummies with correct etc
                                 #println(reptensor.operator_indices[pair][1])
+                                # println("checking")
+                                # println(reptensor.operator_indices[pair][1].name)
 
                                 if haskey(mapping, reptensor.operator_indices[pair][1].name) #if the index is fixed already from before
+                                    # println("replacing")
+                                    # println(reptensor.operator_indices[pair][1].name)
+
                                     ##println("SYMBOILIC INDEX ALREADY FIXED by pattern:")
                                     ##println(reptensor.operator_indices[pair][1])
                                     ##println(mapping[reptensor.operator_indices[pair][1].name])
