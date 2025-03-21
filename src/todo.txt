@@ -8,13 +8,6 @@ serialisation (read exp in and out of memory) - add json version
 update equality checking for various cases
 
 
-fix derivative expansion indices
-
-
-
-
-
-
 
 
 

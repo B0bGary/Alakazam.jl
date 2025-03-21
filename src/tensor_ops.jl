@@ -1633,7 +1633,7 @@ end
 
 #equality checking
 
-function ==(a::TensorTerm, b::TensorTerm)
+function ==(a::TensorTerm, b::TensorTerm) #might need to check a graph isomorphism??
     return a.terms == b.terms
 end
 
@@ -1649,7 +1649,7 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
     return true
 end
 
-function ==(a::TensorSuperType, b::TensorSuperType)
+function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
     if (a.name == b.name && a.indices == b.indices )
         return true
     else
@@ -1658,7 +1658,9 @@ function ==(a::TensorSuperType, b::TensorSuperType)
 end
 
 function ==(a::TensorExpression, b::TensorExpression)
-    if length(a.summands)!=length(b.summands)
+
+
+    if length(a.summands)!=length(b.summands) #|| get_free_indices(a)!=get_free_indices(b) #easy case exclusion
         # println("stop here")
         # println(a)
         # println(b)
@@ -1669,9 +1671,36 @@ function ==(a::TensorExpression, b::TensorExpression)
     # println(b)
     aa=a.summands
     bb=b.summands
+
+    # indb_matches=[]#add ids once already matched
+    # for inda in eachindex(aa) # make sure to handle a thing with multiple terms vs 1 term ? might not need since sums merge but still
+    #     match_found=false
+    #     for indb in eachindex(bb) #need to check each term for a match
+    #         if inbd in indbmatches
+    #             continue#skip if already used in a match
+    #         end
+    #         if aa[inda][1]!=bb[indb][1] #coefficient doesnt match
+    #             continue
+    #         else
+    #             if aa[inda][2]==bb[indb][2] #check tensor term level
+    #                 match_found==true
+    #                 indb_matches.push!(indb)
+    #             end
+    #         end
+    #     end
+
+    #     if !match_found #no term that matches.
+    #         return false
+    #     end
+
+    # end
     for inde in eachindex(aa)
-        if aa[inde][1]!=bb[inde][1] || aa[inde][2]!=bb[inde][2]
+        if aa[inde][1]!=bb[inde][1]  # || aa[inde][2]!=bb[inde][2]
             return false
+        else #add a check to see if have the same structure modulo dummies
+
+            #actually.... need to check for this that are not in the same order....
+            return aa[inde][2]==bb[inde][2] #tensor term logic checking
         end
     end
     
@@ -1818,7 +1847,12 @@ function get_dummies_with_pos_index_and_pos_ul(T::TensorSuperType)
     return  [i=>pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
    
    end
+
+function get_dummies_with_pos_index_and_pos_ul(T::TensorTerm)
+
+    return  [i=>pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
    
+   end
 
 
 function get_dummies_positional(T::TensorSuperType)

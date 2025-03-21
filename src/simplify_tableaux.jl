@@ -6,6 +6,99 @@
 # end
 
 
+function construct_tensorterm_graph(T1::TensorTerm)
+    g1 = nx.MultiGraph()
+    # n_primes=primes(length(T1.terms)) # will use prime fact theorem to assign ids to index nodes
+    node_counter=0
+    for t1pl in 1:length(T1.terms) #for each tensor vector index
+        tens1=T1.terms[t1pl]
+        g1.add_node(2*t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
+
+        for indexx in 1:length(tens1.indices)
+            g1.add_node((2*(node_counter+indexx)+1),name= tens1.indices[indexx][1].name) #assigns index
+            g1.add_edge(2*t1pl, (2*(node_counter+indexx)+1), weight=0) #edge between tensor and index
+        end
+        for tab in tens1.tableaux
+            adm = tab.adj_matrix
+            dims = size(adm)[1]
+            for i in 1:dims
+                for j in (i+1):dims
+                    g1.add_edge( (2*(node_counter+i)+1), (2*(node_counter+j)+1), weight=adm[i, j]) # should add the correct edges between indices
+                end
+            end
+        end
+        node_counter+=length(tens1.indices)
+    end
+
+    #should handle all dummies in term
+    dums11 = get_dummies_with_pos_index_and_pos_ul(T1)
+        #elements are (i, pair), where pair is name=>upper/lower
+    contractions1 = [(x, y) for x in dums11 for y in dums11 if x[2][1] == y[2][1] && x != y]
+    for pair in contractions1
+        g1.add_edge((2*pair[1][1]+1), (2*pair[2][1]+1), weight=2) #contraction edge
+        # println(pair)
+        # println(pair[1][2][2])
+        if pair[1][2][2]==upper
+            g1.add_edge((2*pair[1][1]+1), (2*pair[1][1]+1), weight=-2) #mark the uppers
+        else
+            g1.add_edge((2*pair[2][1]+1), (2*pair[2][1]+1), weight=-2)
+        end
+    end
+
+    return g1
+end
+
+function draw_ind_graph(g1)
+    pos = nx.shell_layout(g1)  # Layout algorithm, you can choose other layouts too
+    nx.draw(g1, pos, with_labels=true, node_color="skyblue", node_size=800, font_size=10, font_color="black")
+    # Extract edge weights as labels
+    edge_labels = Dict{Tuple{Int,Int},Float64}()
+    for (u, v, d) in g1.edges(data=true)
+        edge_labels[(u, v)] = d["weight"]
+    end
+    # Add edge weight labels to the graph
+    nx.draw_networkx_edge_labels(g1, pos, edge_labels=edge_labels, font_size=10)
+    plt.title("Tensor")
+    plt.show()
+end
+
+
+
+function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
+
+   g1=construct_tensorterm_graph(T1)
+   g2=construct_tensorterm_graph(T2)
+
+   draw_ind_graph(g1)
+   draw_ind_graph(g2)
+
+   ISO=find_tensor_graph_iso(g1,g2)
+
+   #there should be an isomorphism with 
+end
+
+
+function find_tensor_graph_iso(g1,g2)
+        # Perform the isomorphism check using vf2pp_isomorphism and edge_match #check order g2 g1. i think its opposite of 
+        ISO = nx.algorithms.isomorphism.GraphMatcher(g2, g1, edge_match=nx.algorithms.isomorphism.numerical_multiedge_match("weight",-10)) #need some unused number here for edge w/o weight just in case
+        if ISO.is_isomorphic()
+            try
+                all_isomorphisms = ISO.isomorphisms_iter()
+            
+                # Iterate through all isomorphisms and print them
+                for iso in all_isomorphisms
+                    println("Isomorphism: ", iso)
+                end
+            catch e
+                println("Error occurred while checking isomorphisms: ", e)
+            end
+        else
+            println("The graphs are not isomorphic considering edge weights.")
+        end
+    return ISO
+end
+
+
 #since i remember nothing, lets start fresh
 
 function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
