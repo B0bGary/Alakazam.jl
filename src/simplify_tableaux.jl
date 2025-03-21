@@ -95,6 +95,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
 
     counter=0
     #reassign dummies first!
+    println("pre dum rep:")
+    println(TT2)
     for termid in 1:length(TT2.terms)
         ttensor=TT2.terms[termid] #get a tensor
         for indid in 1:length(ttensor.indices)
@@ -111,6 +113,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
         end
         counter+=length(ttensor.indices) #shift the counter
     end
+    println("post dum rep:")
+    println(TT2)
 
     ##all dummies in TT2 shoud now be same as in T1
     # for perm_pair in filtered_odd_undiv
@@ -134,7 +138,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
 
     newtenter=TensorTerm(newts) #new tensor with the swaps tensors. 
 
-
+    println("new term after graded tens swap:")
+    println(newtenter)
 
 
    #then, map the indices to new positions via the isomorphism
@@ -147,7 +152,7 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
     #         continue #skip dummies
     #       #  newinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
     #     else
-        newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] #what is now ___ was ____
+        newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] #what is now ___ was ____ !! use original TT2
         # end
    end
     #this should be a vector with inds in the correct spot.
@@ -161,20 +166,26 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
 #    end
 
    #now, check the sign between the rearranged tensors and the new index positions
+   println("indices under isomorphism")
+   println(newinds)
    counter=1
-   totgrweight=0
+   totgrweight=1
    for tensid in 1:length(newtenter.terms)
         ntensinds=newtenter.terms[tensid].indices # get the indices. now, compare to 
         rearrinds=newinds[counter:counter+length(ntensinds)-1] # get the next subset of inds
         curtens=newtenter.terms[tensid]
         comptens=copy(curtens)
         comptens.indices=rearrinds
-
         #compare tensors!
         println("compare:")
-        println(curtens)
         println(comptens)
-        (same,grweight)=same_tensor_mod_syms(curtens,comptens)
+
+        #comapre to T1
+        compariT1tens=TT2.terms[tensid] #compare change under iso??? T1 or T2??
+        println(curtens)
+        (same,grweight)=same_tensor_mod_syms(comptens,curtens)
+        println("grwe")
+        println(grweight)
         if !same
             println("!!! Something is wrong with the tensorterm graph algo! Inconsistent!")
             return false
@@ -184,11 +195,11 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
         counter+=length(ntensinds)
    end
 
-   oversign=totgrweight+tens_grad
+   oversign=totgrweight*((-1)^tens_grad)
    println("index perm weight:"*string(totgrweight))
    println("tens swap weight:"*string(tens_grad))
 
-   return oversign%2==0 #same !!
+   return oversign==1 #same !!
 
 end
 

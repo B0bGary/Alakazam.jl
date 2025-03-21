@@ -55,29 +55,38 @@ covar_unbar=Derivative("D",zero, [x,θ], [ i => lower])
 
 custom_sort_order(["θ","Θ","ϵ"])
 
-t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower,y=>lower],x)
+# t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower,y=>lower],x)
+# )
+
+# t2=(Tensor("C",[w=>lower,y=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
+# )
+
+
+# println(same_tensorterm_mod_syms(t1,t2)) #true
+
+# t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
+# )
+# t2=(Tensor("C",[w=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
+# )
+
+# println(same_tensorterm_mod_syms(t1,t2)) #false
+
+
+# t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ i=>lower, j=>lower],x)*Tensor("C",[w=>lower],x)
+# )
+# t2=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ j=>lower,i=>lower],x)*Tensor("C",[w=>lower],x) ### technically equal to zero...
+# )
+
+# println(same_tensorterm_mod_syms(t1,t2)) #true
+
+
+
+t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ i=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
+)
+t2=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ n=>lower,i=>lower],x)*Tensor("C",[w=>lower],x) ### technically equal to zero...
 )
 
-t2=(Tensor("C",[w=>lower,y=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
-)
-
-
-same_tensorterm_mod_syms(t1,t2) #true
-
-t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
-)
-t2=(Tensor("C",[w=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)
-)
-
-same_tensorterm_mod_syms(t1,t2) #false
-
-
-t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ l=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
-)
-t2=(Tensor("C",[w=>lower],x)*SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ n=>lower, l=>lower],x)
-)
-
-same_tensorterm_mod_syms(t1,t2) #true
+println(same_tensorterm_mod_syms(t1,t2)) #true
 
 
 ##something wrong w comparison
