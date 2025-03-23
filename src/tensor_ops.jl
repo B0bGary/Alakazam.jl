@@ -1634,7 +1634,7 @@ end
 #equality checking
 
 function ==(a::TensorTerm, b::TensorTerm) #might need to check a graph isomorphism??
-    return a.terms == b.terms
+    return same_tensorterm_mod_syms(a,b) #hopefully...
 end
 
 function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
@@ -1650,11 +1650,13 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
 end
 
 function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
-    if (a.name == b.name && a.indices == b.indices )
-        return true
-    else
-        return false
-    end
+    (same,grweight)=same_tensor_mod_syms(a,b)
+   return same
+    # if (a.name == b.name && a.indices == b.indices )
+    #     return true
+    # else
+    #     return false
+    # end
 end
 
 function ==(a::TensorExpression, b::TensorExpression)

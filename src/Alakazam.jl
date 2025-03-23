@@ -37,7 +37,7 @@ export EpsilonTensorSuperType,EpsilonTensor,YoungTableau,DerivativeSuperType
 export PartialSuperType,CovDerivSuperType,Derivative
 export lower,upper,sort_order,custom_sort_order,zero
 export project_component
-export same_tensorterm_mod_syms
+export same_tensorterm_mod_syms, same_tensor_mod_syms
 
 export read_from_file, write_to_file
 

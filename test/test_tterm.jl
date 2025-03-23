@@ -81,13 +81,16 @@ custom_sort_order(["θ","Θ","ϵ"])
 
 
 
-t1=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ i=>lower, n=>lower],x)*Tensor("C",[w=>lower],x)
+
+
+println(same_tensor_mod_syms(Tensor("A", [i=>upper, j=>upper, k=>upper],x),Tensor("A", [j=>upper, i=>upper, k=>upper],x)))
+
+t1=(SymmetricTensor("A", [n=>upper, i=>upper, k=>upper],x)*AntisymmetricTensor("B",[ n=>lower, z=>lower],x)*Tensor("C",[k=>lower],x)
 )
-t2=(SymmetricTensor("A", [i=>upper, j=>upper, k=>upper],x)*AntisymmetricTensor("B",[ n=>lower,i=>lower],x)*Tensor("C",[w=>lower],x) ### technically equal to zero...
+t2=(SymmetricTensor("A", [i=>upper, k=>upper, n=>upper],x)*AntisymmetricTensor("B",[ n=>lower,z=>lower],x)*Tensor("C",[k=>lower],x) ### technically equal to zero...
 )
 
 println(same_tensorterm_mod_syms(t1,t2)) #true
-
 
 ##something wrong w comparison
 

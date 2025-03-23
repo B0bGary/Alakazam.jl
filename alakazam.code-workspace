@@ -5,5 +5,21 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+
+			{
+				"type": "julia",
+				"request": "launch",
+				"name": "Run tests",
+				"program": "${workspaceFolder}/test/runtests.jl",
+				"stopOnEntry": false,
+	
+				"env": {},
+				"juliaEnv": "${command:activeJuliaEnvironment}"
+			}
+		]
+	}
 }
