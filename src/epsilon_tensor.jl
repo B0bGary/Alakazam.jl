@@ -11,6 +11,8 @@ mutable struct EpsilonTensor<:EpsilonTensorSuperType
     indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
     weights::Dict{String,Number}
     function_of::Vector{Coordinate}
+    tableaux::Vector{YoungTableau}
+
 
     function EpsilonTensor(indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
         if indices[1][2]!=indices[2][2]
@@ -21,6 +23,7 @@ mutable struct EpsilonTensor<:EpsilonTensorSuperType
             println(indices[2][1])
             throw(InvalidEpsilonIndices())
         end
-        new("ϵ",indices,Dict{String,Number}(),[])
+        tabelau=YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))
+        new("ϵ",indices,Dict{String,Number}(),[],[tabelau])
     end
  end

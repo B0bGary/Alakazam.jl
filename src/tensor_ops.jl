@@ -2232,6 +2232,9 @@ function sort_symmetric(T::TensorSuperType)
     return T
 end
 
+function simplify(TEx::TensorTerm)
+    simplify(TensorExpression(TEx))
+end
 
 function simplify(TEx::TensorExpression)
 

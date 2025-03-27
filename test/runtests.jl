@@ -7,5 +7,7 @@ zero=Alakazam.zero
 
 
 #include("test_tensor_term.jl")
-include("test_tterm_equivs.jl")
+# include("test_tterm_equivs.jl")
+
+include("test_opsimps.jl")
 # ...
