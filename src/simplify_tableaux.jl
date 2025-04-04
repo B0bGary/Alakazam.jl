@@ -6,13 +6,13 @@
 # end
 
 
-function construct_tensorterm_graph(T1::TensorTerm)
+function construct_tensorterm_graph(T1::TensorTerm,debug=false)
     g1 = nx.MultiGraph()
     # n_primes=primes(length(T1.terms)) # will use prime fact theorem to assign ids to index nodes
     node_counter=0
 
     dums=get_dummies(T1) #dont name dums in graph
-    println(dums)
+    # println(dums)
     for t1pl in 1:length(T1.terms) #for each tensor vector index
         tens1=T1.terms[t1pl]
         g1.add_node(2*t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
@@ -21,7 +21,7 @@ function construct_tensorterm_graph(T1::TensorTerm)
             if !(tens1.indices[indexx] in dums)
                 g1.add_node((2*(node_counter+indexx)+1),name= tens1.indices[indexx][1].name) #assigns index
             else
-                g1.add_node((2*(node_counter+indexx)+1)) #assigns index
+                g1.add_node((2*(node_counter+indexx)+1),name="" ) #assigns index, its a dummy so no name
             end
             g1.add_edge(2*t1pl, (2*(node_counter+indexx)+1), weight=0) #edge between tensor and index
         end
@@ -30,6 +30,11 @@ function construct_tensorterm_graph(T1::TensorTerm)
             dims = size(adm)[1]
             for i in 1:dims
                 for j in (i+1):dims
+                    if debug
+                    println(" edge add:")
+                    println(2*(node_counter+i)+1)
+                    println(2*(node_counter+j)+1)
+                    end
                     g1.add_edge( (2*(node_counter+i)+1), (2*(node_counter+j)+1), weight=adm[i, j]) # should add the correct edges between indices
                 end
             end
@@ -39,9 +44,25 @@ function construct_tensorterm_graph(T1::TensorTerm)
 
     #should handle all dummies in term
     dums11 = get_dummies_with_pos_index_and_pos_ul(T1)
+
         #elements are (i, pair), where pair is name=>upper/lower
     contractions1 = [(x, y) for x in dums11 for y in dums11 if x[2][1] == y[2][1] && x != y]
+
+    if debug
+        println("dummies")
+        println(T1)
+        println(T1.indices)
+        println(get_dummies(T1))
+        println(dums11)
+        println(contractions1)
+    end
     for pair in contractions1
+        if debug
+
+            println("dummy edge pair:")
+            println(2*pair[1][1]+1)
+            println(2*pair[2][1]+1)
+        end
         g1.add_edge((2*pair[1][1]+1), (2*pair[2][1]+1), weight=2) #contraction edge
         # println(pair)
         # println(pair[1][2][2])
@@ -63,12 +84,12 @@ function draw_ind_graph(g1)
     for (u, v, d) in g1.edges(data=true)
         edge_labels[(u, v)] = d["weight"]
     end
-    # println(g1.nodes(data=true))
-    # for n in g1.nodes(data=true)
-    #     println(n)
-    #     println(n[2])
-    #     println(n[2]["name"])
-    # end
+    println(g1.nodes(data=true))
+    for n in g1.nodes(data=true)
+        println(n)
+        println(n[2])
+        println(n[2]["name"])
+    end
     node_labels = Dict(n[1] => string(n[1])*":"*string(n[2]["name"]) for n in g1.nodes(data=true))
 
     # Draw node labels (custom or default)
@@ -83,6 +104,8 @@ end
 
 
 function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
+    update_indices(T1)
+    update_indices(T2)
     if get_free_indices(T1)!=get_free_indices(T2)
         return false
     end
@@ -112,7 +135,7 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
     for isom_map in  iterate(ISO.isomorphisms_iter())
         # isom_map=isom[1]
 
-        println(isom_map)
+        # println(isom_map)
         filtered_even = Dict(k÷2 => v ÷ 2 for (k, v) in isom_map if iseven(k) && iseven(v)) #get just the tensors swapps
         filtered_odd = Dict((k-1)÷2 => (v - 1) ÷ 2 for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the inidices
         filtered_odd_undiv = Dict(k => v for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the indices
@@ -122,8 +145,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
     
         counter=0
         #reassign dummies first!
-        println("pre dum rep:")
-        println(TT2)
+        # println("pre dum rep:")
+        # println(TT2)
         for termid in 1:length(TT2.terms)
             ttensor=TT2.terms[termid] #get a tensor
             for indid in 1:length(ttensor.indices)
@@ -140,8 +163,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
             end
             counter+=length(ttensor.indices) #shift the counter
         end
-        println("post dum rep:")
-        println(TT2)
+        # println("post dum rep:")
+        # println(TT2)
     
         ##all dummies in TT2 shoud now be same as in T1
         # for perm_pair in filtered_odd_undiv
@@ -165,8 +188,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
     
         newtenter=TensorTerm(newts) #new tensor with the swaps tensors. 
     
-        println("new term after graded tens swap:")
-        println(newtenter)
+        # println("new term after graded tens swap:")
+        # println(newtenter)
     
     
        #then, map the indices to new positions via the isomorphism
@@ -179,7 +202,22 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
         #         continue #skip dummies
         #       #  newinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
         #     else
-            newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] #what is now ___ was ____ !! use original TT2
+            # println("TT2 inds:")
+            # println(isom_map)
+            # println(T1)
+            # println(T2)
+            # println(TT2)
+            # println(TT2.indices)
+            # println(perm_pair)
+            # println(filtered_odd)
+            try 
+                newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] 
+            catch e
+                println("Error occurred while checking isomorphisms: ", e)
+                g1=construct_tensorterm_graph(T1,true)
+                draw_ind_graph(g1)
+            end
+           #what is now ___ was ____ !! use original TT2
             # end
        end
         #this should be a vector with inds in the correct spot.
@@ -193,8 +231,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
     #    end
     
        #now, check the sign between the rearranged tensors and the new index positions
-       println("indices under isomorphism")
-       println(newinds)
+    #    println("indices under isomorphism")
+    #    println(newinds)
        counter=1
        totgrweight=1
        flag=false
@@ -205,19 +243,19 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
             comptens=copy(curtens)
             comptens.indices=rearrinds
             #compare tensors!
-            println("compare:")
-            println(comptens)
+            # println("compare:")
+            # println(comptens)
     
             #comapre to T1
             compariT1tens=TT2.terms[tensid] #compare change under iso??? T1 or T2??
-            println(curtens)
+            # println(curtens)
             (same,grweight)=same_tensor_mod_syms(comptens,curtens)
-            println("grwe")
-            println(grweight)
+            # println("grwe")
+            # println(grweight)
             if !same
                 #this means the isomorphisms is wrong: ie we need to use a symmetry of the tensor that doesn't exists
                 # i think if we get here we should iterate over all the isomorphisms. just incase one is a bad one
-                println("Inconsistent!")
+                # println("Inconsistent!")
                 flag=true
                 break
             end
@@ -231,8 +269,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
         end
     
        oversign=totgrweight*((-1)^tens_grad)
-       println("index perm weight:"*string(totgrweight))
-       println("tens swap weight:"*string(tens_grad))
+    #    println("index perm weight:"*string(totgrweight))
+    #    println("tens swap weight:"*string(tens_grad))
     
        return oversign==1 #same !!
     end
@@ -310,7 +348,7 @@ function find_weighted_square(g)
                 push!(weights, missing)  # No edge data found
             end
         end
-        println(weights)
+        # println(weights)
 
         # **Fix: Ensure no missing values before checking weights**
         if all(x -> !ismissing(x), weights) && any(isequal(weights, circshift(target_weights, i)) for i in 0:3)
@@ -366,7 +404,7 @@ function perm_grading(perm_dict::Dict{Int,Int},tt::TensorTerm)
     for i in 1:n-1
         for j in i+1:n
             # Check if the elements are in reverse order in the permutation (i.e., an inversion)
-            println(perm_dict)
+            # println(perm_dict)
             if perm_dict[i] > perm_dict[j]
                 # Check if the grading of elements at i and j are different
                 if grading(tt.terms[i]) * grading(tt.terms[j])==1
@@ -392,14 +430,14 @@ function find_tensor_graph_iso(g1,g2)
                 all_isomorphisms = ISO.isomorphisms_iter()
             
                 # Iterate through all isomorphisms and print them
-                for iso in all_isomorphisms
-                    println("Isomorphism: ", iso)
-                end
+                # for iso in all_isomorphisms
+                #     # println("Isomorphism: ", iso)
+                # end
             catch e
                 println("Error occurred while checking isomorphisms: ", e)
             end
         else
-            println("The graphs are not isomorphic considering edge weights and node names.")
+            # println("The graphs are not isomorphic considering edge weights and node names.")
         end
     return ISO
 end
