@@ -432,6 +432,9 @@ if compute_constraints
 
         end
 
+
+        println(consr[2,2])
+
     elseif constraint_type==1
 
         Dbar_SUPERFIELD=Derivative("̄D",SUPERFIELD_Tmmmm, [x], [ i=>lower])

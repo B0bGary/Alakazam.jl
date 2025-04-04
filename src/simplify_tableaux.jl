@@ -15,8 +15,16 @@ function construct_tensorterm_graph(T1::TensorTerm,debug=false)
     # println(dums)
     for t1pl in 1:length(T1.terms) #for each tensor vector index
         tens1=T1.terms[t1pl]
-        g1.add_node(2*t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
+        if typeof(tens1)<:OperatorSuperType
+            oprnd=tens1.operand #get the operand tensor
+            opr_name=oprnd.summands[1][2].terms[1].name #name of first tensor in the operator..... this is only a temp solution assuming that the oeprator is on a single tensor
 
+            g1.add_node(2*t1pl, name=(tens1.name*"_"*opr_name)) #we add the oprator name to see if theyre the same!!!
+            # println("opr name")
+            # println(tens1.name*"_"*opr_name)
+        else
+        g1.add_node(2*t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
+        end
         for indexx in 1:length(tens1.indices)
             if !(tens1.indices[indexx] in dums)
                 g1.add_node((2*(node_counter+indexx)+1),name= tens1.indices[indexx][1].name) #assigns index
@@ -450,7 +458,16 @@ function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     #names don't match
     if T1.name != T2.name
         return (false, 0)
+
+    #dirty fix to stop the operator from being a problem... not fully general
+    elseif typeof(T1)<:OperatorSuperType && typeof(T2)<:OperatorSuperType #types don't match
+        t1opnd=T1.operand.summands[1][2].terms[1]
+        t2opnd=T2.operand.summands[1][2].terms[1]
+        if t1opnd.name != t2opnd.name
+            return (false, 0)
+        end
     end
+        
     dums1 = get_dummies(T1)
     dums2 = get_dummies(T2)
     #if we dont need to worry about dummies, do simple algo

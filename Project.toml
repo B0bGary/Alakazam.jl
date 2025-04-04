@@ -3,7 +3,7 @@ uuid = "41a1aa08-1d43-4dd7-adeb-62cd7a1359ba"
 authors = ["Jesse Woods <jesse.woods@unibe.ch>"]
 registry = "https://github.com/JuliaRegistries/General.git"
 repo = "https://gitlab.com/B0bGary/Alakazam.jl.git"
-version = "0.1.23"
+version = "0.1.24"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"

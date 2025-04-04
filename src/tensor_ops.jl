@@ -162,6 +162,7 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             if typeof(metric) <: EpsilonTensorSuperType
                 if index1 == index2 # contracts same index kroneckers
                     factor *= 0
+                    # println("vanished")
                     flag = true
                     break
                 end
@@ -2282,6 +2283,7 @@ function simplify(TEx::TensorExpression)
     # eliminate_epsilon(new_exp)
     new_exp = rename_dummies(new_exp)
     contract_metrics(new_exp, Metric)
+    update_indices(new_exp)
     return new_exp
 end
 
