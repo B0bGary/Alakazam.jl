@@ -1632,9 +1632,15 @@ end
 
 #equality checking
 
-function ==(a::TensorTerm, b::TensorTerm) #might need to check a graph isomorphism??
+function hardeq(a::TensorTerm, b::TensorTerm) #might need to check a graph isomorphism??
     return same_tensorterm_mod_syms(a,b) #hopefully...
 end
+
+function ==(a::TensorTerm, b::TensorTerm)
+    return a.terms == b.terms #keeping the equality checking with graph iso only for request for speed!
+end
+
+
 
 function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
     if length(a) != length(b)
@@ -2390,6 +2396,70 @@ function merge_sum(TEx::TensorExpression)
 end
 
 
+
+## use graph iso function, slowly but better!
+function hard_merge_sum(TEx::TensorExpression)
+    if TEx == zero
+        return zero
+    end
+    ##println("zero ma:",zero)
+    out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
+    if isempty(out)
+        ##println("killing")
+        ##println("zero??:",zero)
+        return zero
+    end
+    ##println("not killing")
+    ###println(out)
+    TEx.summands = out
+    new_merged = []
+    for summand in TEx.summands
+        ###println("doing")
+        found = false
+
+        for i in eachindex(new_merged)
+            if hardeq(summand[2], new_merged[i][2])
+                # println("got here")
+                # println(summand[1])
+                # println(new_merged[i][1])
+                # println(summand[2])
+                # println(new_merged[i][2])
+                new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
+                # ##println("sum is")
+                # ##println(new_merged[i])
+                # ##println(new_merged) #not editting in place apparaently....
+                found = true
+                break
+            elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1 #this might be redundant after the tensterm check above
+
+                rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
+                if rescomp[1]==true
+                    # println(rescomp)
+                    new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
+                    found=true
+                end
+            end
+
+            # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
+            # if res
+            #     new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
+            #     found = true
+            #     break
+            # end
+        end
+        # if found
+        #    ##println("breaking....")
+        #     break
+        # end
+        if !found
+            push!(new_merged, summand)
+        end
+    end
+
+    TEx.summands = new_merged
+    TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
+    return isempty(TEx.summands) ? zero : TEx
+end
 
 
 ##############################################################################################################################
