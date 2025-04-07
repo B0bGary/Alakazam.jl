@@ -7,7 +7,7 @@ using OrderedCollections
 using PyCall
 using StatsBase
 using Serialization
-import SymbolicUtils
+using SymbolicUtils
 import Base.:*
 import Base.:+
 import Base.:copy

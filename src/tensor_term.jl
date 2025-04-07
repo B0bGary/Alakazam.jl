@@ -8,33 +8,44 @@ abstract type TotallySymmetricSuperType <: TensorSuperType end
 
 mutable struct DummyPatternTensor <: TensorSuperType
     name::String
-    indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+    indices::Vector{Pair{I, IndexPosition}} where I <: IndexSuperType
     function_of::Vector{Coordinate}
-    weights::Dict{String,Number}
+    weights::Dict{String, Number}
 
     function DummyPatternTensor(name::String, args...)
-        indices = Pair{IndexSuperType,IndexPosition}[]
-        function_of = Coordinate[]
-        weights = Dict{String,Number}()
+        indices = Pair{IndexSuperType, IndexPosition}[]  # Initialize indices as an empty array
+        function_of = Coordinate[]  # Initialize function_of as an empty array
+        weights = Dict{String, Number}()  # Initialize an empty weights dictionary
 
         for arg in args
-            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+            if arg isa Pair{I, IndexPosition} where I <: IndexSuperType
                 push!(indices, arg)
-            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+            elseif arg isa Vector{Pair{I, IndexPosition}} where I <: IndexSuperType
                 append!(indices, arg)
             elseif arg isa Coordinate
-                function_of = [arg]
+                push!(function_of, arg)
             elseif arg isa Vector{Coordinate}
-                function_of = arg
-            elseif arg isa Dict{String,Number}
+                append!(function_of, arg)
+            elseif arg isa Dict{String, Number}
                 weights = arg
+            end
+        end
+
+        # Ensure function_of is not overwritten if it's not passed
+        if isempty(function_of)
+            function_of = [Coordinate()]  # Use a default if necessary
+        end
+
+        # Ensure weights is not empty and infer if necessary
+        if isempty(weights) && !isempty(function_of)
+            for coord in function_of
+                weights[coord.name] = 1  # Default weight
             end
         end
 
         new(name, indices, function_of, weights)
     end
 end
-
 
 
 
@@ -209,17 +220,13 @@ mutable struct TensorTerm
         end
         new(terms, inds)
     end
-    function TensorTerm(term::TensorSuperType)
-        new([term], term.indices)
-    end
 end
-
+function TensorTerm(term::TensorSuperType)
+    TensorTerm([term])
+end
 
 mutable struct TensorExpression
     summands::Vector{Pair{SymorNum,TensorTerm}}
-    function TensorExpression(summand::TensorTerm)
-        merge_sum(new(Vector((1, summand))))
-    end
     function TensorExpression(summands::Vector{TensorTerm})
         merge_sum(new(Vector((1, summand) for summand in summands)))
     end
@@ -419,7 +426,7 @@ function parse_indices(head, indices, leaf)
     return indices
 end
 
-Base.@doc "Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
+Base.@doc"Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
 macro Tensor(expr::Symbol)
     length(string(expr)) == 1 && return Tensor(string(expr))
     index_count = length(string(expr)) - 2
