@@ -2,8 +2,6 @@ using Latexify
 set_default(convert_unicode = true)
 
 # include("tensor_term.jl")
-include("kronecker.jl")
-include("epsilon_tensor.jl")
 # include("metric.jl")
 
 
@@ -2471,9 +2469,9 @@ end
 #     return TEx
 # end
 
-function Base.sort(T::TensorTerm)
-    return sort(TensorExpression(T))
-end
+# function Base.sort(T::TensorTerm)
+#     return sort(TensorExpression(T))
+# end
 
 
 function Base.sort(TEx::TensorExpression)

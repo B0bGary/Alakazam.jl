@@ -6,7 +6,9 @@
 # end
 
 
+
 function construct_tensorterm_graph(T1::TensorTerm,debug=false)
+    # println("Checking if nx is correctly imported:", Alakazam.nx)
     g1 = nx.MultiGraph()
     # n_primes=primes(length(T1.terms)) # will use prime fact theorem to assign ids to index nodes
     node_counter=0

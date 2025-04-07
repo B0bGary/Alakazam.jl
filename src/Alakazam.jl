@@ -18,7 +18,30 @@ import Base.:replace
 import DataStructures
 
 
+function ensure_installed(package::String)
+    try
+        pyimport(package)
+    catch
+        run(`$(PyCall.python) -m pip install $package`)
+    end
+end
+
+# Ensure required packages are installed
+ensure_installed("networkx")
+ensure_installed("matplotlib")
+# Import the modules
+
+# println("Checking if nx is correctly imported:", nx)
+const nx= PyNULL()
+const plt= PyNULL()
+
+function __init__()
+    copy!(nx,pyimport("networkx"))
+    copy!(plt,pyimport("matplotlib.pyplot"))
+end
+
 #usable functions and types
+
 
 export pop_metric, contract_metrics, eliminate_kronecker,eliminate_epsilon,term_weight,singleterm
 export get_weighted_terms,drop_weight_above,×,update_indices,get_unused_indices
@@ -41,10 +64,14 @@ export same_tensorterm_mod_syms, same_tensor_mod_syms
 
 export read_from_file, write_to_file
 
+
 include("indices.jl")
 include("young.jl")
 include("custom_exceptions.jl")
 include("tensor_term.jl")
+include("metric.jl")
+include("kronecker.jl")
+include("epsilon_tensor.jl")
 include("tensor_ops.jl")
 # include("metric.jl")
 include("operator.jl")
@@ -58,20 +85,6 @@ include("simplify_tableaux.jl")
 include("lightcone.jl")
 include("superspace.jl")
 
-
-function ensure_installed(package::String)
-    try
-        pyimport(package)
-    catch
-        run(`$(PyCall.python) -m pip install $package`)
-    end
-end
-# Ensure required packages are installed
-ensure_installed("networkx")
-ensure_installed("matplotlib")
-# Import the modules
-nx = pyimport("networkx")
-plt = pyimport("matplotlib.pyplot")
 
 
 
