@@ -2288,6 +2288,7 @@ function simplify(TEx::TensorExpression)
     new_exp = rename_dummies(new_exp)
     contract_metrics(new_exp, Metric)
     update_indices(new_exp)
+    hard_merge_sum(new_exp) # slow graph simplify...
     return new_exp
 end
 
