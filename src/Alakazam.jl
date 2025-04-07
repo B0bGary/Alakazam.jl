@@ -45,6 +45,7 @@ end
 
 export pop_metric, contract_metrics, eliminate_kronecker,eliminate_epsilon,term_weight,singleterm
 export get_weighted_terms,drop_weight_above,×,update_indices,get_unused_indices
+export ≅
 export get_free_indices,get_free_indices_nopos,get_dummies_positional,get_index_sets
 export get_dummies,rename_dummies,update_ext_indices,update_dummies,simplify,merge_sum,grading,substitute
 export to_latex,replace,hasIndices,operator_weight,same_operator,partially_project_component
@@ -61,6 +62,8 @@ export PartialSuperType,CovDerivSuperType,Derivative
 export lower,upper,sort_order,custom_sort_order,zero
 export project_component
 export same_tensorterm_mod_syms, same_tensor_mod_syms
+export hard_simplify
+export hard_equals
 
 export read_from_file, write_to_file
 

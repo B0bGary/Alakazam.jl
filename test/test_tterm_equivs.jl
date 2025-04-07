@@ -31,72 +31,59 @@ z = Index("z", flavour_indices,1)
 x = Coordinate("x", [spacetime_indices, spacetime_indices])
 θ = Coordinate("θ", [spacetime_indices])
 θbar = Coordinate("Θ", [spacetime_indices])
-# grassman_deriv=Derivative("𝛛",zero, [θ], [i => lower])
-# grassman_deriv_bar=Derivative("∂",zero, [θbar], [i => lower])
-# spatial_deriv=Derivative("∇",zero, [x])
-# minus_deriv=Derivative("δ",zero, [x])
-# add_derivative_action(grassman_deriv_bar,Tensor("Θ",[j=>lower],θbar),EpsilonTensor([i =>lower, j=>lower]))
-# add_derivative_action(grassman_deriv,Tensor("θ",[j=>lower],θ),EpsilonTensor([i =>lower, j=>lower]))
-# add_derivative_action(grassman_deriv_bar,Tensor("Θ",[j=>upper],θbar),KroneckerDelta([i =>lower, j=>upper]))
-# add_derivative_action(grassman_deriv,Tensor("θ",[j=>upper],θ),KroneckerDelta([i =>lower, j=>upper]))
-# covar_expansion=-1*grassman_deriv_bar+im/2*Tensor("θ",[i=>lower],θ)*spatial_deriv
-# covar_unbar_expansion=grassman_deriv-im/2*Tensor("Θ",[ i=>lower],θbar)*spatial_deriv
-# covar=Derivative("̄D",zero, [x,θbar], [ i => lower])
-# covar_unbar=Derivative("D",zero, [x,θ], [ i => lower])
-
 
 #############
 
     ####
     #simple tensors
 
-    @test Tensor("A",[i=>upper,j=>upper])==Tensor("A",[i=>upper,j=>upper]) #should be exactly equal
-    @test Tensor("A",[i=>upper,j=>upper])!=Tensor("A",[j=>upper,i=>upper]) #not equal since no syms
-    @test SymmetricTensor("A",[i=>upper,j=>upper])==SymmetricTensor("A",[j=>upper,i=>upper]) # equal since syms
-    @test SymmetricTensor("A",[i=>upper,j=>upper])!=SymmetricTensor("B",[j=>upper,i=>upper]) # not equal since different names
-    @test AntisymmetricTensor("A",[i=>upper,j=>upper])==AntisymmetricTensor("A",[j=>upper,i=>upper]) # not equal since antisym
+    @test Tensor("A",[i=>upper,j=>upper])≅Tensor("A",[i=>upper,j=>upper]) #should be exactly equal
+    @test ! (Tensor("A",[i=>upper,j=>upper])≅Tensor("A",[j=>upper,i=>upper])) #not equal since no syms
+    @test SymmetricTensor("A",[i=>upper,j=>upper])≅SymmetricTensor("A",[j=>upper,i=>upper]) # equal since syms
+    @test !(SymmetricTensor("A",[i=>upper,j=>upper])≅SymmetricTensor("B",[j=>upper,i=>upper])) # not equal since different names
+    @test AntisymmetricTensor("A",[i=>upper,j=>upper])≅AntisymmetricTensor("A",[j=>upper,i=>upper]) # not equal since antisym
 
 
     ####
     #simple products and contractions
 
     #should be not equal by antisym
-    @test AntisymmetricTensor("A", [i=>upper, j=>upper],x)*SymmetricTensor("B",[ i=>lower, k=>lower],x)!=  AntisymmetricTensor("A", [j=>upper, i=>upper],x)*SymmetricTensor("B",[ i=>lower, k=>lower],x)
-
+    @test !(( AntisymmetricTensor("A", [i=>upper, j=>upper],x)*SymmetricTensor("B",[ i=>lower, k=>lower],x))≅  (AntisymmetricTensor("A", [j=>upper, i=>upper],x)*SymmetricTensor("B",[ i=>lower, k=>lower],x))
+)
     #should be equal since contractions imply equal to zero, even tho they look unequal by antisymmetry.
-    @test AntisymmetricTensor("A", [i=>upper, j=>upper],x)*SymmetricTensor("B",[ i=>lower, j=>lower],x)==  AntisymmetricTensor("A", [j=>upper, i=>upper],x)*SymmetricTensor("B",[ i=>lower, j=>lower],x)
+    @test (AntisymmetricTensor("A", [i=>upper, j=>upper],x)*SymmetricTensor("B",[ i=>lower, j=>lower],x))≅(  AntisymmetricTensor("A", [j=>upper, i=>upper],x)*SymmetricTensor("B",[ i=>lower, j=>lower],x))
 
     #equal by double antisym
-    @test AntisymmetricTensor("A", [i=>upper, j=>upper],x)*AntisymmetricTensor("B",[ i=>lower, j=>lower],x)==  AntisymmetricTensor("A", [j=>upper, i=>upper],x)*AntisymmetricTensor("B",[ j=>lower, i=>lower],x)
+    @test (AntisymmetricTensor("A", [i=>upper, j=>upper],x)*AntisymmetricTensor("B",[ i=>lower, j=>lower],x))≅  (AntisymmetricTensor("A", [j=>upper, i=>upper],x)*AntisymmetricTensor("B",[ j=>lower, i=>lower],x))
 
 
     ####
     #testing the grading and swaps 
 
     #should be equal by grading (even*odd=even)
-    @test Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower,k=>lower],x)==Tensor("B",[ j=>lower,k=>lower],x) *Tensor("A", [i=>upper],x) 
+    @test (Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower,k=>lower],x))≅(Tensor("B",[ j=>lower,k=>lower],x) *Tensor("A", [i=>upper],x)) 
 
     #should be equal by grading (even*even=even)
-    @test Tensor("A", [i=>upper,t=>upper],x)*Tensor("B",[ j=>lower,k=>lower],x)==Tensor("B",[ j=>lower,k=>lower],x) *Tensor("A", [i=>upper,t=>upper],x) 
+    @test (Tensor("A", [i=>upper,t=>upper],x)*Tensor("B",[ j=>lower,k=>lower],x))≅(Tensor("B",[ j=>lower,k=>lower],x) *Tensor("A", [i=>upper,t=>upper],x) )
 
     #should be not equal by grading (odd*odd=odd) 
-    @test Tensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ j=>lower,k=>lower,l=>lower],x)!=Tensor("B",[ j=>lower,k=>lower,l=>lower],x) *Tensor("A", [i=>upper,t=>upper,s=>upper],x)
+    @test ! ((Tensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ j=>lower,k=>lower,l=>lower],x))≅(Tensor("B",[ j=>lower,k=>lower,l=>lower],x) *Tensor("A", [i=>upper,t=>upper,s=>upper],x)))
 
     #should be equal by grading plus antisymm (odd*odd=odd) 
-    @test AntisymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ j=>lower,k=>lower,l=>lower],x)==Tensor("B",[ j=>lower,k=>lower,l=>lower],x) *AntisymmetricTensor("A", [i=>upper,s=>upper,t=>upper],x)
+    @test (AntisymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ j=>lower,k=>lower,l=>lower],x))≅(Tensor("B",[ j=>lower,k=>lower,l=>lower],x) *AntisymmetricTensor("A", [i=>upper,s=>upper,t=>upper],x))
 
     #should be equal by two graded swaps
-    @test Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x)*Tensor("C",[ k=>lower],x)==Tensor("C",[ k=>lower],x)*Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x)
+    @test (Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x)*Tensor("C",[ k=>lower],x))≅(Tensor("C",[ k=>lower],x)*Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x))
 
     #should be not equal
-    @test Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x)*Tensor("C",[ k=>lower],x)!=Tensor("C",[ k=>lower],x)*Tensor("B",[ j=>lower],x)*Tensor("A", [i=>upper],x)
+    @test ! ((Tensor("A", [i=>upper],x)*Tensor("B",[ j=>lower],x)*Tensor("C",[ k=>lower],x))≅(Tensor("C",[ k=>lower],x)*Tensor("B",[ j=>lower],x)*Tensor("A", [i=>upper],x)))
 
 
     #should be equal by grading plus antisymm thanks to the contraction relabelling
-    @test AntisymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x)==AntisymmetricTensor("A", [i=>upper,s=>upper,t=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x)
+    @test (AntisymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x))≅(AntisymmetricTensor("A", [i=>upper,s=>upper,t=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x))
 
       #should be equal since equal to zero via contraction
-      @test SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x)==SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x)
+      @test (SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x))≅(SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x))
 
 
 end

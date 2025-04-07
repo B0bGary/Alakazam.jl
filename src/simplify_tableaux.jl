@@ -8,6 +8,7 @@
 
 
 function construct_tensorterm_graph(T1::TensorTerm,debug=false)
+    # println("mking graph")
     # println("Checking if nx is correctly imported:", Alakazam.nx)
     g1 = nx.MultiGraph()
     # n_primes=primes(length(T1.terms)) # will use prime fact theorem to assign ids to index nodes
@@ -133,6 +134,8 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
    if !ISO.is_isomorphic()
     return false
    end
+
+    println("found iso")
 
    if find_weighted_square(g2) && find_weighted_square(g1) #other cases.....
     #the term is equal to zero.
@@ -433,6 +436,7 @@ end
 
 
 function find_tensor_graph_iso(g1,g2)
+    # println("iso check...")
         # Perform the isomorphism check using vf2pp_isomorphism and edge_match #check order g2 g1. i think its opposite of 
         ISO = nx.algorithms.isomorphism.GraphMatcher(g2, g1, edge_match=nx.algorithms.isomorphism.numerical_multiedge_match("weight",-10),node_match=nx.algorithms.isomorphism.categorical_node_match("name", "")) #need some unused number here for edge w/o weight just in case
         if ISO.is_isomorphic()

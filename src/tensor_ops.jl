@@ -1,10 +1,6 @@
 using Latexify
 set_default(convert_unicode = true)
 
-# include("tensor_term.jl")
-# include("metric.jl")
-
-
 ##############################################################################################################################
 ##############################################################################################################################
 
@@ -160,7 +156,6 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             if typeof(metric) <: EpsilonTensorSuperType
                 if index1 == index2 # contracts same index kroneckers
                     factor *= 0
-                    # println("vanished")
                     flag = true
                     break
                 end
@@ -1632,13 +1627,18 @@ end
 
 #equality checking
 
-function hardeq(a::TensorTerm, b::TensorTerm) #might need to check a graph isomorphism??
-    return same_tensorterm_mod_syms(a,b) #hopefully...
+function ==(a::TensorTerm, b::TensorTerm)
+    return a.terms == b.terms
 end
 
-function ==(a::TensorTerm, b::TensorTerm)
-    return a.terms == b.terms #keeping the equality checking with graph iso only for request for speed!
+function hard_equals(a::TensorTerm, b::TensorTerm)
+    return same_tensorterm_mod_syms(a,b)
 end
+
+function ≅(a::TensorTerm, b::TensorTerm)
+    return hard_equals(a,b)
+end
+
 
 
 
@@ -1654,7 +1654,7 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
     return true
 end
 
-function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
+function ≅(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
     (same,grweight)=same_tensor_mod_syms(a,b)
    return same
     # if (a.name == b.name && a.indices == b.indices )
@@ -1664,10 +1664,18 @@ function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau co
     # end
 end
 
+
+function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
+    if (a.name == b.name && a.indices == b.indices )
+        return true
+    else
+        return false
+    end
+end
+
+
 function ==(a::TensorExpression, b::TensorExpression)
-
-
-    if length(a.summands)!=length(b.summands) #|| get_free_indices(a)!=get_free_indices(b) #easy case exclusion
+    if length(a.summands)!=length(b.summands)
         # println("stop here")
         # println(a)
         # println(b)
@@ -1678,36 +1686,9 @@ function ==(a::TensorExpression, b::TensorExpression)
     # println(b)
     aa=a.summands
     bb=b.summands
-
-    # indb_matches=[]#add ids once already matched
-    # for inda in eachindex(aa) # make sure to handle a thing with multiple terms vs 1 term ? might not need since sums merge but still
-    #     match_found=false
-    #     for indb in eachindex(bb) #need to check each term for a match
-    #         if inbd in indbmatches
-    #             continue#skip if already used in a match
-    #         end
-    #         if aa[inda][1]!=bb[indb][1] #coefficient doesnt match
-    #             continue
-    #         else
-    #             if aa[inda][2]==bb[indb][2] #check tensor term level
-    #                 match_found==true
-    #                 indb_matches.push!(indb)
-    #             end
-    #         end
-    #     end
-
-    #     if !match_found #no term that matches.
-    #         return false
-    #     end
-
-    # end
     for inde in eachindex(aa)
-        if aa[inde][1]!=bb[inde][1]  # || aa[inde][2]!=bb[inde][2]
+        if aa[inde][1]!=bb[inde][1] || aa[inde][2]!=bb[inde][2]
             return false
-        else #add a check to see if have the same structure modulo dummies
-
-            #actually.... need to check for this that are not in the same order....
-            return aa[inde][2]==bb[inde][2] #tensor term logic checking
         end
     end
     
@@ -2241,6 +2222,7 @@ function simplify(TEx::TensorTerm)
     simplify(TensorExpression(TEx))
 end
 
+
 function simplify(TEx::TensorExpression)
 
     exp = contract_metrics(TEx, EpsilonTensor)
@@ -2287,14 +2269,8 @@ function simplify(TEx::TensorExpression)
     # eliminate_epsilon(new_exp)
     new_exp = rename_dummies(new_exp)
     contract_metrics(new_exp, Metric)
-    update_indices(new_exp)
-    # hard_merge_sum(new_exp) # slow graph simplify...
+    # hard_simplify(new_exp)
     return new_exp
-end
-
-function hard_simplify(exp::TensorExpression)
-    hard_merge_sum(exp)
-    return exp
 end
 
 function simp_ops_n_sym(exp::TensorExpression)
@@ -2330,6 +2306,10 @@ end
 
 
 
+function hard_simplify(TEx::TensorExpression)
+    hard_merge(TEx)
+    return TEx
+end
 
 
 
@@ -2337,6 +2317,71 @@ end
 #merging terms with same tensor content
 
 ## need to add functionality for symmetric and antisym tensors
+
+
+function hard_merge(TEx::TensorExpression)
+    if TEx == zero
+        return zero
+    end
+    ##println("zero ma:",zero)
+    out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
+    if isempty(out)
+        ##println("killing")
+        ##println("zero??:",zero)
+        return zero
+    end
+    ##println("not killing")
+    ###println(out)
+    TEx.summands = out
+    new_merged = []
+    for summand in TEx.summands
+        ###println("doing")
+        found = false
+
+        for i in eachindex(new_merged)
+            if hard_equals(summand[2] ,new_merged[i][2]) 
+                # println("got here")
+                # println(summand[1])
+                # println(new_merged[i][1])
+                # println(summand[2])
+                # println(new_merged[i][2])
+                new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
+                # ##println("sum is")
+                # ##println(new_merged[i])
+                # ##println(new_merged) #not editting in place apparaently....
+                found = true
+                break
+            # elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
+
+            #     rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
+            #     if rescomp[1]==true
+            #         # println(rescomp)
+            #         new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
+            #         found=true
+            #     end
+            end
+
+            # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
+            # if res
+            #     new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
+            #     found = true
+            #     break
+            # end
+        end
+        # if found
+        #    ##println("breaking....")
+        #     break
+        # end
+        if !found
+            push!(new_merged, summand)
+        end
+    end
+
+    TEx.summands = new_merged
+    TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
+    return isempty(TEx.summands) ? zero : TEx
+end
+
 
 function merge_sum(TEx::TensorExpression)
     if TEx == zero
@@ -2402,70 +2447,6 @@ function merge_sum(TEx::TensorExpression)
 end
 
 
-
-## use graph iso function, slowly but better!
-function hard_merge_sum(TEx::TensorExpression)
-    if TEx == zero
-        return zero
-    end
-    ##println("zero ma:",zero)
-    out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
-    if isempty(out)
-        ##println("killing")
-        ##println("zero??:",zero)
-        return zero
-    end
-    ##println("not killing")
-    ###println(out)
-    TEx.summands = out
-    new_merged = []
-    for summand in TEx.summands
-        ###println("doing")
-        found = false
-
-        for i in eachindex(new_merged)
-            if hardeq(summand[2], new_merged[i][2])
-                # println("got here")
-                # println(summand[1])
-                # println(new_merged[i][1])
-                # println(summand[2])
-                # println(new_merged[i][2])
-                new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
-                # ##println("sum is")
-                # ##println(new_merged[i])
-                # ##println(new_merged) #not editting in place apparaently....
-                found = true
-                break
-            elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1 #this might be redundant after the tensterm check above
-
-                rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
-                if rescomp[1]==true
-                    # println(rescomp)
-                    new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
-                    found=true
-                end
-            end
-
-            # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
-            # if res
-            #     new_merged[i] = (new_merged[i][1] + val*summand[1] => new_merged[i][2])
-            #     found = true
-            #     break
-            # end
-        end
-        # if found
-        #    ##println("breaking....")
-        #     break
-        # end
-        if !found
-            push!(new_merged, summand)
-        end
-    end
-
-    TEx.summands = new_merged
-    TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
-    return isempty(TEx.summands) ? zero : TEx
-end
 
 
 ##############################################################################################################################
