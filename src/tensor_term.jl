@@ -12,22 +12,29 @@ mutable struct DummyPatternTensor <: TensorSuperType
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
 
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}())  #lets you have scalars with no indices
-        new(name, indices, function_of, Dict{String,Number}())
-    end
+    function DummyPatternTensor(name::String, args...)
+        indices = Pair{IndexSuperType,IndexPosition}[]
+        function_of = Coordinate[]
+        weights = Dict{String,Number}()
 
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}=Vector{Pair{IndexSuperType,IndexPosition}}())  #lets you have scalars with no indices
-        new(name, indices, [], Dict{String,Number}())
-    end
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}=Vector{Pair{IndexSuperType,IndexPosition}}(), function_of::Coordinate=Coordinate("", Vector{IndexSet}()))  #lets you have scalars with no indices
-        new(name, indices, [function_of], Dict{String,Number}())
-    end
-    function DummyPatternTensor(name::String="?", indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}=Vector{Pair{IndexSuperType,IndexPosition}}(), function_of::Coordinate=Coordinate("", Vector{IndexSet}()), weights::Dict{String,Number}=Dict{String,Number}())  #lets you have scalars with no indices
-        new(name, indices, [function_of],)
-    end
+        for arg in args
+            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+                push!(indices, arg)
+            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+                append!(indices, arg)
+            elseif arg isa Coordinate
+                function_of = [arg]
+            elseif arg isa Vector{Coordinate}
+                function_of = arg
+            elseif arg isa Dict{String,Number}
+                weights = arg
+            end
+        end
 
+        new(name, indices, function_of, weights)
+    end
 end
+
 
 
 
@@ -84,81 +91,45 @@ mutable struct SymmetricTensor <: TotallySymmetricSuperType
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
 
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        w = Dict{String,Number}()
-        for coord in function_of
-            w[coord.name] = 1
-        end
-        new(name, indices, function_of, w, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
+    function SymmetricTensor(name::String, args...)
+        indices = Pair{IndexSuperType,IndexPosition}[]
+        function_of = Coordinate[]
+        weights = Dict{String,Number}()
+        tableaux = YoungTableau[]
 
-
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
-        end
-        new(name, indices, [function_of], w, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function SymmetricTensor(name::String,
-        function_of::Coordinate=nothing) #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
-        end
-        new(name, Vector{Pair{IndexSuperType,IndexPosition}}(), [function_of], w, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-
-        new(name, indices, [], Dict{String,Number}(), [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-    function SymmetricTensor(T::DummyPatternTensor) #
-        new(T.name, T.indices, T.function_of, T.weights, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition},}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}(), weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        w = Dict{String,Number}()
-        for coord in function_of
-            w[coord.name] = 1
-        end
-        new(name, indices, function_of, merge(w, weights), [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Coordinate=nothing, weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType} #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
+        for arg in args
+            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+                push!(indices, arg)
+            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+                append!(indices, arg)
+            elseif arg isa Coordinate
+                function_of = [arg]
+            elseif arg isa Vector{Coordinate}
+                function_of = arg
+            elseif arg isa Dict{String,Number}
+                weights = arg
+            elseif arg isa YoungTableau
+                tableaux = [arg]
+            elseif arg isa Vector{YoungTableau}
+                tableaux = arg
+            end
         end
 
-        new(name, indices, [function_of], merge(w, weights), [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function SymmetricTensor(name::String,
-        function_of::Coordinate=nothing, weights::Dict{String,Number}=Dict{String,Number}()) #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
+        # If weights weren't manually provided, infer from function_of
+        if isempty(weights)
+            for coord in function_of
+                weights[coord.name] = 1
+            end
         end
-        new(name, Vector{Pair{IndexSuperType,IndexPosition}}(), [function_of], merge(w, weights), [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
 
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices, [], weights, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
-    end
+        # If tableaux not provided, generate a default one
+        if isempty(tableaux)
+            n = length(indices)
+            tableaux = [YoungTableau([n], collect(1:n))]
+        end
 
-    function SymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), function_of::Vector{Coordinate}=Vector{Coordinate}(),
-        weights::Dict{String,Number}=Dict{String,Number}(), tableaux::Vector{YoungTableau}=Vector{YoungTableau}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices, function_of, weights, [YoungTableau([size(indices)[1]], collect(1:size(indices)[1]))])
+        new(name, indices, function_of, weights, tableaux)
     end
-
-    # weights::Dict{String,Number}=Dict()
 
 end
 
@@ -171,81 +142,47 @@ mutable struct AntisymmetricTensor <: TotallyAntisymmetricSuperType
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
 
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        w = Dict{String,Number}()
-        for coord in function_of
-            w[coord.name] = 1
-        end
-        new(name, indices, function_of, w, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
+    function AntisymmetricTensor(name::String, args...)
+        indices = Pair{IndexSuperType,IndexPosition}[]
+        function_of = Coordinate[]
+        weights = Dict{String,Number}()
+        tableaux = YoungTableau[]
 
-
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Coordinate=nothing) where {I<:IndexSuperType} #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
-        end
-        new(name, indices, [function_of], w, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function AntisymmetricTensor(name::String,
-        function_of::Coordinate=nothing) #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
-        end
-        new(name, Vector{Pair{IndexSuperType,IndexPosition}}(), [function_of], w, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-
-        new(name, indices, [], Dict{String,Number}(), [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-    function AntisymmetricTensor(T::DummyPatternTensor) #
-        new(T.name, T.indices, T.function_of, T.weights, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition},}(),
-        function_of::Vector{Coordinate}=Vector{Coordinate}(), weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        w = Dict{String,Number}()
-        for coord in function_of
-            w[coord.name] = 1
-        end
-        new(name, indices, function_of, merge(w, weights), [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(),
-        function_of::Coordinate=nothing, weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType} #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
+        for arg in args
+            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+                push!(indices, arg)
+            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+                append!(indices, arg)
+            elseif arg isa Coordinate
+                function_of = [arg]
+            elseif arg isa Vector{Coordinate}
+                function_of = arg
+            elseif arg isa Dict{String,Number}
+                weights = arg
+            elseif arg isa YoungTableau
+                tableaux = [arg]
+            elseif arg isa Vector{YoungTableau}
+                tableaux = arg
+            end
         end
 
-        new(name, indices, [function_of], merge(w, weights), [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
-
-    function AntisymmetricTensor(name::String,
-        function_of::Coordinate=nothing, weights::Dict{String,Number}=Dict{String,Number}()) #lets you have scalars with no indices
-        w = Dict{String,Number}()
-        if function_of != nothing
-            w[function_of.name] = 1
+        # If weights weren't manually provided, infer from function_of
+        if isempty(weights)
+            for coord in function_of
+                weights[coord.name] = 1
+            end
         end
-        new(name, Vector{Pair{IndexSuperType,IndexPosition}}(), [function_of], merge(w, weights), [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
 
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), weights::Dict{String,Number}=Dict{String,Number}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices, [], weights, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
-    end
+        # If tableaux not provided, use default antisymmetric tableau (all rows of length 1)
+        if isempty(tableaux)
+            n = length(indices)
+            tableaux = [YoungTableau(fill(1, n), collect(1:n))]
+        end
 
-    # weights::Dict{String,Number}=Dict()
-    function AntisymmetricTensor(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), function_of::Vector{Coordinate}=Vector{Coordinate}(),
-        weights::Dict{String,Number}=Dict{String,Number}(), tableaux::Vector{YoungTableau}=Vector{YoungTableau}()) where {I<:IndexSuperType}#lets you have scalars with no indices
-        new(name, indices, function_of, weights, [YoungTableau([1 for _ in 1:size(indices)[1]], collect(1:size(indices)[1]))])
+        new(name, indices, function_of, weights, tableaux)
     end
 end
+
 
 # function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
 #     function_of::Coordinate=nothing) #lets you have scalars with no indices
