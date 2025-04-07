@@ -373,7 +373,7 @@ end
 # # end
 
 # https://docs.julialang.org/en/v1/manual/metaprogramming/
-"Usage: `@Tensor A^μν_ρ^τ` where `A` is a symbol and `μ,ν,ρ,τ` are indices."
+Base.@doc "Usage: `@Tensor A^μν_ρ^τ` where `A` is a symbol and `μ,ν,ρ,τ` are indices."
 macro Tensor(expr::Expr)
     # @show expr
     symbol = string(expr)[1]
@@ -419,7 +419,7 @@ function parse_indices(head, indices, leaf)
     return indices
 end
 
-"Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
+Base.@doc "Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
 macro Tensor(expr::Symbol)
     length(string(expr)) == 1 && return Tensor(string(expr))
     index_count = length(string(expr)) - 2
