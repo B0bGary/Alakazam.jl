@@ -47,6 +47,8 @@ function Derivative(name::String, operand, coord::Vector{Coordinate}, args::Vara
             tableaux = arg
         end
     end
+
+    append!(function_of, get_operand_function_of(operand))
     
     # Ensure operand_indices are taken from the operand
     operand_indices = operand.summands[1][2].indices
@@ -56,6 +58,20 @@ function Derivative(name::String, operand, coord::Vector{Coordinate}, args::Vara
     return new(name, operand, coord, operator_indices, operand_indices, indices, function_of, weights, tableaux)
 end
 end
+
+
+function get_operand_function_of(expr::TensorExpression)
+    coords = Coordinate[]
+    for (_, term) in expr.summands
+        for t in term.terms
+            if hasproperty(t, :function_of)
+                append!(coords, t.function_of)
+            end
+        end
+    end
+    return coords
+end
+
 
     # function Derivative(name::String, operand::TensorExpression, coord::Vector{T}, operator_indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {T<:Coordinate} where {I<:IndexSuperType}
     #     inds=operand.summands[1][2].indices
