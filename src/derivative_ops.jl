@@ -15,6 +15,10 @@ function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:Derivati
     ind2 = D2.operator_indices
     doubles = Dict{Index,Index}()
 
+    if D1.name != D2.name
+        return (false => doubles)
+    end
+
     #quick check for inequality
     if length(ind1) != length(ind2)
         return (false => doubles)
@@ -249,17 +253,34 @@ function perform_derivative_action(D::DerivativeSuperType)
         A = same_operator(D, ky)
         B = A[1]
         o = A[2]
+        # println(B)
+        # println(o)
         if B
             action_dict = derivative_actions[ky] # dict of tensors we've defined deriv on
             for k in keys(action_dict)#looks through all tensors
                 op = same_tensor_mod_pattern(operand, k, o)
                 if op[1]
+                    # println("found a match")
+                    # println(D)
+                    # println(operand)
+                    # println(ky)
+                    # println(op)
+                    # println("same op out")
+                    # println(A)
                     #do derivative:
                     replacement = action_dict[k] # need to go through and replace this with correct pattern
+                    # println("replacement is")
+                    # println(replacement)
                     inverted_dict = Dict(v => k for (k, v) in o)
                     inverted_dict2 = Dict(v => k for (k, v) in op[2])
-                    pat_rep = index_to_pattern(replacement, inverted_dict)
-                    pat_rep = index_to_pattern(pat_rep, inverted_dict2)
+
+                    all_invs=merge(inverted_dict,inverted_dict2)
+                    # pat_rep = index_to_pattern(replacement, inverted_dict)
+                    # println(pat_rep)
+                    # pat_rep = index_to_pattern(pat_rep, inverted_dict2)
+                    pat_rep = index_to_pattern(replacement, all_invs)
+
+                    # println(pat_rep)
                     return pat_rep
                 end
             end
