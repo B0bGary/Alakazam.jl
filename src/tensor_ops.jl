@@ -1116,6 +1116,20 @@ end
 
 #addition
 
+
+function +(A::SymorNum, B::TensorExpression)
+    const_ten=Tensor("")
+    if get_free_indices_nopos(const_ten) == get_free_indices_nopos(B)
+        return A*const_ten+ B
+    else
+        throw(FreeIndexMismatch())
+    end
+
+end
+
++(A::TensorExpression, B::SymorNum) = +(B, A)
+
+
 function +(A::TensorSuperType, B::TensorSuperType)
     if get_free_indices_nopos(A) == get_free_indices_nopos(B)
         return TensorExpression([A, B])
@@ -2771,7 +2785,9 @@ end
 
 function to_latex(T::TensorSuperType)
     out = ""
-    out *= uni_to_TeX(T.name) * " "
+    if T.name!=""
+        out *= uni_to_TeX(T.name) * " "
+    end
     if !isempty(T.indices)
         lowers = ""
         uppers = ""
