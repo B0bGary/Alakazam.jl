@@ -93,6 +93,16 @@ end
 end
 
 
+# function generate_symmetric_tableau(indices)
+#     n = length(indices)
+#     return tableaux = [YoungTableau([n], collect(1:n))]
+# end
+
+# function SymmetricTensor(name::String,args...)
+#     t = Tensor(name,args...)
+#     t.tableaux = [generate_symmetric_tableau(t.indices)]
+# end
+
 # struct SymmetricTensor <:TotallySymmetricSuperType
 # end
 mutable struct SymmetricTensor <: TotallySymmetricSuperType
@@ -143,6 +153,8 @@ mutable struct SymmetricTensor <: TotallySymmetricSuperType
     end
 
 end
+
+
 
 # struct AntisymmetricTensor <:TotallyAntisymmetricSuperType
 # end
@@ -382,10 +394,12 @@ end
 # https://docs.julialang.org/en/v1/manual/metaprogramming/
 Base.@doc "Usage: `@Tensor A^μν_ρ^τ` where `A` is a symbol and `μ,ν,ρ,τ` are indices."
 macro Tensor(expr::Expr)
-    # @show expr
-    symbol = string(expr)[1]
+    @show expr
+    @show expr.args
+    @show string(expr)
+    symbol = string(expr)[1] # extract the tensor name
     indices = []
-    if length(string(expr.args[2])) > 1 && 
+    if length(string(expr.args[2])) > 1 && #"name" part should only be one character - if more, then should be _
        string(expr.args[2])[nextind(string(expr.args[2]),1)] == '_'
         push!(indices, [ v => lower for v in split(string(expr.args[2])[nextind(string(expr.args[2]),1,2):end], "")]...)
     else
@@ -438,4 +452,80 @@ macro Tensor(expr::Symbol)
                 [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
             )
     end
+end
+
+macro Tensor(expr::String)
+    length(expr) == 1 && return Tensor(expr) #simple no index tensor
+    symbol=expr[1:1]
+
+    indexpos=2#depreciate this
+     @assert  contains("_^([{",expr[indexpos]) "Tensor name should be one character."#throw error if not starting with following
+    positions=[]
+    indices=[]
+    currpos=upper
+    pause=false
+    asym=false
+    sym=false
+    slotnum=0 #current real index pos (for sym/asym logic)
+    functionoflist=[]
+    funof=false
+    tabstart=0
+    tabaccum=[]
+    tableaulist=[]
+    coordstring=""
+    for (i,char) in enumerate(expr)
+        i==1&&continue #skip the first character since its the symbol, and we already extracted it
+        char=string(char)
+        if char=="^"
+            currpos=upper
+        elseif char=="_"
+            currpos=lower
+        elseif char=="|"#pause/unpause sym/asym
+            pause=(!pause) 
+        elseif char=="["
+            tabaccum=Vector{Int64}()
+            asym=true
+            tabstart=slotnum+1
+        elseif char=="]"
+            asym=false
+            push!(tableaulist, YoungTableau(fill(1, slotnum-tabstart+1),tabaccum))
+        elseif char=="("
+            tabaccum=Vector{Int64}()
+            sym=true
+            tabstart=slotnum+1
+        elseif char==")"
+            sym=false
+            push!(tableaulist, YoungTableau([length(tabaccum)],tabaccum))
+        elseif char=="{"
+            funof=true
+            println("starting function of")
+        else
+             #increase the real indexpos
+            if  !funof
+                slotnum+=1
+                push!(indices,Symbol(char))
+                push!(positions,currpos)
+                if !pause && asym
+                    push!(tabaccum, slotnum)
+                elseif !pause && sym
+                    push!(tabaccum, slotnum)
+                end
+            elseif char=="," || char=="}"
+                push!(functionoflist, :( $(esc(Symbol(coordstring))) ))
+                println("added function of: ", coordstring)
+                coordstring=""
+                if char=="}"
+                    funof=false
+                end
+            else
+                coordstring*=char
+            end
+        end
+        # indexpos+=1
+        # @show tableaulist
+    end
+    functions_expr = Expr(:vect, functionoflist...)
+    #pair indices and pos into a vector
+    indplacement= quote[$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]end
+    return :(Tensor($symbol, [$indplacement...],[$tableaulist...],$functions_expr))
 end

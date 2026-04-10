@@ -1670,7 +1670,7 @@ end
 
 function ≅(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
     (same,grweight)=same_tensor_mod_syms(a,b)
-   return same
+   return (same && grweight==1)
     # if (a.name == b.name && a.indices == b.indices )
     #     return true
     # else
@@ -2913,7 +2913,117 @@ function replace(TEx::TensorExpression, old_T::TensorSuperType, new_T::TensorSup
     end
     return update_indices(TEx)
 end
+# """
+#     young_projector_block(shape::Vector{Int}, labels::Vector{Int})
 
+# Compute the true Young projector for an arbitrary Young tableau.
+
+# - `shape`: row lengths of the tableau, e.g., [2,2]
+# - `labels`: label vector, e.g., [1,2,3,4]
+
+# Returns: Vector of `(sign, permuted_labels)` representing the projected tensor.
+# """
+# function young_projector_block(shape::Vector{Int}, labels::Vector{Int})
+#     n = sum(shape)
+#     @assert length(labels) == n "Labels length must match total boxes"
+
+#     # --- 1. Build row and column positions ---
+#     rows = []
+#     idx = 1
+#     for rlen in shape
+#         push!(rows, collect(idx:idx+rlen-1))
+#         idx += rlen
+#     end
+
+#     ncols = maximum(shape)
+#     cols = []
+#     for c = 1:ncols
+#         col = Int[]
+#         for r = 1:length(shape)
+#             if shape[r] >= c
+#                 push!(col, sum(shape[1:r-1])+c)
+#             end
+#         end
+#         push!(cols, col)
+#     end
+
+#     # --- 2. Generate all permutations of a vector with sign ---
+#     function perms_signed(v::Vector{Int})
+#         results = []
+#         function recurse!(a::Vector{Int}, i::Int, s::Int)
+#             if i == length(a)
+#                 push!(results, (s, copy(a)))
+#             else
+#                 for j = i:length(a)
+#                     a[i], a[j] = a[j], a[i]
+#                     new_s = s * (-1)^((j-i)%2)
+#                     recurse!(a, i+1, new_s)
+#                     a[i], a[j] = a[j], a[i]
+#                 end
+#             end
+#         end
+#         recurse!(copy(v), 1, 1)
+#         return results
+#     end
+
+#     # --- 3. Column antisymmetrization (block-based) ---
+#     col_terms = [(1, copy(labels))]
+#     for col in cols
+#         new_terms = []
+#         perms = perms_signed(col)
+#         for (sign0, lab0) in col_terms
+#             for (sign1, perm) in perms
+#                 lab_copy = copy(lab0)
+#                 for (i, pos) in enumerate(col)
+#                     lab_copy[pos] = lab0[perm[i]]
+#                 end
+#                 push!(new_terms, (sign0*sign1, lab_copy))
+#             end
+#         end
+#         col_terms = new_terms
+#     end
+
+#     # --- 4. Row symmetrization (block-based) ---
+#     row_terms = [(s, copy(lab)) for (s, lab) in col_terms]
+#     for row in rows
+#         new_terms = []
+#         # generate all row permutations (sign = +1)
+#         function row_perms(v)
+#             if length(v) == 1
+#                 return [v]
+#             else
+#                 out = []
+#                 for i=1:length(v)
+#                     rest = vcat(v[1:i-1], v[i+1:end])
+#                     for p in row_perms(rest)
+#                         push!(out, [v[i]; p])
+#                     end
+#                 end
+#                 return out
+#             end
+#         end
+#         perms = row_perms(row)
+#         for (s0, lab0) in row_terms
+#             for perm in perms
+#                 lab_copy = copy(lab0)
+#                 for (i, pos) in enumerate(row)
+#                     lab_copy[pos] = lab0[perm[i]]
+#                 end
+#                 push!(new_terms, (s0, lab_copy))
+#             end
+#         end
+#         row_terms = new_terms
+#     end
+
+#     # --- 5. Combine duplicates ---
+#     term_dict = Dict{Vector{Int}, Int}()
+#     for (s, lab) in row_terms
+#         term_dict[lab] = get(term_dict, lab, 0) + s
+#     end
+
+#     # Only nonzero terms
+#     return [(s, lab) for (lab,s) in term_dict if s != 0]
+# end
 
 
 
@@ -2921,8 +3031,366 @@ end
 
 ##############################################################################################################################
 ##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+# YOUNG PROJECTION
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
 
-# copying
+function young_projection(TEx::TensorExpression, proj::Union{Vector{String}, Nothing}=nothing)
+    tex=zero
+    for summand in TEx.summands
+        for tens in summand[2].terms
+            if typeof(tens) <: TensorSuperType
+                    tex+=summand[1]*young_projection(tens,proj)
+            end
+        end
+    end
+    return tex
+end
+
+# function count_terms_in_factor(factor::String)
+#     # Use your existing split_additive_factors
+#     return length(split_additive_factors(factor))
+# end
+
+# function compute_normalization_from_counts(factors::Vector{String})
+#     # Multiply number of terms in each factor
+#     total_terms = prod(count_terms_in_factor(f) for f in factors)
+#     return 1 / total_terms
+# end
+
+function factor_weight(factor::String)
+    weight = 0
+    for subf in split_additive_factors(factor)
+        coef, _, _ = parse_factor(subf)
+        weight += abs(coef)
+    end
+    return weight
+end
+
+function compute_normalization_weighted(factors::Vector{String})
+    total_weight = prod(factor_weight(f) for f in factors)
+    return 1 / total_weight
+end
+
+function factor_abs_sum(factor::String)
+    sum_coeff = 0
+    for subf in split_additive_factors(factor)
+        coef, _, _ = parse_factor(subf)
+        sum_coeff += abs(coef)
+    end
+    return sum_coeff
+end
+
+function compute_normalization_from_factors(factors::Vector{String})
+    total = prod(factor_abs_sum(f) for f in factors)
+    return 1 // total
+end
+function young_projection(T::TensorSuperType, proj::Union{Vector{String}, Nothing}=nothing)
+    projectors = proj === nothing ? [compute_young_projector(tab) for tab in T.tableaux] : [proj for tab in T.tableaux]
+    # println(tab for tab in T.tableaux)
+    norms= proj=== nothing ? [1//compute_hook_product(tab) for tab in T.tableaux] : [compute_normalization_from_factors(prr) for prr in projectors]
+    tex=zero
+    for (proj,norm) in zip(projectors, norms)
+        tex+=apply_young_projector(T, proj)*norm
+    end
+    return tex
+end
+
+function apply_young_projector(T::TensorExpression, projector::Vector{String})
+    tex=zero
+    for summand in T.summands
+        for tens in summand[2].terms
+            if typeof(tens) <: TensorSuperType
+                    tex+=summand[1]*apply_single_projector!(tens, projector)
+            end
+        end
+    end
+    return tex
+end
+
+function apply_young_projector(T::TensorTerm, projector::Vector{String})
+   tex=zero
+    for tens in T.terms
+        if typeof(tens) <: TensorSuperType
+            tex+=apply_young_projector!(tens, projector)
+        end
+    end
+    return tex
+end
+
+function apply_young_projector(T::TensorSuperType, projector::Vector{String})
+    terms =Vector{Tuple{Number, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}([(1, collect(T.indices))])
+    for proj in reverse(projector)
+        terms = apply_string_factor(terms, proj)
+    end
+    result = Dict{Vector, Number}()
+    for (s, t) in terms
+        result[t] = get(result, t, 0) + s
+    end
+    no_dupes=[(s,t) for (t,s) in result if s != 0]
+    tex=zero #new tensor expression to hold result of projection
+    for (prefact,inds) in no_dupes
+        Tn=copy(T)
+        Tn.indices=inds
+        tex+=prefact*(Tn)
+    end
+    return tex #normalisation fixed elsewhere above
+
+end
+
+function compute_hook_product(tab::YoungTableau)
+    hook_lengths = compute_hook_length(tab)
+    return prod(hook_lengths[hook_lengths .> 0];init=1)
+end
+
+function compute_hook_length(tab::YoungTableau)
+    rows = tab.row_lengths
+    n_rows = length(rows)
+    n_cols = maximum(rows)
+
+    hook_lengths = zeros(Int, n_rows, n_cols)
+
+    for r in 1:n_rows
+        for c in 1:rows[r]
+            right = rows[r] - c
+            below = sum(r2 >= c for r2 in rows[r+1:end];init=0)
+            hook_lengths[r, c] = 1 + right + below
+        end
+    end
+
+    return hook_lengths
+end
+
+# Swap multiple pairs in a tensor
+function swap_string_pairs(t::Vector, pairs)
+    t = copy(t)
+    for (i,j) in pairs
+        t[i], t[j] = t[j], t[i]
+    end
+    return t
+end
+
+# Apply a general n-cycle like (2 3 4)
+function apply_cycle(t::Vector, cycle)
+    t = copy(t)
+    temp = t[cycle[end]]
+    for i in reverse(2:length(cycle))
+        t[cycle[i]] = t[cycle[i-1]]
+    end
+    t[cycle[1]] = temp
+    return t
+end
+
+
+function parse_number(s::AbstractString)
+    s = strip(s)
+    if occursin('/', s)
+        return parse(Rational{Int}, s)
+    elseif occursin('.', s)
+        return parse(Float64, s)
+    else
+        return parse(Int, s)
+    end
+end
+
+function parse_factor(factor::SubString{String})
+    factor = strip(factor)
+
+    # Remove outer parentheses
+    if startswith(factor, "(") && endswith(factor, ")")
+        factor = strip(factor[2:end-1])
+    end
+
+    coef = one(Rational{Int})
+
+    # Leading sign
+    if startswith(factor, "+")
+        factor = strip(factor[2:end])
+    elseif startswith(factor, "-")
+        coef = -one(Rational{Int})
+        factor = strip(factor[2:end])
+    end
+
+    # Extract coefficient
+    parts = split(factor, "(", limit=2)
+    coeff = strip(parts[1])
+    coeff = strip(replace(coeff, r"[+-]\s*$" => ""))
+
+    if !(coeff == "" || coeff == "1")
+        coef *= parse_number(coeff)
+    end
+
+    pairs = Tuple{Int,Int}[]
+    cycles = Vector{Int}[]
+
+    for m in eachmatch(r"\(([^)]+)\)", factor)
+        nums = parse.(Int, split(strip(m.captures[1]), " "))
+
+        if length(nums) == 2
+            push!(pairs, (nums[1], nums[2]))
+        elseif length(nums) > 2
+            push!(cycles, nums)
+        end
+    end
+
+    return coef, pairs, cycles
+end
+
+
+# Split "(1 - A + B)" → ["1 ", "- A", "+ B"]
+function split_additive_factors(factor::String)
+    inner = factor[2:end-1]
+    return split(inner, r"(?=[+-])")
+end
+
+
+function apply_string_factor(terms, factor::String)
+    new_terms = []
+
+    for subf in split_additive_factors(factor)
+        coef, pairs, cycles = parse_factor(subf)
+
+        for (s, t) in terms
+            t1 = swap_string_pairs(t, pairs)
+            for cyc in cycles
+                t1 = apply_cycle(t1, cyc)
+            end
+            push!(new_terms, (s * coef, t1))
+        end
+    end
+
+    return new_terms
+end
+
+
+function apply_factorized_projector(factors::Vector{String}, tensor::String)
+    terms = [(one(Rational{Int}), collect(tensor))]
+
+    for f in reverse(factors)
+        terms = apply_string_factor(terms, f)
+    end
+
+    result = Dict{Vector{Char}, Float64}()
+    for (s, t) in terms
+        result[t] = get(result, t, 0.0) + s
+    end
+
+    return [(s, t) for (t, s) in result if abs(s) > 1e-12]
+end
+
+# # Apply a single factor (could be product of swaps)
+# function apply_string_factor(terms::Vector{Tuple{Int64, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}, factor::String)
+#     # Determine sign
+#     plus = occursin("+", factor)
+    
+#     # Find all (i j) pairs
+#     pairs = [(parse(Int, m.captures[1]), parse(Int, m.captures[2])) 
+#              for m in eachmatch(r"\((\d+) (\d+)\)", factor)]
+    
+#     new_terms = []
+#     for (s, t) in terms
+#         # Identity term
+#         push!(new_terms, (s, t))
+#         # Swapped term
+#         push!(new_terms, (s * (plus ? 1 : -1), swap_string_pairs(t, pairs)))
+#     end
+#     return new_terms
+# end
+
+
+# # Apply a single factor "(1 ± (i j))" to current list of (sign, tensor)
+# function apply_string_factor(terms::Vector{Tuple{Int64, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}, factor::String)
+#     # Parse factor
+#     plus = occursin("+", factor)
+#     m = match(r"\((\d+) (\d+)\)", factor)
+#     i = parse(Int, m.captures[1])
+#     j = parse(Int, m.captures[2])
+    
+#     new_terms =Vector{Tuple{Int64, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}([])
+#     for (s, t) in terms
+#         # Identity term
+#         push!(new_terms, (s, t))
+#         # Swapped term
+#         push!(new_terms, (s * (plus ? 1 : -1), swap_inds(t, i, j)))
+#     end
+#     # println(new_terms)
+#     return new_terms
+# end
+
+
+function compute_young_projector(tab::YoungTableau)
+    labels=tab.index_assignment
+    row_lengths=tab.row_lengths
+    # Split labels into rows
+    rows = []
+    idx = 1
+    for rlen in row_lengths
+        push!(rows, labels[idx:idx+rlen-1])
+        idx += rlen
+    end
+    n_rows = length(rows)
+    n_cols = maximum(row_lengths)
+
+    # Split labels into columns
+    columns = []
+    for c in 1:n_cols
+        col = Int[]
+        for r in 1:n_rows
+            if c <= length(rows[r])
+                push!(col, rows[r][c])
+            end
+        end
+        push!(columns, col)
+    end
+
+    # Column antisymmetrizer factors: (1 - (i j))
+    col_factors = Vector{String}()
+    for col in columns
+        for (i,j) in transpositions(col)
+            push!(col_factors, "(1 - ($i $j))")
+        end
+    end
+
+    # Row symmetrizer factors: (1 + (i j))
+    row_factors = Vector{String}()
+    for row in rows
+        for (i,j) in transpositions(row)
+            push!(row_factors, "(1 + ($i $j))")
+        end
+    end
+
+    # Combine column antisymmetrizers first, then row symmetrizers
+    projector = vcat(row_factors,col_factors) #i just swapped THEM!
+    return projector
+end
+
+
+# Function to generate transpositions for a row or column
+function transpositions(indices::Vector)
+    ts = []
+    n = length(indices)
+    for i in 1:n-1
+        for j in i+1:n
+            push!(ts, (indices[i], indices[j]))
+        end
+    end
+    return ts
+end
+
+
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+# COPYING
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
 
 
 function copy(T::TensorTerm)
@@ -2947,8 +3415,6 @@ function copy(T::TensorExpression)
     return out
 end
 
-
-
 # name::String
 #     operand::TensorExpression
 #     coord::Vector{T} where {T<:Coordinate}
@@ -2971,10 +3437,17 @@ function copy(T::EpsilonTensorSuperType)
     return typeof(T)(copy(T.indices))
 end
 
-##############################################################################################################################
-##############################################################################################################################
 
-# utils
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+# UTILS
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+#more or less generic functions that either are simple or have many uses across the codebase
 
 function hasIndices(T::TensorSuperType)
     return length(T.indices) != 0
@@ -3003,6 +3476,14 @@ end
 #         return false
 #     end
 # end
+
+# Swap indices at positions i,j in a vector
+function swap_inds(s::Vector, i::Int, j::Int)
+    t = copy(s)
+    t[i], t[j] = t[j], t[i]
+    return t
+end
+
 
 function ordered_setdiff(set1::OrderedSet{T1}, set2::OrderedSet{T2}) where {T1, T2}
     result = OrderedSet{Union{T1, T2}}()
@@ -3097,6 +3578,19 @@ function is_even_perm(p::AbstractVector{T}) where {T<:Real}
     return (inv_left + inv_right + inv_merge) % 2 == 0
 end
 
+
+
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+# LETTERING
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
+# unused atm, but potentially wanted for autogenerating more variable names when the user hasnt defined enough 
+# (idealy, new indices would be generated from the same character set, eg latin, greek, hebrew etc)
 
 # letters = OrderedSet{Char}()
 

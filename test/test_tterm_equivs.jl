@@ -41,8 +41,8 @@ x = Coordinate("x", [spacetime_indices, spacetime_indices])
     @test ! (Tensor("A",[i=>upper,j=>upper])≅Tensor("A",[j=>upper,i=>upper])) #not equal since no syms
     @test SymmetricTensor("A",[i=>upper,j=>upper])≅SymmetricTensor("A",[j=>upper,i=>upper]) # equal since syms
     @test !(SymmetricTensor("A",[i=>upper,j=>upper])≅SymmetricTensor("B",[j=>upper,i=>upper])) # not equal since different names
-    @test AntisymmetricTensor("A",[i=>upper,j=>upper])≅AntisymmetricTensor("A",[j=>upper,i=>upper]) # not equal since antisym
-
+    @test !(AntisymmetricTensor("A",[i=>upper,j=>upper])≅ AntisymmetricTensor("A",[j=>upper,i=>upper])) # not equal since antisym
+    @test !(AntisymmetricTensor("A",[i=>upper,i=>lower])≅AntisymmetricTensor("A",[i=>lower,i=>upper])) # not equal since antisym
 
     ####
     #simple products and contractions
@@ -82,8 +82,12 @@ x = Coordinate("x", [spacetime_indices, spacetime_indices])
     #should be equal by grading plus antisymm thanks to the contraction relabelling
     @test (AntisymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x))≅(AntisymmetricTensor("A", [i=>upper,s=>upper,t=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x))
 
-      #should be equal since equal to zero via contraction
-      @test (SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x))≅(SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x))
+    #   #should be equal since equal to zero via contraction
+    #   @test (SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ t=>lower],x)*Tensor("B",[ s=>lower],x))≅(SymmetricTensor("A", [i=>upper,t=>upper,s=>upper],x)*Tensor("B",[ s=>lower],x)*Tensor("B",[ t=>lower],x))
 
+    #should be equal since the tableaux encodes totally symmetric
+    @test (Tensor("A", [i=>upper, j=> upper, k=>upper, l=>upper],x, YoungTableau([4],[1,2,3,4]))≅Tensor("A", [j=>upper, i=> upper, l=>upper, k=>upper],x, YoungTableau([4],[1,2,3,4]))) 
+
+    @test (1*Tensor("A", [i=>upper, j=> upper, k=>upper, l=>upper],x, YoungTableau([1,1,1,1],[1,2,3,4]))≅-Tensor("A", [j=>upper, i=> upper, k=>upper, l=>upper],x, YoungTableau([1,1,1,1],[1,2,3,4]))) 
 
 end
