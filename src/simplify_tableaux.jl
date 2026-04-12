@@ -268,7 +268,7 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
             if !same
                 #this means the isomorphisms is wrong: ie we need to use a symmetry of the tensor that doesn't exists
                 # i think if we get here we should iterate over all the isomorphisms. just incase one is a bad one
-                # println("Inconsistent!")
+                println("Inconsistent!")
                 flag=true
                 break
             end
@@ -478,6 +478,7 @@ function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     dums2 = get_dummies(T2)
     #if we dont need to worry about dummies, do simple algo
     if isempty(dums1) && isempty(dums2)
+        # println("no dummies")
         out = dumless_same_tensor_mod_syms(T1, T2)
         if out != 0
             return (true, out)
@@ -496,7 +497,8 @@ end
 # this works for simple tensors with no dummies
 
 function do_swaps(T1::TensorSuperType, patt::OrderedSet, movers::Dict)
-    return 0 ##TEMP disabled tableau since implements wrong for general tabs
+    println("WARNING: tableau simplification is wrong for general tabs")
+    # return 0 ##TEMP disabled tableau since implements wrong for general tabs
     #where {I<:IndexSuperType}
     #elemetns in patt: indiceobj, intpos
     #elemtns in mover: intpos, indiceobj

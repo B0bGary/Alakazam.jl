@@ -3,9 +3,9 @@
 
 SymorNum = Union{SymbolicUtils.Symbolic,Number}
 abstract type TensorSuperType end
-abstract type TotallyAntisymmetricSuperType <: TensorSuperType end
-abstract type TotallySymmetricSuperType <: TensorSuperType end
 
+
+#pattern matching struct... don't touch
 mutable struct DummyPatternTensor <: TensorSuperType
     name::String
     indices::Vector{Pair{I, IndexPosition}} where I <: IndexSuperType
@@ -48,6 +48,9 @@ mutable struct DummyPatternTensor <: TensorSuperType
 end
 
 
+#####################
+####### primitive tensor types
+#####################
 
 mutable struct Tensor <: TensorSuperType
     name::String
@@ -56,73 +59,17 @@ mutable struct Tensor <: TensorSuperType
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
 
-
-function Tensor(name::String, args...)
-    indices = Vector{Pair{IndexSuperType,IndexPosition}}()
-    function_of = Vector{Coordinate}()
-    weights = Dict{String,Number}()
-    tableaux = Vector{YoungTableau}()
-
-    for arg in args
-        if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-            indices = vcat(indices,arg)
-        elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
-            push!(indices,arg)
-        elseif arg isa Coordinate
-            function_of = [arg]
-        elseif arg isa Vector{Coordinate}
-            function_of = arg
-        elseif arg isa Dict{String,Number}
-            weights = arg
-        elseif arg isa YoungTableau
-            tableaux = [arg]
-        elseif arg isa Vector{YoungTableau}
-            tableaux = arg
-        end
-    end
-
-    w = Dict{String,Number}()
-
-    for coord in function_of
-        w[coord.name] = 1
-    end
-
-    return new(name, indices, function_of, 
-    merge(w, weights), tableaux)
-end
-end
-
-
-# function generate_symmetric_tableau(indices)
-#     n = length(indices)
-#     return tableaux = [YoungTableau([n], collect(1:n))]
-# end
-
-# function SymmetricTensor(name::String,args...)
-#     t = Tensor(name,args...)
-#     t.tableaux = [generate_symmetric_tableau(t.indices)]
-# end
-
-# struct SymmetricTensor <:TotallySymmetricSuperType
-# end
-mutable struct SymmetricTensor <: TotallySymmetricSuperType
-    name::String
-    indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-    function_of::Vector{Coordinate}
-    weights::Dict{String,Number}
-    tableaux::Vector{YoungTableau}
-
-    function SymmetricTensor(name::String, args...)
-        indices = Pair{IndexSuperType,IndexPosition}[]
-        function_of = Coordinate[]
+    function Tensor(name::String, args...)
+        indices = Vector{Pair{IndexSuperType,IndexPosition}}()
+        function_of = Vector{Coordinate}()
         weights = Dict{String,Number}()
-        tableaux = YoungTableau[]
+        tableaux = Vector{YoungTableau}()
 
         for arg in args
-            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
-                push!(indices, arg)
-            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-                append!(indices, arg)
+            if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+                indices = vcat(indices,arg)
+            elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+                push!(indices,arg)
             elseif arg isa Coordinate
                 function_of = [arg]
             elseif arg isa Vector{Coordinate}
@@ -136,87 +83,151 @@ mutable struct SymmetricTensor <: TotallySymmetricSuperType
             end
         end
 
-        # If weights weren't manually provided, infer from function_of
-        if isempty(weights)
-            for coord in function_of
-                weights[coord.name] = 1
-            end
+        w = Dict{String,Number}()
+
+        for coord in function_of
+            w[coord.name] = 1
         end
 
-        # If tableaux not provided, generate a default one
-        if isempty(tableaux)
-            n = length(indices)
-            tableaux = [YoungTableau([n], collect(1:n))]
-        end
-
-        new(name, indices, function_of, weights, tableaux)
+        return new(name, indices, function_of, 
+        merge(w, weights), tableaux)
     end
-
 end
 
+function SymmetricTensor(name::String,args...)
+    t = Tensor(name,args...)
+    t.tableaux = generate_symmetric_tableau(t.indices)
+    return t
+end
 
+function AntisymmetricTensor(name::String,args...)
+    t = Tensor(name,args...)
+    t.tableaux = generate_antisymmetric_tableau(t.indices)
+    return t
+end
 
-# struct AntisymmetricTensor <:TotallyAntisymmetricSuperType
-# end
-mutable struct AntisymmetricTensor <: TotallyAntisymmetricSuperType
+function RiemannTensor(args...)
+    return RiemannTensor("R", args...)
+end
+
+function RiemannTensor(name::String,args...)
+    t = Tensor(name,args...)
+    if length(t.indices) != 4
+        throw(ArgumentError("Riemann tensor must have exactly 4 indices"))
+    end
+    t.tableaux = generate_riemann_tableau()
+    return t
+end
+
+# keep these, since we need to check if metrics in some checks
+abstract type MetricSuperType <: TensorSuperType end
+abstract type SymMetricSuperType <: MetricSuperType end
+abstract type AntisymMetricSuperType <: MetricSuperType end
+abstract type EpsilonTensorSuperType <: AntisymMetricSuperType end
+abstract type KroneckerSuperType <: TensorSuperType end
+
+mutable struct Metric <: SymMetricSuperType
     name::String
-    indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+    indices::Vector{Pair{IndexSuperType, IndexPosition}}
     function_of::Vector{Coordinate}
-    weights::Dict{String,Number}
+    weights::Dict{String, Number}
     tableaux::Vector{YoungTableau}
 
-    function AntisymmetricTensor(name::String, args...)
-        indices = Pair{IndexSuperType,IndexPosition}[]
-        function_of = Coordinate[]
-        weights = Dict{String,Number}()
-        tableaux = YoungTableau[]
-
-        for arg in args
-            if arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
-                push!(indices, arg)
-            elseif arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-                append!(indices, arg)
-            elseif arg isa Coordinate
-                function_of = [arg]
-            elseif arg isa Vector{Coordinate}
-                function_of = arg
-            elseif arg isa Dict{String,Number}
-                weights = arg
-            elseif arg isa YoungTableau
-                tableaux = [arg]
-            elseif arg isa Vector{YoungTableau}
-                tableaux = arg
-            end
+    Metric(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = Metric("η", indices)
+    function Metric(name::String, indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {I<:IndexSuperType}
+        if length(indices) != 2
+            throw(ArgumentError("Metric must have exactly 2 indices"))
         end
-
-        # If weights weren't manually provided, infer from function_of
-        if isempty(weights)
-            for coord in function_of
-                weights[coord.name] = 1
-            end
-        end
-
-        # If tableaux not provided, use default antisymmetric tableau (all rows of length 1)
-        if isempty(tableaux)
-            n = length(indices)
-            tableaux = [YoungTableau(fill(1, n), collect(1:n))]
-        end
-
-        new(name, indices, function_of, weights, tableaux)
+        new(name, indices, Vector{Coordinate}(), Dict{String, Number}(),generate_symmetric_tableau(indices))
     end
 end
 
 
-# function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}(),
-#     function_of::Coordinate=nothing) #lets you have scalars with no indices
-#     new(name, indices,[function_of])
-# end
+mutable struct EpsilonTensor<:EpsilonTensorSuperType
+    name::String
+    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
+    weights::Dict{String,Number}
+    function_of::Vector{Coordinate}
+    tableaux::Vector{YoungTableau}
 
-# function Tensor(name::String, indices::Vector{Pair{Index, IndexPosition}}=Vector{Pair{Index, IndexPosition}}()) #lets you have scalars with no indices
-#     new(name, indices,[])
-# end
+    
+    EpsilonTensor(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = EpsilonTensor("ϵ", indices)
+    function EpsilonTensor(name::String,indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
+        if indices[1][2]!=indices[2][2]
+            throw(InvalidEpsilonIndices()) #should be both upper or both lower
+        end
+        if indices[1][1].index_set!=indices[2][1].index_set
+            println(indices[1][1])
+            println(indices[2][1])
+            throw(InvalidEpsilonIndices()) #should be from the same index set
+        end
+        new(name,indices,Dict{String,Number}(),[],generate_antisymmetric_tableau(indices))
+    end
+ end
 
 
+mutable struct KroneckerDelta<:KroneckerSuperType
+    name::String
+    indices::Vector{Pair{I, IndexPosition}}where {I<:IndexSuperType}
+    weights::Dict{String,Number}
+    function_of::Vector{Coordinate}
+    tableaux::Vector{YoungTableau}
+
+    KroneckerDelta(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = KroneckerDelta("δ", indices)
+
+    function KroneckerDelta(name::String,indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
+        if indices[1][2]==indices[2][2] #should be one upper and one lower
+            throw(InvalidKroneckerIndices())
+        end
+        if indices[1][1].index_set!=indices[2][1].index_set #should be from the same index set
+            throw(InvalidKroneckerIndices())
+        end
+        new(name,indices,Dict{String,Number}(),[],generate_symmetric_tableau(indices))
+    end
+ end
+
+
+
+#######
+# common tableaux generation functions
+######
+
+function generate_symmetric_tableau(indices::Vector)
+    n = length(indices)
+    return tableaux = [YoungTableau([n], collect(1:n))]
+end
+function generate_antisymmetric_tableau(indices::Vector)
+    n = length(indices)
+    return tableaux = [YoungTableau(fill(1, n), collect(1:n))]
+end
+function generate_symmetric_tableau(n::Integer)
+    return tableaux = [YoungTableau([n], collect(1:n))]
+end
+function generate_antisymmetric_tableau(n::Integer)
+    return tableaux = [YoungTableau(fill(1, n), collect(1:n))]
+end
+function generate_riemann_tableau()
+    return tableaux = [YoungTableau([2,2],[1,3,2,4])]
+end
+
+
+
+#####
+# access properties of tensors
+#####
+
+
+#will implement this soon... but will require work to change across everything...
+
+# name(t::TensorSuperType) = t.data.name
+# indices(t::TensorSuperType) = t.data.indices
+# function_of(t::TensorSuperType) = t.data.function_of
+# weights(t::TensorSuperType) = t.data.weights
+# tableaux(t::TensorSuperType) = t.data.tableaux
+
+######
+# compound tensor terms and expressions
+######
 
 
 mutable struct TensorTerm

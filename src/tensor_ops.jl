@@ -1,11 +1,14 @@
 using Latexify
-set_default(convert_unicode = true)
+set_default(convert_unicode=true)
 
 ##############################################################################################################################
 ##############################################################################################################################
-
 ### metric ops
+##############################################################################################################################
+###################################################################################################################################
 
+""""Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
+"""
 function pop_metric(TEx::TensorExpression)
     new_exp = zero
 
@@ -21,7 +24,8 @@ function pop_metric(TEx::TensorExpression)
     return new_exp
 end
 
-
+""""Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
+"""
 function pop_metric(terms::TensorTerm)
     new_term = 1
     # println("popping",terms)
@@ -52,7 +56,8 @@ function pop_metric(terms::TensorTerm)
     return new_term
 end
 
-
+""""Pop" metrics off a tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
+"""
 function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorTerm,Nothing}=nothing, running_term::Union{TensorExpression,TensorTerm,Nothing}=nothing)# makes all indices on the object go to the default position according to the index set
     # println("doing pop of", T)
     if typeof(T) <: AntisymMetricSuperType || typeof(T) <: SymMetricSuperType || typeof(T) <: OperatorSuperType || typeof(T) <: KroneckerSuperType
@@ -110,11 +115,16 @@ function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorT
 
 end
 
-
-function contract_metrics(T::TensorTerm,typ::Type=Metric)
-    contract_metrics(1*T,typ)
+""""
+Contract all metrics of a particular type in an expression, whereever possible.
+"""
+function contract_metrics(T::TensorTerm, typ::Type=Metric)
+    contract_metrics(1 * T, typ)
 end
 
+""""
+Contract all metrics of a particular type in an expression, whereever possible.
+"""
 function contract_metrics(T::TensorExpression, typ::Type=Metric)
     ###println("running function")
     T = copy(T)
@@ -139,19 +149,19 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
             index2 = metric.indices[2][1]
             # println(metric)
             if typeof(metric) <: KroneckerSuperType
-                if index1.index_set.name=="lightcone"
+                if index1.index_set.name == "lightcone"
                     if index1 != index2
                         factor *= 0
                     end
                     flag = true
                     break
                 else
-                if index1 == index2 # contracts same index kroneckers
-                    factor *= index1.index_set.range
-                    flag = true #something here breaks!!!!! 
-             #       break #idk why but having the break screws things up, make it drop terms in front of the delta?? weird behaviour
+                    if index1 == index2 # contracts same index kroneckers
+                        factor *= index1.index_set.range
+                        flag = true #something here breaks!!!!! 
+                        #       break #idk why but having the break screws things up, make it drop terms in front of the delta?? weird behaviour
+                    end
                 end
-            end
             end
             if typeof(metric) <: EpsilonTensorSuperType
                 if index1 == index2 # contracts same index kroneckers
@@ -171,8 +181,6 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
                 if flag # terminat if contracted
                     break
                 end
-
-
 
                 ###########################################################################
                 if typeof(tens) <: OperatorSuperType
@@ -1053,26 +1061,24 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
 
 end
 
-# function contract_metrics(T::Tensor) term
-#     contract
-
-# end
 
 
 ##############################################################################################################################
 ##############################################################################################################################
-
 ### KroneckerDelta
-
-
+##############################################################################################################################
 ##############################################################################################################################
 
-#elim kronecker
+""""
+Eliminate Kronecker deltas by contracting indices or taking traces.
+"""
 function eliminate_kronecker(T::TensorTerm)
     eliminate_kronecker(TensorExpression(T))
 end
 
-
+""""
+Eliminate Kronecker deltas by contracting indices or taking traces.
+"""
 function eliminate_kronecker(T::TensorExpression)
     contract_metrics(T, KroneckerSuperType)
 
@@ -1089,38 +1095,39 @@ end
 
 ##############################################################################################################################
 
-#elim eps
+""""
+Eliminate the Levi-Civita epsilon tensor by contracting indices or taking traces.
+"""
 function eliminate_epsilon(T::TensorTerm)
     eliminate_epsilon(TensorExpression(T))
 end
 
-
+""""
+Eliminate the Levi-Civita epsilon tensor by contracting indices or taking traces.
+"""
 function eliminate_epsilon(T::TensorExpression)
     eliminate_kronecker(contract_metrics(T, EpsilonTensorSuperType))
 
 end
 
-# function contact_eps(T::TensorExpression)
-#     return T
-# end
-
-
 
 ##############################################################################################################################
 ##############################################################################################################################
-
-### Mathematical ops
-
-
+### Mathematical ops, arithmetic 
+##############################################################################################################################
 ##############################################################################################################################
 
+
+########################
 #addition
-
+##
 
 function +(A::SymorNum, B::TensorExpression)
-    const_ten=Tensor("")
-    if get_free_indices_nopos(const_ten) == get_free_indices_nopos(B)
-        return A*const_ten+ B
+    const_ten = Tensor("")
+    if get_free_indices(const_ten) == get_free_indices(B)
+        return A * const_ten + B
+    elseif isempty(Set([x for x in get_free_indices(B) if x[1].index_set.name != "lightcone"]))
+        return A * const_ten + B
     else
         throw(FreeIndexMismatch())
     end
@@ -1128,10 +1135,14 @@ function +(A::SymorNum, B::TensorExpression)
 end
 
 +(A::TensorExpression, B::SymorNum) = +(B, A)
++(A::TensorTerm, B::SymorNum) = +(B, TensorExpression(A))
++(A::TensorSuperType, B::SymorNum) = +(B, TensorExpression(A))
 
 
 function +(A::TensorSuperType, B::TensorSuperType)
-    if get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if get_free_indices(A) == get_free_indices(B)
+        return TensorExpression([A, B])
+    elseif isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression([A, B])
     else
         throw(FreeIndexMismatch())
@@ -1140,37 +1151,35 @@ function +(A::TensorSuperType, B::TensorSuperType)
 end
 
 function +(A::TensorSuperType, B::TensorExpression)
-    if isZeroTens(B) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
+        return TensorExpression(TensorExpression(A), B)
+    elseif isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(TensorExpression(A), B)
     else
         throw(FreeIndexMismatch())
     end
 end
++(A::TensorExpression, B::TensorSuperType) = +(B, A)
 
-function +(A::TensorExpression, B::TensorSuperType)
-    if isZeroTens(A) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
-        return TensorExpression(A, TensorExpression(B))
-    else
-        throw(FreeIndexMismatch())
-    end
-end
+# function +(A::TensorExpression, B::TensorSuperType)
+#     if isZeroTens(A) || get_free_indices_nopos(A) == get_free_indices_nopos(B)
+#         return TensorExpression(A, TensorExpression(B))
+#     else
+#         throw(FreeIndexMismatch())
+#     end
+# end
 
 function +(A::TensorExpression, B::TensorExpression)
-    ##println(A)
-    ##println(B)
-    ##println(isZeroTens(A))
-    ##println(isZeroTens(B))
-    ##println(A.summands)
     if isZeroTens(A) || isZeroTens(B) || get_free_indices(A) == get_free_indices(B)
         return TensorExpression(A, B)
 
-    elseif isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
+    elseif isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(A, B)
     else
         println(get_free_indices(A), ":", get_free_indices(B))
         println(A)
         println(B)
-        println(setdiff(get_free_indices(A),get_free_indices(B)))
+        println(setdiff(get_free_indices(A), get_free_indices(B)))
         for summand in B.summands
             for tens in summand[2].terms
                 println(tens)
@@ -1185,7 +1194,7 @@ end
 
 function +(A::TensorTerm, B::TensorExpression)
 
-    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(TensorExpression(A), B)
     else
 
@@ -1193,22 +1202,39 @@ function +(A::TensorTerm, B::TensorExpression)
     end
 end
 
-+(A::TensorExpression, B::TensorTerm) = +(B, A)
+function +(B::TensorExpression,A::TensorTerm)
+
+    if isZeroTens(B) || get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
+        return TensorExpression(B,TensorExpression(A))
+    else
+
+        throw(FreeIndexMismatch())
+    end
+end
 
 function +(A::TensorTerm, B::TensorTerm)
 
-    if get_free_indices(A) == get_free_indices(B)|| isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
+    if get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(A) + TensorExpression(B)
     else
         throw(FreeIndexMismatch())
     end
 end
 
-+(A::TensorSuperType, B::TensorTerm) = +(B, A)
+function +(B::TensorSuperType,A::TensorTerm)
+
+    if get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
+        return TensorExpression(B) + TensorExpression(A)
+    else
+        ###println(get_free_indices(A))
+        ###println(get_free_indices(B))
+        throw(FreeIndexMismatch())
+    end
+end
 
 function +(A::TensorTerm, B::TensorSuperType)
 
-    if get_free_indices(A) == get_free_indices(B)|| isempty(Set([x for x in setdiff(get_free_indices(A),get_free_indices(B)) if x[1].index_set.name!="lightcone"]))
+    if get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(A) + TensorExpression(B)
     else
         ###println(get_free_indices(A))
@@ -1217,6 +1243,203 @@ function +(A::TensorTerm, B::TensorSuperType)
     end
 end
 
+
+########################
+#multiplication
+##
+
+#helper funcs to ensure indices are valid
+function valid_index_placement(T1,T2)
+     if check_common_dummies(T1, T2)
+        throw(OverusedIndices())
+    elseif !check_common_are_lightcone(T1, T2)
+        throw(SameLevelDummieError())
+    else
+        return true
+    end
+end
+function check_common_are_lightcone(T1, T2)
+    common = intersect(T1.indices, T2.indices)
+    return isempty(common) || all(ind -> ind[1].index_set.name == "lightcone", common)
+end
+function check_common_are_lightcone(T1::TensorExpression, T2)
+    common = intersect(get_inds(T1), get_inds(T2))
+    return isempty(common) || all(ind -> ind[1].index_set.name == "lightcone", common)
+end
+check_common_are_lightcone(T1, T2::TensorExpression)=check_common_are_lightcone(T2,T1)
+check_common_are_lightcone(T1::TensorExpression, T2::TensorExpression)=check_common_are_lightcone(T1,T2)
+
+
+function get_inds(T)
+    if typeof(T)<:TensorExpression
+        return T.summands[1][2].indices
+    else
+        return T.indices
+    end
+end
+
+
+"""Check if free indices of one tensor are dummies of the other. Return tue if so."""
+function check_common_dummies(T1, T2)
+    d1 = get_dummies(T1)
+    d2 = get_dummies(T2)
+    f1 = get_free_indices_nopos(T1)
+    f2 = get_free_indices_nopos(T2)
+    dp1=get_dummies_positional(T1)
+    dp2=get_dummies_positional(T2)
+    return !(isempty(intersect(d1, f2)) && isempty(intersect(d2, f1)) && isempty(intersect(dp1, dp2)))
+    # return isempty(common) || all(ind -> ind[1].index_set.name == "lightcone", common)
+end
+
+
+#basic mult
+*(N::SymorNum, B::TensorSuperType) = TensorExpression(N, copy(B))
+*(N::SymorNum, B::TensorTerm) = TensorExpression(N => B)
+*(B::TensorSuperType, N::SymorNum) = TensorExpression(N, copy(B)) #i dont remember why i put copy...
+*(B::TensorTerm, N::SymorNum) = TensorExpression(N => B)
+
+function *(B::TensorExpression, N::SymorNum)
+    if B == zero
+        return zero
+    end
+    B.summands = [convert(SymorNum, N) * summand[1] => summand[2] for summand in B.summands]
+    return update_indices(B)
+end
+*(N::SymorNum, B::TensorExpression) = *(B, convert(SymorNum, N)) #fix for grading....?
+
+function *(T::TensorSuperType, TEx::TensorExpression)
+    ###println("doing this sort of multiplcation1")
+    new_exp = zero
+    for sum in TEx.summands
+        new_exp += sum[1] * (T * sum[2])#should stop overflow?
+    end
+    return update_indices(new_exp)
+end
+function *(TEx::TensorExpression, T::TensorSuperType)
+    if valid_index_placement(TEx,T)
+    ###println("doing this sort of multiplcation1")
+        new_exp = zero
+        for sum in TEx.summands
+            new_exp += sum[1] * (sum[2] * T)#should stop overflow?
+        end
+        return update_indices(new_exp)
+    end
+end
+
+function *(T::TensorTerm, TEx::TensorExpression)
+    ###println("doing this sort of multiplcation2")
+    return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
+end
+# *(TEx::TensorExpression, T::TensorTerm) = *(T, TEx)
+
+function *(TEx::TensorExpression, T::TensorTerm)
+    ###println("doing this sort of multiplcation3")
+    return update_indices(TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands]))
+end
+
+function *(T1::TensorSuperType, T2::TensorSuperType)
+    if valid_index_placement(T1,T2)
+        return update_indices(TensorTerm([copy(T1), copy(T2)]))
+    end
+end
+
+
+function *(TEx::TensorTerm, T::TensorSuperType)
+    if valid_index_placement(TEx,T)
+        return update_indices(TensorTerm(vcat(TEx.terms, copy(T))))
+    end
+end
+function *(T::TensorSuperType, TEx::TensorTerm)
+   if valid_index_placement(T,TEx)
+        return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
+    end
+end
+# *(T::TensorSuperType, TEx::TensorTerm) = *(TEx, T)
+
+function *(TEx1::TensorExpression, TEx2::TensorExpression)
+    new_tex = zero
+    if TEx1 == zero || TEx2 == zero
+        return zero
+    end
+    for T in TEx1.summands
+        for T2 in TEx2.summands
+            new_tex += TensorExpression(T[1] * T2[1] => T[2] * T2[2])
+        end
+    end
+    return update_indices(new_tex)
+end
+# *(TEx::TensorExpression, T::TensorSuperType)=*(TEx,TensorExpression(T))
+# *(T::TensorSuperType,TEx::TensorExpression, )=*(TEx,TensorExpression(T))
+
+# function *(TEx::TensorExpression, T::TensorSuperType)
+#     ###println("doing this sort of multiplcation4")
+#     if TEx == zero
+#         return zero
+#     end
+#     for summandind in eachindex(TEx.summands)
+#         ###println(TEx.summands[summandind])
+#         # println("thuis")
+#         # println(T)
+#         TEx.summands[summandind] = TEx.summands[summandind][1] => TEx.summands[summandind][2] * T
+#         ###println(TEx.summands[summandind])
+#         ###println("here")
+#     end
+#     #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
+#     ###println(TEx)
+#     return update_indices(TEx)
+# end
+
+# *(TEx::TensorExpression,T::TensorSuperType)=*(T,TEx)
+
+# function *(T::TensorSuperType, TEx::TensorTerm)
+#     return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
+# end
+# *(TEx::TensorTerm, T::TensorSuperType) = *(T, TEx)
+
+function *(T::TensorTerm, TEx::TensorTerm)
+    if valid_index_placement(T,TEx)
+        return update_indices(TensorTerm(vcat(T.terms, TEx.terms)))
+    end
+end
+
+########################
+#subtraction (defined via mult and add)
+##
+
+-(A::TensorSuperType, B::TensorSuperType) = TensorExpression(-1 * B + A)
+-(A::TensorSuperType, B::TensorExpression) = TensorExpression(A + (-1 * B))
+-(A::TensorExpression, B::TensorSuperType) = TensorExpression(A + (-1 * B))
+-(A::TensorExpression, B::TensorExpression) = TensorExpression(A + (-1 * B))
+-(A::TensorTerm, B::TensorExpression) = 1 * A - B
+-(A::TensorTerm, B::TensorTerm) = 1 * A - B
+-(A::TensorExpression, B::TensorTerm) = A - (1 * B)
+-(A::TensorTerm, B::TensorSuperType) = (1 * A) - (1 * B)
+-(A::TensorSuperType, B::TensorTerm) = (1 * A) - (1 * B)
+
+#negation
+-(A::TensorSuperType) = -1 * A
+-(A::TensorTerm) = -1 * A
+-(A::TensorExpression) = -1 * A
+
+
+
+########################
+#division (by numerical factors)
+##
+
+/(B::TensorSuperType, N::SymorNum) = *(1 / N, B)
+/(B::TensorExpression, N::SymorNum) = *(1 / N, B)
+/(B::TensorTerm, N::SymorNum) = *(1 / N, B)
+
+##############################################################################################################################
+##############################################################################################################################
+### Weightings
+##############################################################################################################################
+##############################################################################################################################
+
+"""
+Extract the overall weight value from a TensorTerm for a given weight label
+"""
 function term_weight(T::TensorTerm, w::String)
     weight = 0
     for term in T.terms
@@ -1229,6 +1452,9 @@ function term_weight(T::TensorTerm, w::String)
     return weight
 end
 
+"""
+Check if a TensorExpression is a single TensorTerm.
+"""
 function singleterm(TEx::TensorExpression)
     if length(TEx.summands) == 1 && TEx.summands[1][1] != 0
         return true
@@ -1236,8 +1462,9 @@ function singleterm(TEx::TensorExpression)
     return false
 end
 
-
-
+"""
+Get all summands in a TensorExpression of a particular weight. For example, this may be terms that carry a particular polynomial weighting.
+"""
 function get_weighted_terms(T::TensorExpression, w::String, value::Number)
     new_exp = zero
     for summand in T.summands
@@ -1248,14 +1475,32 @@ function get_weighted_terms(T::TensorExpression, w::String, value::Number)
     return new_exp
 end
 
+"""
+Get all summands in a TensorExpression of below particular weight. For example, this may get leading order terms in a Taylor expansion.
+Returns only weights<value. Assumes weights are non-negative.
+"""
 function drop_weight_above(T::TensorExpression, w::String, value::Number)
     new_exp = zero
-    i=0
-    while i<value
-        new_exp+= get_weighted_terms(T,w,i)
-        i+=1
+    i = 0
+    while i < value
+        new_exp += get_weighted_terms(T, w, i)
+        i += 1
     end
     return new_exp
+end
+
+"""
+Get all summands in a TensorExpression of above particular weight. For example, this may get terms with dominant powers.
+Returns only weights>value. Assumes weights are non-negative.
+"""
+function drop_weight_below(T::TensorExpression, w::String, value::Number)
+    new_exp = zero
+    i = 0
+    while i <= value
+        new_exp += get_weighted_terms(T, w, i)
+        i += 1
+    end
+    return T - new_exp
 end
 
 # function +(N::SymorNum, T::TensorExpression)
@@ -1271,20 +1516,6 @@ end
 
 ##############################################################################################################################
 
-#subtraction
-
--(A::TensorSuperType, B::TensorSuperType) = TensorExpression(-1 * B + A)
--(A::TensorSuperType, B::TensorExpression) = TensorExpression(A + (-1 * B))
--(A::TensorExpression, B::TensorSuperType) = TensorExpression(A + (-1 * B))
--(A::TensorExpression, B::TensorExpression) = TensorExpression(A + (-1 * B))
--(A::TensorTerm,B::TensorExpression)=1*A-B
--(A::TensorExpression, B::TensorTerm)=A-(1*B)
--(A::TensorTerm,B::TensorSuperType)= (1*A)-(1*B)
--(A::TensorSuperType,B::TensorTerm)= (1*A)-(1*B)
-
--(A::TensorSuperType)= -1*A
--(A::TensorTerm)= -1*A
--(A::TensorExpression)= -1*A
 
 # function -(A::TensorSuperType, B::TensorExpression)
 #     if get_free_indices(A)==get_free_indices(B)
@@ -1312,109 +1543,14 @@ end
 # end
 
 
-
+##############################################################################################################################
+##############################################################################################################################
+### Advanced Mathematical Operations
+##############################################################################################################################
 ##############################################################################################################################
 
-#multiplication
-
-*(N::SymorNum, B::TensorSuperType) = TensorExpression(N, copy(B))
-*(N::SymorNum, B::TensorTerm) = TensorExpression(N => B)
-*(B::TensorSuperType, N::SymorNum) = TensorExpression(N, copy(B))
-*(B::TensorTerm, N::SymorNum) = TensorExpression(N => B)
-
-function *(B::TensorExpression, N::SymorNum)
-    if B == zero
-        return zero
-    end
-    B.summands = [convert(SymorNum, N) * summand[1] => summand[2] for summand in B.summands]
-    return update_indices(B)
-end
-
-*(N::SymorNum, B::TensorExpression) = *(B, convert(SymorNum, N))
-
-
-function *(T::TensorSuperType, TEx::TensorExpression)
-    ###println("doing this sort of multiplcation1")
-    new_exp = zero
-    for sum in TEx.summands
-        new_exp += sum[1] * T * sum[2]
-    end
-    return update_indices(new_exp)
-end
-
-
-function *(T::TensorTerm, TEx::TensorExpression)
-    ###println("doing this sort of multiplcation2")
-    return update_indices(TensorExpression([sum[1] => T * sum[2] for sum in TEx.summands]))
-end
-
-function *(TEx::TensorExpression, T::TensorTerm)
-    ###println("doing this sort of multiplcation3")
-    return update_indices(TensorExpression([sum[1] => sum[2] * T for sum in TEx.summands]))
-end
-
-
-
-function *(TEx1::TensorExpression, TEx2::TensorExpression)
-    new_tex = zero
-    if TEx1 == zero || TEx2 == zero
-        return zero
-    end
-    for T in TEx1.summands
-        for T2 in TEx2.summands
-            new_tex += TensorExpression(T[1]*T2[1] => T[2] * T2[2])
-        end
-    end
-    return update_indices(new_tex)
-end
-
-
-function *(TEx::TensorExpression, T::TensorSuperType)
-    ###println("doing this sort of multiplcation4")
-    if TEx == zero
-        return zero
-    end
-    for summandind in eachindex(TEx.summands)
-        ###println(TEx.summands[summandind])
-        # println("thuis")
-        # println(T)
-        TEx.summands[summandind] = TEx.summands[summandind][1] => TEx.summands[summandind][2] * T
-        ###println(TEx.summands[summandind])
-        ###println("here")
-    end
-    #ex=(sum(sum[1] => sum[2] * T for sum in TEx.summands))
-    ###println(TEx)
-    return update_indices(TEx)
-end
-
-
-# *(TEx::TensorExpression,T::TensorSuperType)=*(T,TEx)
-
-function *(T::TensorSuperType, TEx::TensorTerm)
-    return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
-end
-
-function *(T::TensorTerm, TEx::TensorTerm)
-    # println(T)
-    # println(T.indices)
-    # println(TEx)
-    # println(TEx.indices)
-    a = TensorTerm(vcat(T.terms, TEx.terms))
-    # println(a)
-    return update_indices(TensorTerm(vcat(T.terms, TEx.terms)))
-end
-
-function *(T1::TensorSuperType, T2::TensorSuperType)
-    return update_indices(TensorTerm([copy(T1), copy(T2)]))
-end
-
-function *(TEx::TensorTerm, T::TensorSuperType)
-    return update_indices(TensorTerm(vcat(TEx.terms, copy(T))))
-end
-
-##############################################################################################################################
-
-#smart times, basically appends a tensor so that all of its indices are free. useful if you want to mutliply something without doing contractions
+# juxtaposition/appension/smart times, basically appends a tensor to a term so that all of its indices are free. 
+# useful if you want to mutliply something without doing contractions, or want T^3 without manually having to create objects with new indices
 
 # function ×(T1::TensorTerm, T2::TensorSuperType)
 
@@ -1431,7 +1567,7 @@ end
 
 
 function ×(T2::TensorExpression, T1::TensorExpression)
-    new=zero
+    new = zero
     used_inds = union(get_dummies(T2), get_free_indices_nopos(T1))
     #need to make sure all different terms have the same free inds
     # unused_flav = Vector(setdiff(flavour_indices.indices, used_inds))
@@ -1441,7 +1577,7 @@ function ×(T2::TensorExpression, T1::TensorExpression)
 
     for summand2 in T2.summands
         for summand1 in T1.summands
-            new+= (summand2[1] * summand1[1])*(summand2[2] × summand1[2])
+            new += (summand2[1] * summand1[1]) * (summand2[2] × summand1[2])
         end
     end
 
@@ -1629,13 +1765,14 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
     return T1 * T2
 end
 
+##############################################################################################################################
+##############################################################################################################################
+#equality checking
+
+
+
 
 ##############################################################################################################################
-
-#division
-
-/(B::TensorSuperType, N::SymorNum) = *(1 / N, B)
-/(B::TensorExpression, N::SymorNum) = *(1 / N, B)
 
 ##############################################################################################################################
 
@@ -1646,14 +1783,39 @@ function ==(a::TensorTerm, b::TensorTerm)
 end
 
 function hard_equals(a::TensorTerm, b::TensorTerm)
-    return same_tensorterm_mod_syms(a,b)
+    return same_tensorterm_mod_syms(a, b)
 end
 
 function ≅(a::TensorTerm, b::TensorTerm)
-    return hard_equals(a,b)
+    return hard_equals(a, b)
 end
 
 
+function same_summands(a, b)
+    eq(x, y) = is_equal(x.first,y.first) && same_tensorterm_mod_syms(x.second, y.second)
+    length(a) == length(b) || return false
+
+    used = falses(length(b))
+
+    for x in a
+        found = false
+        for j in eachindex(b)
+            # println(x.second)
+            # println(b[j].second)
+            # println(same_tensorterm_mod_syms(x.second, b[j].second))
+            if !used[j] && eq(x, b[j])
+                used[j] = true
+                found = true
+                break
+            end
+        end
+        # println(x)
+        # println(found)
+        found || return false
+    end
+
+    return true
+end
 
 
 function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
@@ -1669,8 +1831,8 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
 end
 
 function ≅(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
-    (same,grweight)=same_tensor_mod_syms(a,b)
-   return (same && grweight==1)
+    (same, grweight) = same_tensor_mod_syms(a, b)
+    return (same && grweight == 1)
     # if (a.name == b.name && a.indices == b.indices )
     #     return true
     # else
@@ -1680,36 +1842,74 @@ end
 
 
 function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
-    if (a.name == b.name && a.indices == b.indices )
+    if (a.name == b.name && a.indices == b.indices)
         return true
     else
         return false
     end
 end
 
+# function Base.isequal(a::Pair{<:SymorNum,TensorTerm},b::Pair{SymorNum,TensorTerm})
+#     println("aprichecl")
+#     return a[1]==b[1] && a[2]==b[2]
+# end
+
+# function Base.hash(a::Pair{<:SymorNum,TensorTerm},h::UInt)
+#     return Base.hash(a.first, Base.hash(a.second, h))
+# end
 
 function ==(a::TensorExpression, b::TensorExpression)
-    if length(a.summands)!=length(b.summands)
+    if length(a.summands) != length(b.summands)
         # println("stop here")
         # println(a)
         # println(b)
         return false
-    end 
+    end
     # println("not stop here")
     # println(a)
     # println(b)
-    aa=a.summands
-    bb=b.summands
-    for inde in eachindex(aa)
-        if aa[inde][1]!=bb[inde][1] || aa[inde][2]!=bb[inde][2]
-            return false
-        end
+    aa = a.summands
+    bb = b.summands
+    if same_summands(aa,bb)
+        return true
     end
-    
-    return true
-   
+    # println("summands")
+    # println(aa)
+    # println(bb)
+    # # println(typeof(first(aa)))
+    # # println(typeof(first(bb)))
+    # println("symdiff")
+    # for summanda in aa
+    #     println(summanda)
+    #     println(Base.hash(summanda[2]))
+    # end
+    # for summandb in bb
+    #     println(summandb)
+    #     println(Base.hash(summandb[2]))
+    # end
+    # # println(bb)
+    # # println(first(aa))
+    # # println(bb[3])
+    # # println(Base.hash(aa[1]))
+    # # println(Base.hash(bb[3]))
+    # println(symdiff(aa,bb))
+    # if isempty(symdiff(a.summands,b.summands))
+    #     return true
+    # end
+    # for inde in eachindex(aa)
+    #     if xor(typeof(aa[inde][1]) <: Number, typeof(bb[inde][1]) <: Number) || aa[inde][1] != bb[inde][1] || aa[inde][2] != bb[inde][2]
+    #         return false
+    #     end
+    # end
+
+    return false
+
 end
 
+
+function is_equal(a::SymorNum,b::SymorNum)
+    ! (xor(typeof(a) <: Number, typeof(b) <: Number) || a != b)
+end
 
 
 
@@ -1780,9 +1980,9 @@ function get_unused_indices(T::TensorExpression, IS::IndexSet)
     ###println(Set(i[1] for i in T.indices))
     ###println(IS.indices)
     ###println("doing this for some reason")
-    temp=IS.indices
+    temp = IS.indices
     for summand in T.summands
-        temp=OrderedSet(ordered_setdiff(temp,OrderedSet(i[1] for i in summand[2].indices)))
+        temp = OrderedSet(ordered_setdiff(temp, OrderedSet(i[1] for i in summand[2].indices)))
     end
 
     return temp
@@ -1790,7 +1990,7 @@ end
 
 
 function get_index_index(T::TensorSuperType)
-    return OrderedSet([T.indices[i][1]=> i for i in 1:size(T.indices)[1]])
+    return OrderedSet([T.indices[i][1] => i for i in 1:size(T.indices)[1]])
 end
 
 function get_index_index_rev(T::TensorSuperType)
@@ -1798,7 +1998,7 @@ function get_index_index_rev(T::TensorSuperType)
 end
 
 function index_index_to_dict(s::OrderedSet)
-    return Dict(p[2]=>p[1] for p in s)
+    return Dict(p[2] => p[1] for p in s)
 end
 
 #finding free indices
@@ -1840,21 +2040,21 @@ end
 
 function get_dummies_with_pos_index(T::TensorSuperType)
 
- return  [i=>pair[1] for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
+    return [i => pair[1] for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)]
 
 end
 
 function get_dummies_with_pos_index_and_pos_ul(T::TensorSuperType)
 
-    return  [i=>pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
-   
-   end
+    return [i => pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)]
+
+end
 
 function get_dummies_with_pos_index_and_pos_ul(T::TensorTerm)
 
-    return  [i=>pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)] 
-   
-   end
+    return [i => pair for (i, pair) in enumerate(T.indices) if pair[1] in get_dummies(T)]
+
+end
 
 
 function get_dummies_positional(T::TensorSuperType)
@@ -1866,7 +2066,7 @@ function get_dummies_positional(T::TensorSuperType)
     return dum
 end
 
-function get_dummies_positional(T::TensorTerm)
+function get_dummies_positional(T::Union{TensorTerm,TensorExpression})
     dum::OrderedSet{Pair{IndexSuperType,IndexPosition}} = OrderedSet()
     for d in get_dummies(T)
         push!(dum, d => upper)
@@ -1911,15 +2111,15 @@ function get_dummies(T::Union{TensorSuperType,TensorTerm})
             if ind[1].index_set.name != "lightcone"
                 if haskey(poscheck, ind[1])
                     if poscheck[ind[1]] == ind[2]
-                        println(T)
-                        println(ind)
+                        # println(T)
+                        # println(ind)
                         throw(SameLevelDummieError())
                     end
                 else
                     poscheck[ind[1]] = ind[2]
                 end
             else
-                pop!(duplicates,ind[1])
+                pop!(duplicates, ind[1])
             end
         end
     end
@@ -2194,7 +2394,7 @@ function update_dummies(T::TensorTerm, reps::Pair{I,I}) where {I<:IndexSuperType
         update_dummies(t, reps)
     end
 end
-function update_dummies(TEX::TensorExpression, reps::Pair{I,I})where {I<:IndexSuperType}
+function update_dummies(TEX::TensorExpression, reps::Pair{I,I}) where {I<:IndexSuperType}
     for summand in TEX.summands
         for t in summand[2].terms
             update_dummies(t, reps)
@@ -2209,7 +2409,7 @@ end
 
 function sort_symmetric(T::TensorSuperType)
     if typeof(T) <: TotallySymmetricSuperType
-        if T.indices[1][1]==T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
+        if T.indices[1][1] == T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
             # println("deleting?????????")
             return zero
         end
@@ -2275,7 +2475,7 @@ function simplify(TEx::TensorExpression)
     exp = rename_dummies(exp)
 
     # println("renamed:",exp)
-    new_exp=simp_ops_n_sym(exp)
+    new_exp = simp_ops_n_sym(exp)
 
     new_exp = eliminate_kronecker(new_exp)
     # rename_dummies()
@@ -2293,22 +2493,22 @@ function simp_ops_n_sym(exp::TensorExpression)
         # println("start ",summand)
         new_term = summand[1]
         for tens in summand[2].terms
-            temp=tens
-            if typeof(tens)<:OperatorSuperType
+            temp = tens
+            if typeof(tens) <: OperatorSuperType
                 # println("old oprd: ", tens.operand)
-                op=simp_ops_n_sym(tens.operand)
+                op = simp_ops_n_sym(tens.operand)
                 #  println("new oprd: ",op)
-                if op==zero || op===nothing
-                    new_term*=zero
+                if op == zero || op === nothing
+                    new_term *= zero
                 else
-                   tens.operand=op #operator on nth term
-                   temp=tens
-                   new_term *= sort_symmetric(temp)
+                    tens.operand = op #operator on nth term
+                    temp = tens
+                    new_term *= sort_symmetric(temp)
                 end
             else
-            # println(temp)
-            # println(new_term)
-            new_term *= sort_symmetric(temp)
+                # println(temp)
+                # println(new_term)
+                new_term *= sort_symmetric(temp)
             end
         end
         ##println(new_exp)
@@ -2353,7 +2553,7 @@ function hard_merge(TEx::TensorExpression)
         found = false
 
         for i in eachindex(new_merged)
-            if hard_equals(summand[2] ,new_merged[i][2]) 
+            if hard_equals(summand[2], new_merged[i][2])
                 # println("got here")
                 # println(summand[1])
                 # println(new_merged[i][1])
@@ -2365,14 +2565,14 @@ function hard_merge(TEx::TensorExpression)
                 # ##println(new_merged) #not editting in place apparaently....
                 found = true
                 break
-            # elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
+                # elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
 
-            #     rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
-            #     if rescomp[1]==true
-            #         # println(rescomp)
-            #         new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
-            #         found=true
-            #     end
+                #     rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
+                #     if rescomp[1]==true
+                #         # println(rescomp)
+                #         new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
+                #         found=true
+                #     end
             end
 
             # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
@@ -2402,7 +2602,7 @@ function merge_sum(TEx::TensorExpression)
         return zero
     end
     ##println("zero ma:",zero)
-    out = filter!(x -> x[1] != 0, TEx.summands) #removes 0 coefficnets
+    out = filter!(x -> !isZero(x[1]), TEx.summands) #removes 0 coefficnets
     if isempty(out)
         ##println("killing")
         ##println("zero??:",zero)
@@ -2429,13 +2629,13 @@ function merge_sum(TEx::TensorExpression)
                 # ##println(new_merged) #not editting in place apparaently....
                 found = true
                 break
-            elseif length(summand[2].terms)==1 && length(new_merged[i][2].terms)==1
+            elseif length(summand[2].terms) == 1 && length(new_merged[i][2].terms) == 1
 
-                rescomp=same_tensor_mod_syms(summand[2].terms[1],new_merged[i][2].terms[1])
-                if rescomp[1]==true
+                rescomp = same_tensor_mod_syms(summand[2].terms[1], new_merged[i][2].terms[1])
+                if rescomp[1] == true
                     # println(rescomp)
-                    new_merged[i]=(rescomp[2]*new_merged[i][1] +summand[1] =>summand[2])
-                    found=true
+                    new_merged[i] = (rescomp[2] * new_merged[i][1] + summand[1] => summand[2])
+                    found = true
                 end
             end
 
@@ -2456,10 +2656,9 @@ function merge_sum(TEx::TensorExpression)
     end
 
     TEx.summands = new_merged
-    TEx.summands = filter!(x -> x[1] != 0, TEx.summands)
+    TEx.summands = filter!(x -> !isZero(x[1]), TEx.summands)
     return isempty(TEx.summands) ? zero : TEx
 end
-
 
 
 
@@ -2512,7 +2711,8 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        print(io, tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : imag(tens[1])!=0 ? string(imag(tens[1])) * "Im" : "") * ")" : string(real(tens[1])))
+        @show (tens[1] == 1)
+        print(io, !(typeof(tens[1]) <: Number) ? tens[1] : tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (!isZero(real(tens[1])) ? string(tens[1]) : !isZero(imag(tens[1])) ? string(imag(tens[1])) * "Im" : "") * ")" : string(real(tens[1])))
         print(io, tens[2])
         next = peek(it)
         if next !== nothing
@@ -2551,7 +2751,7 @@ function Base.sort(TEx::TensorExpression)
         new_term = summand[1]
         # println("orig coef",summand[1])
         # println("orgin term",summand[2])
-        new_terms=copy(summand[2])
+        new_terms = copy(summand[2])
         fac = bubble_sort_with_grading!(new_terms.terms)
         new_term *= (fac * new_terms)
         # println(fac)
@@ -2574,7 +2774,7 @@ end
 
 
 function Base.sort(term::TensorTerm)
-    new_terms=copy(term)
+    new_terms = copy(term)
     fac = bubble_sort_with_grading!(new_terms.terms)
     return fac * new_terms
 end
@@ -2622,7 +2822,7 @@ function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
     return (-1)^(swaps)
 end
 
-function bubble_sort_index_with_grading!(T::TensorSuperType,mapping::Dict)
+function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
 
     n = length(mapping)
     # println(n)
@@ -2633,14 +2833,14 @@ function bubble_sort_index_with_grading!(T::TensorSuperType,mapping::Dict)
         swapped = false
         for i in 1:n-1
             # println(i)
-            if mapping[i+1]<mapping[i]
+            if mapping[i+1] < mapping[i]
 
                 #compute grading
                 for tab in T.tableaux
-                    if tab.adj_matrix[i,i+1]!=0
-                        mapping[i],mapping[i+1]=mapping[i+1],mapping[i]
-                        swaps*=tab.adj_matrix[i,i+1]
-                        swapped=true
+                    if tab.adj_matrix[i, i+1] != 0
+                        mapping[i], mapping[i+1] = mapping[i+1], mapping[i]
+                        swaps *= tab.adj_matrix[i, i+1]
+                        swapped = true
                         break
                     end
                 end
@@ -2648,7 +2848,7 @@ function bubble_sort_index_with_grading!(T::TensorSuperType,mapping::Dict)
         end
     end
 
-    return swaps,mapping
+    return swaps, mapping
 
 end
 
@@ -2702,8 +2902,8 @@ function to_latex(T::TensorExpression)
     out = ""
     it = Iterators.Stateful(T.summands)
     for tens in it
-      #  println(denominator(rationalize(float(imag(tens[1])))))
-        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) :         denominator(rationalize(float(imag(tens[1]))))==1 ? string(float(imag(tens[1])))*"i" : imag(tens[1])<0 ? "-\\frac{"* (numerator(rationalize(float(-1*imag(tens[1]))))==1 ? "" : string(numerator(rationalize(float(-1*imag(tens[1]))))))*"i}{"*string(denominator(rationalize(float(imag(tens[1])))))*"}" : "\\frac{"* (numerator(rationalize(float(imag(tens[1]))))==1 ? "" : string(numerator(rationalize(float(imag(tens[1]))))))*"i}{"*string(denominator(rationalize(float(imag(tens[1])))))*"}") * ")" : denominator(rationalize(float(Real(tens[1]))))==1 ? string(float(real(tens[1]))) : real(tens[1])<0 ? "-\\frac{"*string(numerator(rationalize(float(-1*Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}" : "\\frac{"*string(numerator(rationalize(float(Real(tens[1])))))*"}{"*string(denominator(rationalize(float(Real(tens[1])))))*"}")
+        #  println(denominator(rationalize(float(imag(tens[1])))))
+        out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (real(tens[1]) != 0 ? string(tens[1]) : denominator(rationalize(float(imag(tens[1])))) == 1 ? string(float(imag(tens[1]))) * "i" : imag(tens[1]) < 0 ? "-\\frac{" * (numerator(rationalize(float(-1 * imag(tens[1])))) == 1 ? "" : string(numerator(rationalize(float(-1 * imag(tens[1])))))) * "i}{" * string(denominator(rationalize(float(imag(tens[1]))))) * "}" : "\\frac{" * (numerator(rationalize(float(imag(tens[1])))) == 1 ? "" : string(numerator(rationalize(float(imag(tens[1])))))) * "i}{" * string(denominator(rationalize(float(imag(tens[1]))))) * "}") * ")" : denominator(rationalize(float(Real(tens[1])))) == 1 ? string(float(real(tens[1]))) : real(tens[1]) < 0 ? "-\\frac{" * string(numerator(rationalize(float(-1 * Real(tens[1]))))) * "}{" * string(denominator(rationalize(float(Real(tens[1]))))) * "}" : "\\frac{" * string(numerator(rationalize(float(Real(tens[1]))))) * "}{" * string(denominator(rationalize(float(Real(tens[1]))))) * "}")
         # println(string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "*"))
 
         out *= string(tens[1] == 1 ? " " : tens[1] == -1 ? " " : "")
@@ -2721,23 +2921,23 @@ end
 
 
 function uni_to_TeX(charr::String)
-    out=""
+    out = ""
     # dot=false
     #   println(charr[1])
     #   println(codepoint(charr[1]))
-    if charr[1]=='\u0307'
-        out*="\\dot{"
-        out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
-        out*="}"
+    if charr[1] == '\u0307'
+        out *= "\\dot{"
+        out *= Base.replace(latexify(charr[3:end]), "#\"L" => "")
+        out *= "}"
         return out
-    elseif codepoint(charr[1])==772
-        out*="\\overline{"
-        out*=Base.replace(latexify(charr[3:end]),"#\"L"=>"")
-        out*="}"
+    elseif codepoint(charr[1]) == 772
+        out *= "\\overline{"
+        out *= Base.replace(latexify(charr[3:end]), "#\"L" => "")
+        out *= "}"
         return out
     else
         # println("not dotted")
-    return Base.replace(latexify(charr),"#\"L"=>"")
+        return Base.replace(latexify(charr), "#\"L" => "")
     end
 end
 
@@ -2750,18 +2950,18 @@ function to_latex_basic(T::TensorSuperType)
         lowersempt::Bool = 1
         uppersempt::Bool = 1
         for (ind, pos) in T.indices
-            if ind.name=="±"
-                ntemp="\\pm"
-            elseif ind.name=="∓"
-                ntemp="\\mp"
+            if ind.name == "±"
+                ntemp = "\\pm"
+            elseif ind.name == "∓"
+                ntemp = "\\mp"
             else
-                ntemp=(ind.name)
+                ntemp = (ind.name)
             end
             if pos.position == 0
                 if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
-               
+
                 uppers = uppers * (ntemp) * " "
                 uppersempt = 0
 
@@ -2785,7 +2985,7 @@ end
 
 function to_latex(T::TensorSuperType)
     out = ""
-    if T.name!=""
+    if T.name != ""
         out *= uni_to_TeX(T.name) * " "
     end
     if !isempty(T.indices)
@@ -2794,12 +2994,12 @@ function to_latex(T::TensorSuperType)
         lowersempt::Bool = 1
         uppersempt::Bool = 1
         for (ind, pos) in T.indices
-            if ind.name=="±"
-                ntemp="\\pm"
-            elseif ind.name=="∓"
-                ntemp="\\mp"
+            if ind.name == "±"
+                ntemp = "\\pm"
+            elseif ind.name == "∓"
+                ntemp = "\\mp"
             else
-                ntemp=uni_to_TeX(ind.name)
+                ntemp = uni_to_TeX(ind.name)
             end
             if pos.position == 0
 
@@ -2808,10 +3008,10 @@ function to_latex(T::TensorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     out *= "?"
                 end
-               
+
                 # uppers = uppers * (ntemp) * " "
                 # uppersempt = 0
-                out*=ntemp
+                out *= ntemp
                 out *= "}"
             else
                 # lowersempt = 0
@@ -2823,7 +3023,7 @@ function to_latex(T::TensorSuperType)
                 end
                 # lowers = lowers * (ntemp) * " "
 
-                out*=ntemp
+                out *= ntemp
                 out *= "}"
             end
         end
@@ -3039,12 +3239,12 @@ end
 ##############################################################################################################################
 ##############################################################################################################################
 
-function young_projection(TEx::TensorExpression, proj::Union{Vector{String}, Nothing}=nothing)
-    tex=zero
+function young_projection(TEx::TensorExpression, proj::Union{Vector{String},Nothing}=nothing)
+    tex = zero
     for summand in TEx.summands
         for tens in summand[2].terms
             if typeof(tens) <: TensorSuperType
-                    tex+=summand[1]*young_projection(tens,proj)
+                tex += summand[1] * young_projection(tens, proj)
             end
         end
     end
@@ -3089,23 +3289,23 @@ function compute_normalization_from_factors(factors::Vector{String})
     total = prod(factor_abs_sum(f) for f in factors)
     return 1 // total
 end
-function young_projection(T::TensorSuperType, proj::Union{Vector{String}, Nothing}=nothing)
+function young_projection(T::TensorSuperType, proj::Union{Vector{String},Nothing}=nothing)
     projectors = proj === nothing ? [compute_young_projector(tab) for tab in T.tableaux] : [proj for tab in T.tableaux]
     # println(tab for tab in T.tableaux)
-    norms= proj=== nothing ? [1//compute_hook_product(tab) for tab in T.tableaux] : [compute_normalization_from_factors(prr) for prr in projectors]
-    tex=zero
-    for (proj,norm) in zip(projectors, norms)
-        tex+=apply_young_projector(T, proj)*norm
+    norms = proj === nothing ? [1 // compute_hook_product(tab) for tab in T.tableaux] : [compute_normalization_from_factors(prr) for prr in projectors]
+    tex = zero
+    for (proj, norm) in zip(projectors, norms)
+        tex += apply_young_projector(T, proj) * norm
     end
     return tex
 end
 
 function apply_young_projector(T::TensorExpression, projector::Vector{String})
-    tex=zero
+    tex = zero
     for summand in T.summands
         for tens in summand[2].terms
             if typeof(tens) <: TensorSuperType
-                    tex+=summand[1]*apply_single_projector!(tens, projector)
+                tex += summand[1] * apply_single_projector!(tens, projector)
             end
         end
     end
@@ -3113,30 +3313,32 @@ function apply_young_projector(T::TensorExpression, projector::Vector{String})
 end
 
 function apply_young_projector(T::TensorTerm, projector::Vector{String})
-   tex=zero
+    tex = zero
     for tens in T.terms
         if typeof(tens) <: TensorSuperType
-            tex+=apply_young_projector!(tens, projector)
+            tex += apply_young_projector!(tens, projector)
         end
     end
     return tex
 end
 
 function apply_young_projector(T::TensorSuperType, projector::Vector{String})
-    terms =Vector{Tuple{Number, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}([(1, collect(T.indices))])
+    terms = Vector{Tuple{Number,Vector{Pair{Alakazam.IndexSuperType,Alakazam.IndexPosition}}}}([(1, collect(T.indices))])
     for proj in reverse(projector)
         terms = apply_string_factor(terms, proj)
     end
-    result = Dict{Vector, Number}()
+    result = Dict{Vector,Number}()
     for (s, t) in terms
         result[t] = get(result, t, 0) + s
     end
-    no_dupes=[(s,t) for (t,s) in result if s != 0]
-    tex=zero #new tensor expression to hold result of projection
-    for (prefact,inds) in no_dupes
-        Tn=copy(T)
-        Tn.indices=inds
-        tex+=prefact*(Tn)
+    no_dupes = [(s, t) for (t, s) in result if s != 0]
+    tex = zero #new tensor expression to hold result of projection
+    for (prefact, inds) in no_dupes
+        Tn = copy(T)
+        Tn.indices = inds
+        # println("prefact: ", prefact)
+        tex += prefact * (Tn)
+        # println(tex)
     end
     return tex #normalisation fixed elsewhere above
 
@@ -3144,7 +3346,7 @@ end
 
 function compute_hook_product(tab::YoungTableau)
     hook_lengths = compute_hook_length(tab)
-    return prod(hook_lengths[hook_lengths .> 0];init=1)
+    return prod(hook_lengths[hook_lengths.>0]; init=1)
 end
 
 function compute_hook_length(tab::YoungTableau)
@@ -3157,7 +3359,7 @@ function compute_hook_length(tab::YoungTableau)
     for r in 1:n_rows
         for c in 1:rows[r]
             right = rows[r] - c
-            below = sum(r2 >= c for r2 in rows[r+1:end];init=0)
+            below = sum(r2 >= c for r2 in rows[r+1:end]; init=0)
             hook_lengths[r, c] = 1 + right + below
         end
     end
@@ -3168,7 +3370,7 @@ end
 # Swap multiple pairs in a tensor
 function swap_string_pairs(t::Vector, pairs)
     t = copy(t)
-    for (i,j) in pairs
+    for (i, j) in pairs
         t[i], t[j] = t[j], t[i]
     end
     return t
@@ -3274,7 +3476,7 @@ function apply_factorized_projector(factors::Vector{String}, tensor::String)
         terms = apply_string_factor(terms, f)
     end
 
-    result = Dict{Vector{Char}, Float64}()
+    result = Dict{Vector{Char},Float64}()
     for (s, t) in terms
         result[t] = get(result, t, 0.0) + s
     end
@@ -3286,11 +3488,11 @@ end
 # function apply_string_factor(terms::Vector{Tuple{Int64, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}, factor::String)
 #     # Determine sign
 #     plus = occursin("+", factor)
-    
+
 #     # Find all (i j) pairs
 #     pairs = [(parse(Int, m.captures[1]), parse(Int, m.captures[2])) 
 #              for m in eachmatch(r"\((\d+) (\d+)\)", factor)]
-    
+
 #     new_terms = []
 #     for (s, t) in terms
 #         # Identity term
@@ -3309,7 +3511,7 @@ end
 #     m = match(r"\((\d+) (\d+)\)", factor)
 #     i = parse(Int, m.captures[1])
 #     j = parse(Int, m.captures[2])
-    
+
 #     new_terms =Vector{Tuple{Int64, Vector{Pair{Alakazam.IndexSuperType, Alakazam.IndexPosition}}}}([])
 #     for (s, t) in terms
 #         # Identity term
@@ -3321,52 +3523,343 @@ end
 #     return new_terms
 # end
 
+# # permutation to cycle-list string in your style
+# function perm_str(p::Vector{Int})
+#     cycles = perm_to_cycles(p)
+
+#     if isempty(cycles)
+#         return "1"
+#     end
+
+#     parts = ["(" * join(c, " ") * ")" for c in cycles]
+#     return join(parts, "")
+# end
+
+# # sign of permutation
+# function perm_sign(p::Vector{Int})
+#     n = length(p)
+#     seen = falses(n)
+#     s = 1
+
+#     for i in 1:n
+#         if !seen[i]
+#             j = i
+#             cycle_len = 0
+#             while !seen[j]
+#                 seen[j] = true
+#                 j = p[j]
+#                 cycle_len += 1
+#             end
+#             s *= (-1)^(cycle_len - 1)
+#         end
+#     end
+
+#     return s
+# end
+
+# function perm_to_cycles(p::Vector{Int})
+#     n = length(p)
+#     visited = falses(n)
+#     cycles = Vector{Vector{Int}}()
+
+#     for i in 1:n
+#         if !visited[i] && p[i] != i
+#             cycle = Int[]
+#             j = i
+#             while !visited[j]
+#                 push!(cycle, j)
+#                 visited[j] = true
+#                 j = p[j]
+#             end
+#             push!(cycles, cycle)
+#         end
+#     end
+
+#     return cycles
+# end
+
+# # full symmetric-group sum (row symmetriser)
+# function row_sym_sum(labels)
+#     perms = collect(permutations(labels))
+#     terms = [perm_str(p) for p in perms]
+#     return "(" * join(terms, " + ") * ")"
+# end
+
+# # full signed sum (column antisymmetriser)
+# function col_antisym_sum(labels)
+#     perms = collect(permutations(labels))
+
+#     terms = String[]
+#     for p in perms
+#         if perm_sign(p) == 1
+#             push!(terms, "+ " * perm_str(p))
+#         else
+#             push!(terms, "- " * perm_str(p))
+#         end
+#     end
+
+#     return "(" * join(terms, " ") * ")"
+# end
+
+# function compute_young_projector(tab::YoungTableau)
+
+#     labels = tab.index_assignment
+#     row_lengths = tab.row_lengths
+
+#     # -------------------------
+#     # build rows
+#     # -------------------------
+#     rows = []
+#     idx = 1
+#     for rlen in row_lengths
+#         push!(rows, labels[idx:idx+rlen-1])
+#         idx += rlen
+#     end
+
+#     # -------------------------
+#     # build columns
+#     # -------------------------
+#     n_cols = maximum(row_lengths)
+
+#     columns = []
+#     for c in 1:n_cols
+#         col = Int[]
+#         for r in rows
+#             if c <= length(r)
+#                 push!(col, r[c])
+#             end
+#         end
+#         push!(columns, col)
+#     end
+
+#     # -------------------------
+#     # TRUE Young symmetriser:
+#     # product of:
+#     #   column antisym sums
+#     #   row sym sums
+#     # -------------------------
+#     factors = String[]
+
+#     # columns first (antisym)
+#     for col in columns
+#         if length(col) > 1
+#             push!(factors, col_antisym_sum(col))
+#         end
+#     end
+
+#     # rows second (sym)
+#     for row in rows
+#         if length(row) > 1
+#             push!(factors, row_sym_sum(row))
+#         end
+#     end
+
+#     return factors
+# end
+
+
+# permutation to cycle-list string in your style
+function perm_str(perm::Vector{<:Integer}, labels::Vector{<:Integer})
+    cycles = perm_to_cycles(perm, labels)
+
+    if isempty(cycles)
+        return "1"
+    end
+
+    parts = ["(" * join(c, " ") * ")" for c in cycles]
+    return join(parts, "")
+end
+# sign of permutation
+function perm_sign(p::Vector{Int})
+    s = 1
+    for i in 1:length(p)-1
+        for j in i+1:length(p)
+            if p[i] > p[j]
+                s *= -1
+            end
+        end
+    end
+    return s
+end
+
+function perm_to_cycles(perm::Vector{<:Integer}, labels::Vector{<:Integer})
+    n = length(perm)
+    visited = falses(n)
+    cycles = Vector{Vector{Integer}}()
+
+    for i in 1:n
+        if !visited[i] && perm[i] != i
+            cycle = Int[]
+            j = i
+
+            while !visited[j]
+                visited[j] = true
+                push!(cycle, labels[j])   # label at position j
+                j = perm[j]               # move via permutation
+            end
+
+            push!(cycles, cycle)
+        end
+    end
+
+    return cycles
+end
+
+# full symmetric-group sum (row symmetriser)
+function row_sym_sum(labels)
+    k = length(labels)
+    perms = collect(permutations(1:k))
+
+    terms = String[]
+    first = true
+
+    for perm in perms
+        term = perm_str(perm, labels)
+
+        if first
+            push!(terms, term)
+            first = false
+        else
+            push!(terms, "+ " * term)
+        end
+    end
+
+    return "(" * join(terms, " ") * ")"
+end
+
+# full signed sum (column antisymmetriser)
+function col_antisym_sum(labels)
+    k = length(labels)
+    perms = collect(permutations(1:k))
+
+    terms = String[]
+    first = true
+
+    for perm in perms
+        s = perm_sign(perm)
+        term = perm_str(perm, labels)
+
+        if first
+            if s == 1
+                push!(terms, term)
+            else
+                push!(terms, "- " * term)
+            end
+            first = false
+        else
+            if s == 1
+                push!(terms, "+ " * term)
+            else
+                push!(terms, "- " * term)
+            end
+        end
+    end
+
+    return "(" * join(terms, " ") * ")"
+end
 
 function compute_young_projector(tab::YoungTableau)
-    labels=tab.index_assignment
-    row_lengths=tab.row_lengths
-    # Split labels into rows
+
+    labels = tab.index_assignment
+    row_lengths = tab.row_lengths
+
+    # -------------------------
+    # build rows
+    # -------------------------
     rows = []
     idx = 1
     for rlen in row_lengths
         push!(rows, labels[idx:idx+rlen-1])
         idx += rlen
     end
-    n_rows = length(rows)
+
+    # -------------------------
+    # build columns
+    # -------------------------
     n_cols = maximum(row_lengths)
 
-    # Split labels into columns
     columns = []
     for c in 1:n_cols
         col = Int[]
-        for r in 1:n_rows
-            if c <= length(rows[r])
-                push!(col, rows[r][c])
+        for r in rows
+            if c <= length(r)
+                push!(col, r[c])
             end
         end
         push!(columns, col)
     end
 
-    # Column antisymmetrizer factors: (1 - (i j))
-    col_factors = Vector{String}()
-    for col in columns
-        for (i,j) in transpositions(col)
-            push!(col_factors, "(1 - ($i $j))")
-        end
-    end
+    # -------------------------
+    # TRUE Young symmetriser:
+    # product of:
+    #   column antisym sums
+    #   row sym sums
+    # -------------------------
+    factors = String[]
 
-    # Row symmetrizer factors: (1 + (i j))
-    row_factors = Vector{String}()
+    # columns first (antisym)
+
+    # rows second (sym)
     for row in rows
-        for (i,j) in transpositions(row)
-            push!(row_factors, "(1 + ($i $j))")
+        if length(row) > 1
+            push!(factors, row_sym_sum(row))
+        end
+    end
+    for col in columns
+        if length(col) > 1
+            push!(factors, col_antisym_sum(col))
         end
     end
 
-    # Combine column antisymmetrizers first, then row symmetrizers
-    projector = vcat(row_factors,col_factors) #i just swapped THEM!
-    return projector
+    return factors
 end
+
+
+# function compute_young_projector(tab::YoungTableau)
+#     labels=tab.index_assignment
+#     row_lengths=tab.row_lengths
+#     # Split labels into rows
+#     rows = []
+#     idx = 1
+#     for rlen in row_lengths
+#         push!(rows, labels[idx:idx+rlen-1])
+#         idx += rlen
+#     end
+#     n_rows = length(rows)
+#     n_cols = maximum(row_lengths)
+
+#     # Split labels into columns
+#     columns = []
+#     for c in 1:n_cols
+#         col = Int[]
+#         for r in 1:n_rows
+#             if c <= length(rows[r])
+#                 push!(col, rows[r][c])
+#             end
+#         end
+#         push!(columns, col)
+#     end
+
+#     # Column antisymmetrizer factors: (1 - (i j))
+#     col_factors = Vector{String}()
+#     for col in columns
+#         for (i,j) in transpositions(col)
+#             push!(col_factors, "(1 - ($i $j))")
+#         end
+#     end
+
+#     # Row symmetrizer factors: (1 + (i j))
+#     row_factors = Vector{String}()
+#     for row in rows
+#         for (i,j) in transpositions(row)
+#             push!(row_factors, "(1 + ($i $j))")
+#         end
+#     end
+
+#     # Combine column antisymmetrizers first, then row symmetrizers
+#     projector = vcat(row_factors,col_factors) #i just swapped THEM!
+#     return projector
+# end
 
 
 # Function to generate transpositions for a row or column
@@ -3462,12 +3955,18 @@ const zero = TensorExpression()
 
 
 function isZeroTens(T::TensorExpression)
-    if length(T.summands) == 1 && T.summands[1][1] == 0
+    if length(T.summands) == 1 && isZero(T.summands[1][1])
         return true
     else
         return false
     end
 end
+
+
+function isZero(x)
+    return ((typeof(x) <: Number) && x == 0)
+end
+
 
 # function isZeroTens(T::TEx)
 #     if length(T.summands)==1 && T.summands[1][1]==0
@@ -3485,8 +3984,8 @@ function swap_inds(s::Vector, i::Int, j::Int)
 end
 
 
-function ordered_setdiff(set1::OrderedSet{T1}, set2::OrderedSet{T2}) where {T1, T2}
-    result = OrderedSet{Union{T1, T2}}()
+function ordered_setdiff(set1::OrderedSet{T1}, set2::OrderedSet{T2}) where {T1,T2}
+    result = OrderedSet{Union{T1,T2}}()
     for item in set1
         if !(item in set2)
             push!(result, item)
@@ -3496,8 +3995,8 @@ function ordered_setdiff(set1::OrderedSet{T1}, set2::OrderedSet{T2}) where {T1, 
 end
 
 # Method for vectors
-function ordered_setdiff(arr1::Vector{T1}, arr2::Vector{T2}) where {T1, T2}
-    result = OrderedSet{Union{T1, T2}}()
+function ordered_setdiff(arr1::Vector{T1}, arr2::Vector{T2}) where {T1,T2}
+    result = OrderedSet{Union{T1,T2}}()
     for item in arr1
         if !(item in arr2)
             push!(result, item)
@@ -3507,8 +4006,8 @@ function ordered_setdiff(arr1::Vector{T1}, arr2::Vector{T2}) where {T1, T2}
 end
 
 # Method to handle ordered set and vector combination
-function ordered_setdiff(set1::OrderedSet{T1}, arr2::Vector{T2}) where {T1, T2}
-    result = OrderedSet{Union{T1, T2}}()
+function ordered_setdiff(set1::OrderedSet{T1}, arr2::Vector{T2}) where {T1,T2}
+    result = OrderedSet{Union{T1,T2}}()
     for item in set1
         if !(item in arr2)
             push!(result, item)
@@ -3518,8 +4017,8 @@ function ordered_setdiff(set1::OrderedSet{T1}, arr2::Vector{T2}) where {T1, T2}
 end
 
 # Method to handle vector and ordered set combination
-function ordered_setdiff(arr1::Vector{T1}, set2::OrderedSet{T2}) where {T1, T2}
-    result = OrderedSet{Union{T1, T2}}()
+function ordered_setdiff(arr1::Vector{T1}, set2::OrderedSet{T2}) where {T1,T2}
+    result = OrderedSet{Union{T1,T2}}()
     for item in arr1
         if !(item in set2)
             push!(result, item)

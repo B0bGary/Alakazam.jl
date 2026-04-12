@@ -6,6 +6,7 @@ using Symbolics
 using OrderedCollections
 using PyCall
 using StatsBase
+using Combinatorics
 using Serialization
 using SymbolicUtils
 import Base.:*
@@ -53,8 +54,9 @@ export add_derivative_action,index_to_pattern,same_tensor_mod_pattern,apply_deri
 export perform_derivative_action, expand_derivative,product_rule,to_lc_expression
 
 export IndexSet,Index,DummyPatternIndex,Coordinate,DummyPatternTensor,TensorSuperType
-export TotallyAntisymmetricSuperType,TotallySymmetricSuperType,Tensor,SymmetricTensor,@Tensor
-export AntisymmetricTensor,TensorTerm,TensorExpression,EpsilonTensor,EpsilonTensorSuperType
+export Tensor,@Tensor,RiemannTensor,SymmetricTensor,AntisymmetricTensor
+#,TotallyAntisymmetricSuperType,TotallySymmetricSuperType,SymmetricTensor
+export TensorTerm,TensorExpression,EpsilonTensor,EpsilonTensorSuperType
 export KroneckerDelta,KroneckerSuperType,Operator, OperatorSuperType
 export LeibnizOperatorSuperType,Metric,SymMetricSuperType,AntisymMetricSuperType
 export EpsilonTensorSuperType,EpsilonTensor,YoungTableau,DerivativeSuperType
@@ -72,9 +74,9 @@ include("indices.jl")
 include("young.jl")
 include("custom_exceptions.jl")
 include("tensor_term.jl")
-include("metric.jl")
-include("kronecker.jl")
-include("epsilon_tensor.jl")
+# include("metric.jl")
+# include("kronecker.jl")
+# include("epsilon_tensor.jl")
 include("tensor_ops.jl")
 # include("metric.jl")
 include("operator.jl")
