@@ -3,7 +3,7 @@ uuid = "41a1aa08-1d43-4dd7-adeb-62cd7a1359ba"
 authors = ["Jesse Woods <jesse.woods@unibe.ch>"]
 registry = "https://github.com/JuliaRegistries/General.git"
 repo = "https://gitlab.com/B0bGary/Alakazam.jl.git"
-version = "0.1.28"
+version = "0.1.29"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
