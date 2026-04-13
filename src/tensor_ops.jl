@@ -2450,7 +2450,7 @@ function find_canonical_rep(T::TensorSuperType)
             if cost == 0
                 return (1,new_inds)
             end
-            if cost < best_cost
+            if cost < best_cost || (cost == best_cost && new_inds < best_inds)
                 best_inds = new_inds
                 best_cost = cost
             end
@@ -2462,7 +2462,7 @@ function find_canonical_rep(T::TensorSuperType)
             if cost == 0
                 return (-1,new_inds)
             end
-            if cost < best_cost
+            if cost < best_cost || (cost == best_cost && new_inds < best_inds)
                 best_inds = new_inds
                 best_cost = cost
                 sign = -1
