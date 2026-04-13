@@ -42,6 +42,7 @@
     T1 = Tensor("T", [a => lower, b => lower, c => lower], [t_tabelau])
     T2 = Tensor("T", [c => lower, b => lower, a => lower], [t_tabelau])
     T3 = Tensor("T", [b => lower, a => lower, c => lower], [t_tabelau])
+    # @show Alakazam.young_projection(T1)+Alakazam.young_projection(T2)
     T4 = Tensor("T", [c => lower, a => lower, b => lower], [t_tabelau])
     T5 = Tensor("T", [b => lower, c => lower, a => lower], [t_tabelau])
     T6 = Tensor("T", [a => lower, c => lower, b => lower], [t_tabelau])
@@ -56,9 +57,11 @@
     labels = [1, 3, 2, 4]
     row_lengths = [2, 2]
     riemann_tabelau = YoungTableau(row_lengths, labels)
+    @show riemann_tabelau
 
 
     R1 = Tensor("R", [a => lower, b => lower, c => lower, d => lower], [riemann_tabelau])
+    @show Alakazam.young_projection(R1)
     @test Alakazam.young_projection(Alakazam.young_projection(R1)) - Alakazam.young_projection(R1) == Alakazam.zero #idempotency of projector
 
     #test the bianchi id
@@ -84,6 +87,7 @@
     ### 
     ###
     A1 = AntisymmetricTensor("A", [a => lower, b => lower, c => lower, d => lower], [x])
+    @show Alakazam.young_projection(A1)
     A2 = AntisymmetricTensor("A", [d => lower, a => lower, b => lower, c => lower], [x])
     @test Alakazam.young_projection(A1) + Alakazam.young_projection(A2) == Alakazam.zero #check that antisymmetric tensor is antisymmetric
 
@@ -94,6 +98,11 @@
     ###
     S1 =SymmetricTensor("S", [a => lower, b => lower, c => lower, d => lower], [x])
     S2 =SymmetricTensor("S", [d => lower, a => lower, b => lower, c => lower], [x])
+    @show S1.tableaux[1]
+    @show S2.tableaux[1]
+    @show Alakazam.compute_young_projector(S1.tableaux[1])
+    @show Alakazam.young_projection(S1)
+    @show Alakazam.young_projection(S2)
     @test Alakazam.young_projection(S1) - Alakazam.young_projection(S2) == Alakazam.zero #check that symmetric tensor is symmetric
 
 end

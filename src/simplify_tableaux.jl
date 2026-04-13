@@ -497,7 +497,7 @@ end
 # this works for simple tensors with no dummies
 
 function do_swaps(T1::TensorSuperType, patt::OrderedSet, movers::Dict)
-    println("WARNING: tableau simplification is wrong for general tabs")
+    # println("WARNING: tableau simplification is wrong for general tabs") #note: only simplifies sym and antisyms
     # return 0 ##TEMP disabled tableau since implements wrong for general tabs
     #where {I<:IndexSuperType}
     #elemetns in patt: indiceobj, intpos
@@ -532,20 +532,27 @@ end
 
 # the "simple algo" in question
 function dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
-    inds1 = get_index_index(T1)
-    inds2 = get_index_index(T2)
-    needperm1 = setdiff(inds1, inds2) #indices of T1 that don't match T2
-    needperm2 = setdiff(inds2, inds1) #indices of T2 that don't match T1
-    inds_to_move = index_index_to_dict(needperm2)
+
+    #new version to use the tableau swapping algo, which should be more general and work for any symmetries
+    # (sign, new_inds) = find_canonical_rep(T)(T1) #just to make sure the tableaux are in the correct order, since the swapping algo relies on this. also should be a no-op
+    (sign1, new_inds1) = find_canonical_rep(T1)
+    (sign2, new_inds2) = find_canonical_rep(T2)
+    return new_inds1==new_inds2 ? sign1*sign2 : 0
+
+    # inds1 = get_index_index(T1)
+    # inds2 = get_index_index(T2)
+    # needperm1 = setdiff(inds1, inds2) #indices of T1 that don't match T2
+    # needperm2 = setdiff(inds2, inds1) #indices of T2 that don't match T1
+    # inds_to_move = index_index_to_dict(needperm2)
 
     
-    # println("do dum by default")
-    # println(T1)
-    # println(needperm1)
-    # println(inds_to_move)
+    # # println("do dum by default")
+    # # println(T1)
+    # # println(needperm1)
+    # # println(inds_to_move)
 
-    out = do_swaps(T1, needperm1, inds_to_move)
-    # println(out)
+    # out = do_swaps(T1, needperm1, inds_to_move)
+    # # println(out)
 
     return out
 end

@@ -1202,10 +1202,10 @@ function +(A::TensorTerm, B::TensorExpression)
     end
 end
 
-function +(B::TensorExpression,A::TensorTerm)
+function +(B::TensorExpression, A::TensorTerm)
 
     if isZeroTens(B) || get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
-        return TensorExpression(B,TensorExpression(A))
+        return TensorExpression(B, TensorExpression(A))
     else
 
         throw(FreeIndexMismatch())
@@ -1221,7 +1221,7 @@ function +(A::TensorTerm, B::TensorTerm)
     end
 end
 
-function +(B::TensorSuperType,A::TensorTerm)
+function +(B::TensorSuperType, A::TensorTerm)
 
     if get_free_indices(A) == get_free_indices(B) || isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(B) + TensorExpression(A)
@@ -1249,8 +1249,8 @@ end
 ##
 
 #helper funcs to ensure indices are valid
-function valid_index_placement(T1,T2)
-     if check_common_dummies(T1, T2)
+function valid_index_placement(T1, T2)
+    if check_common_dummies(T1, T2)
         throw(OverusedIndices())
     elseif !check_common_are_lightcone(T1, T2)
         throw(SameLevelDummieError())
@@ -1266,12 +1266,12 @@ function check_common_are_lightcone(T1::TensorExpression, T2)
     common = intersect(get_inds(T1), get_inds(T2))
     return isempty(common) || all(ind -> ind[1].index_set.name == "lightcone", common)
 end
-check_common_are_lightcone(T1, T2::TensorExpression)=check_common_are_lightcone(T2,T1)
-check_common_are_lightcone(T1::TensorExpression, T2::TensorExpression)=check_common_are_lightcone(T1,T2)
+check_common_are_lightcone(T1, T2::TensorExpression) = check_common_are_lightcone(T2, T1)
+check_common_are_lightcone(T1::TensorExpression, T2::TensorExpression) = check_common_are_lightcone(T1, T2)
 
 
 function get_inds(T)
-    if typeof(T)<:TensorExpression
+    if typeof(T) <: TensorExpression
         return T.summands[1][2].indices
     else
         return T.indices
@@ -1285,8 +1285,8 @@ function check_common_dummies(T1, T2)
     d2 = get_dummies(T2)
     f1 = get_free_indices_nopos(T1)
     f2 = get_free_indices_nopos(T2)
-    dp1=get_dummies_positional(T1)
-    dp2=get_dummies_positional(T2)
+    dp1 = get_dummies_positional(T1)
+    dp2 = get_dummies_positional(T2)
     return !(isempty(intersect(d1, f2)) && isempty(intersect(d2, f1)) && isempty(intersect(dp1, dp2)))
     # return isempty(common) || all(ind -> ind[1].index_set.name == "lightcone", common)
 end
@@ -1316,8 +1316,8 @@ function *(T::TensorSuperType, TEx::TensorExpression)
     return update_indices(new_exp)
 end
 function *(TEx::TensorExpression, T::TensorSuperType)
-    if valid_index_placement(TEx,T)
-    ###println("doing this sort of multiplcation1")
+    if valid_index_placement(TEx, T)
+        ###println("doing this sort of multiplcation1")
         new_exp = zero
         for sum in TEx.summands
             new_exp += sum[1] * (sum[2] * T)#should stop overflow?
@@ -1338,19 +1338,19 @@ function *(TEx::TensorExpression, T::TensorTerm)
 end
 
 function *(T1::TensorSuperType, T2::TensorSuperType)
-    if valid_index_placement(T1,T2)
+    if valid_index_placement(T1, T2)
         return update_indices(TensorTerm([copy(T1), copy(T2)]))
     end
 end
 
 
 function *(TEx::TensorTerm, T::TensorSuperType)
-    if valid_index_placement(TEx,T)
+    if valid_index_placement(TEx, T)
         return update_indices(TensorTerm(vcat(TEx.terms, copy(T))))
     end
 end
 function *(T::TensorSuperType, TEx::TensorTerm)
-   if valid_index_placement(T,TEx)
+    if valid_index_placement(T, TEx)
         return update_indices(TensorTerm(vcat(copy(T), TEx.terms)))
     end
 end
@@ -1397,7 +1397,7 @@ end
 # *(TEx::TensorTerm, T::TensorSuperType) = *(T, TEx)
 
 function *(T::TensorTerm, TEx::TensorTerm)
-    if valid_index_placement(T,TEx)
+    if valid_index_placement(T, TEx)
         return update_indices(TensorTerm(vcat(T.terms, TEx.terms)))
     end
 end
@@ -1461,7 +1461,15 @@ function singleterm(TEx::TensorExpression)
     end
     return false
 end
-
+"""
+Check if a TensorTerm is a single Tensor.
+"""
+function singleterm(TT::TensorTerm)
+    if length(TT.terms) == 1
+        return true
+    end
+    return false
+end
 """
 Get all summands in a TensorExpression of a particular weight. For example, this may be terms that carry a particular polynomial weighting.
 """
@@ -1792,7 +1800,7 @@ end
 
 
 function same_summands(a, b)
-    eq(x, y) = is_equal(x.first,y.first) && same_tensorterm_mod_syms(x.second, y.second)
+    eq(x, y) = is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] :  same_tensorterm_mod_syms(x.second, y.second))
     length(a) == length(b) || return false
 
     used = falses(length(b))
@@ -1870,7 +1878,7 @@ function ==(a::TensorExpression, b::TensorExpression)
     # println(b)
     aa = a.summands
     bb = b.summands
-    if same_summands(aa,bb)
+    if same_summands(aa, bb)
         return true
     end
     # println("summands")
@@ -1907,8 +1915,8 @@ function ==(a::TensorExpression, b::TensorExpression)
 end
 
 
-function is_equal(a::SymorNum,b::SymorNum)
-    ! (xor(typeof(a) <: Number, typeof(b) <: Number) || a != b)
+function is_equal(a::SymorNum, b::SymorNum)
+    !(xor(typeof(a) <: Number, typeof(b) <: Number) || a != b)
 end
 
 
@@ -2405,32 +2413,123 @@ end
 
 ##############################################################################################################################
 ##############################################################################################################################
+### index sorting and canonicalisation
+##############################################################################################################################
+##############################################################################################################################
 
+"""Computes the distance between two configurations of indices, as the number of inversions needed to get from one to the other. 
+Used as a cost function for finding the canonical representation of a tensor.
+Penalised out of alphabetical order, and also by the number of swaps needed to get to the canonical order."""
+function rep_distance(canon::Vector, config::Vector)
+    inv = 0
+    n = length(config)
+    for i in 1:n
+        for j in i+1:n
+            if config[i] > config[j]
+                inv += 1
+            end
+        end
+    end
 
-function sort_symmetric(T::TensorSuperType)
-    if typeof(T) <: TotallySymmetricSuperType
-        if T.indices[1][1] == T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
-            # println("deleting?????????")
-            return zero
+    return inv
+end
+
+"""Look through the symmetries of the tensor, and find the configuration of indices that is closest to the lexo-canonical order, as measured by the rep_distance function.
+Returns the sign and the new configuration of indices. If the cost is zero, we can return immediately, as we have found the lexo-canonical representation."""
+function find_canonical_rep(T::TensorSuperType)
+    # sort indices into canonical order, serving as a baseline of cost zero.
+    lexo = T.indices[sortperm(T.indices)]#this will automatically put in alphabetical
+    best_inds = T.indices
+    sign = 1
+    best_cost = Inf
+    for tableau in T.tableaux
+        syms = tableau.symmetries
+        for perm in syms
+            new_inds = apply_permutation_cycle(T.indices, perm)
+            cost = rep_distance(lexo, new_inds)
+            if cost == 0
+                return (1,new_inds)
+            end
+            if cost < best_cost
+                best_inds = new_inds
+                best_cost = cost
+            end
+        end
+        asyms = tableau.antisymmetries
+        for perm in asyms
+            new_inds = apply_permutation_cycle(T.indices, perm)
+            cost = rep_distance(lexo, new_inds)
+            if cost == 0
+                return (-1,new_inds)
+            end
+            if cost < best_cost
+                best_inds = new_inds
+                best_cost = cost
+                sign = -1
+            end
         end
 
-        indsorted = sortperm(T.indices)
-        newinds = T.indices[indsorted]
-        T.indices = newinds
-        return T
-    elseif typeof(T) <: TotallyAntisymmetricSuperType
-        indsorted = sortperm(T.indices)
-        ###println(T.indices)
-        ###println(indsorted)
-        ###println(swaps)
-        newinds = T.indices[indsorted]
-        ###println(newinds)
-        T.indices = newinds
-        invcount = is_even_perm(indsorted)
-        return (-1)^(!invcount) * T
     end
-    return T
+    # apply symmetries to the tensor, and measure the cost by the difference from the baseline.
+    return (sign, best_inds)
 end
+
+"""Given a permutation cycle like "(1 5 2)", applies the corresponding permutation to the vector."""
+function apply_permutation_cycle(v::Vector, cycle::String)
+    result = copy(v)
+    if cycle=="()"
+        return result
+    end
+    # extract cycles like "(1 5 2)"
+    cycles = collect(eachmatch(r"\(([^()]*)\)", cycle))
+
+    for c in cycles
+        # parse numbers inside this cycle
+        nums = parse.(Int, split(c.captures[1]))
+        k = length(nums)
+
+        # rotate values according to cycle
+        temp = result[nums[end]]
+        for i in k:-1:2
+            result[nums[i]] = result[nums[i-1]]
+        end
+        result[nums[1]] = temp
+    end
+
+    return result
+end
+"""
+Sorts indices of a tensor into a canonical order, and applies the appropriate symmetries if the tensor is symmetric or antisymmetric. 
+Swaps are based on permutations allowed by the Young Tableau
+"""
+function sort_symmetric(T::TensorSuperType)
+    (sign, new_inds) = find_canonical_rep(T)
+    T_new=copy(T)
+    T_new.indices = new_inds
+    return sign * T_new
+end
+    # if typeof(T) <: TotallySymmetricSuperType
+    #     if T.indices[1][1] == T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
+    #         # println("deleting?????????")
+    #         return zero
+    #     end
+    # indsorted = sortperm(T.indices)
+    #     newinds = T.indices[indsorted]
+    #     T.indices = newinds
+    #     return T
+    # elseif typeof(T) <: TotallyAntisymmetricSuperType
+    #     indsorted = sortperm(T.indices)
+    #     ###println(T.indices)
+    #     ###println(indsorted)
+    #     ###println(swaps)
+    #     newinds = T.indices[indsorted]
+    #     ###println(newinds)
+    #     T.indices = newinds
+    #     invcount = is_even_perm(indsorted)
+    #     return (-1)^(!invcount) * T
+    # end
+#     return T
+# end
 
 function simplify(TEx::TensorTerm)
     simplify(TensorExpression(TEx))
@@ -2711,7 +2810,7 @@ end
 function Base.show(io::IO, T::TensorExpression)
     it = Iterators.Stateful(T.summands)
     for tens in it
-        @show (tens[1] == 1)
+        # @show (tens[1] == 1)
         print(io, !(typeof(tens[1]) <: Number) ? tens[1] : tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (!isZero(real(tens[1])) ? string(tens[1]) : !isZero(imag(tens[1])) ? string(imag(tens[1])) * "Im" : "") * ")" : string(real(tens[1])))
         print(io, tens[2])
         next = peek(it)
@@ -3337,7 +3436,7 @@ function apply_young_projector(T::TensorSuperType, projector::Vector{String})
         Tn = copy(T)
         Tn.indices = inds
         # println("prefact: ", prefact)
-        tex += prefact * (Tn)
+        tex += prefact * sort_symmetric(Tn)
         # println(tex)
     end
     return tex #normalisation fixed elsewhere above
