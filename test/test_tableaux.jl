@@ -105,4 +105,9 @@
     @show Alakazam.young_projection(S2)
     @test Alakazam.young_projection(S1) - Alakazam.young_projection(S2) == Alakazam.zero #check that symmetric tensor is symmetric
 
+
+    # A= AntisymmetricTensor("A", [a => upper, b => upper, c => upper], [x])
+    # @show Alakazam.simplify(Alakazam.young_projection(A)*Alakazam.young_projection(R1))
+    #want to show a nontrivial identity here following from ricci identity...
+    # can't tell if simplify is wrong, or whether this is an edge case where something doesn't eval to zero
 end

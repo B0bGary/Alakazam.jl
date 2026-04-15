@@ -1110,6 +1110,44 @@ function eliminate_epsilon(T::TensorExpression)
 
 end
 
+##############################################################################################################################
+##############################################################################################################################
+### Basic properties of tensors
+##############################################################################################################################
+##############################################################################################################################
+
+
+"""
+Checks a tensor's Young Tableau to see if it is a totally antisymmetric tensor.
+Tensors with 0 or 1 index will be considered antisymmetric, so that they can be interpretted as differential forms.
+"""
+function isAntisymmetric(T::TensorSuperType)
+    if isempty(T.tableaux)
+        return length(T.indices) <= 1 #no tableau -> still a 0 or 1-form
+    end
+    tab = T.tableaux[1] #totally antisymm so only should have 1 anyway
+    # println(tab.row_lengths)
+    return length(tab.row_lengths) == length(T.indices)#should be a column of n rows
+end
+
+"""
+Checks a tensor's Young Tableau to see if it is a totally symmetric tensor.
+Tensors with 0 or 1 index will be considered symmetric.
+"""
+function isSymmetric(T::TensorSuperType)
+    if isempty(T.tableaux)
+        return length(T.indices) <= 1 #no tableau 
+    end
+    tab = T.tableaux[1] #totally symm so only should have 1 anyway
+    return tab.row_lengths[1] == length(T.indices)#should only have a single row of length n
+end
+
+
+
+
+
+
+
 
 ##############################################################################################################################
 ##############################################################################################################################
@@ -1773,6 +1811,82 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
     return T1 * T2
 end
 
+
+
+"""Take the Hodge star of a form.
+This operation will automatically be taken with respect to spacetime indices, if they are defined on the tensor.
+"""
+star(T::TensorSuperType, index_type::IndexSet=nothing) = ⋆(T, index_type)
+
+"""Take the Hodge star of a form.
+This operation will automatically be taken with respect to spacetime indices, if they are defined on the tensor.
+"""
+function ⋆(T::TensorSuperType,  index_type::Union{IndexSet, Nothing}=nothing)
+    if index_type===nothing && length(T.indices)==0
+        throw(InvalidDifferentialForm("The tensor "*tens2str(T)*" has no indices, please specify the spacetime indices for the Hodge star."))
+    end
+    if !isAntisymmetric(T) ### actually... need to do a different check because we may have flavour indices
+        throw(InvalidDifferentialForm("The tensor "*tens2str(T)*" should be totally antisymmetric."))
+    end
+    has_spacetime = false
+    mismatch = false
+    tinds = nothing
+    if index_type === nothing
+        for (ind, pos) in T.indices
+            is = ind.index_set
+            if is.name == "spacetime" #automatically detect if spacetime indices exist
+                has_spacetime = true
+                tinds = is
+                break
+            end
+            if tinds === nothing
+                tinds = is
+            elseif tinds != ind.index_set
+                mismatch = true
+            end
+        end
+    else
+        tinds = index_type
+    end
+    if has_spacetime == false && mismatch == true
+         throw(InvalidDifferentialForm("The tensor "*tens2str(T)*"has multiple index types, none of which are 'spacetime'. Indicate which indices should be dualised."))
+    end
+    dimension = tinds.range
+    #add logic to raise/lower indices... pop to canonical...
+    filtered = [x for x in T.indices if x[1].index_set == tinds] #only contract with the spacetime indices (incase we have flavour etc)
+    p = min(length(filtered), dimension) #form degree (ignoring eg flavour inds)
+    new_deg = dimension - p
+    if new_deg < 0 #can't have negative degree forms
+        return zero
+    end
+
+    # println(T)
+    #start the epsilon with the free inds
+    epsindlist=Vector{Pair{IndexSuperType, Alakazam.IndexPosition}}([  tinds.indices[i] => op_pos(filtered[i][2]) for i in 1:p] ∪ [tinds.indices[i]=> op_pos(tinds.default_position) for i in (p+1):dimension])#will work after popping the tensor
+    println(epsindlist)
+    # println(typeof(epsindlist))
+    # println(T)
+    eps=EpsilonTensor(epsindlist) #create an n dim epsilon
+    Tdual=eps×T #append the epsilon first -> this order should ensure we keep (atleast) the same free inds...
+    # println(Tdual.terms[2].indices)
+    forminds=[x for x in Tdual.terms[2].indices if x[1].index_set == tinds]
+    epsinds=Tdual.terms[1].indices
+    contraction = 1//factorial(p)*prod(KroneckerDelta([ti[1] => op_pos(ti[2]),ei[1] => op_pos(ei[2])]) for (ti, ei) in zip(forminds, epsinds[dimension-p+1:end]);init=1)#form the contraction with epsilon. we go backwards to preserve
+    Tdual*=contraction
+    Tdual=eliminate_kronecker(Tdual)
+
+    return Tdual
+end
+
+"""Take the wedge exterior product between two forms"""
+wedge(T1::TensorSuperType, T2::TensorSuperType) = ∧(T1::TensorSuperType, T2::TensorSuperType)
+
+"""Take the wedge exterior product between two forms"""
+function ∧(T1::TensorSuperType, T2::TensorSuperType)
+    return
+end
+
+
 ##############################################################################################################################
 ##############################################################################################################################
 #equality checking
@@ -1800,7 +1914,7 @@ end
 
 
 function same_summands(a, b)
-    eq(x, y) = is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] :  same_tensorterm_mod_syms(x.second, y.second))
+    eq(x, y) = is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] : same_tensorterm_mod_syms(x.second, y.second))
     length(a) == length(b) || return false
 
     used = falses(length(b))
@@ -2448,7 +2562,7 @@ function find_canonical_rep(T::TensorSuperType)
             new_inds = apply_permutation_cycle(T.indices, perm)
             cost = rep_distance(lexo, new_inds)
             if cost == 0
-                return (1,new_inds)
+                return (1, new_inds)
             end
             if cost < best_cost || (cost == best_cost && new_inds < best_inds)
                 best_inds = new_inds
@@ -2460,7 +2574,7 @@ function find_canonical_rep(T::TensorSuperType)
             new_inds = apply_permutation_cycle(T.indices, perm)
             cost = rep_distance(lexo, new_inds)
             if cost == 0
-                return (-1,new_inds)
+                return (-1, new_inds)
             end
             if cost < best_cost || (cost == best_cost && new_inds < best_inds)
                 best_inds = new_inds
@@ -2477,7 +2591,7 @@ end
 """Given a permutation cycle like "(1 5 2)", applies the corresponding permutation to the vector."""
 function apply_permutation_cycle(v::Vector, cycle::String)
     result = copy(v)
-    if cycle=="()"
+    if cycle == "()"
         return result
     end
     # extract cycles like "(1 5 2)"
@@ -2504,30 +2618,30 @@ Swaps are based on permutations allowed by the Young Tableau
 """
 function sort_symmetric(T::TensorSuperType)
     (sign, new_inds) = find_canonical_rep(T)
-    T_new=copy(T)
+    T_new = copy(T)
     T_new.indices = new_inds
     return sign * T_new
 end
-    # if typeof(T) <: TotallySymmetricSuperType
-    #     if T.indices[1][1] == T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
-    #         # println("deleting?????????")
-    #         return zero
-    #     end
-    # indsorted = sortperm(T.indices)
-    #     newinds = T.indices[indsorted]
-    #     T.indices = newinds
-    #     return T
-    # elseif typeof(T) <: TotallyAntisymmetricSuperType
-    #     indsorted = sortperm(T.indices)
-    #     ###println(T.indices)
-    #     ###println(indsorted)
-    #     ###println(swaps)
-    #     newinds = T.indices[indsorted]
-    #     ###println(newinds)
-    #     T.indices = newinds
-    #     invcount = is_even_perm(indsorted)
-    #     return (-1)^(!invcount) * T
-    # end
+# if typeof(T) <: TotallySymmetricSuperType
+#     if T.indices[1][1] == T.indices[2][1] && T.indices[1][2] == op_pos(T.indices[2][2])
+#         # println("deleting?????????")
+#         return zero
+#     end
+# indsorted = sortperm(T.indices)
+#     newinds = T.indices[indsorted]
+#     T.indices = newinds
+#     return T
+# elseif typeof(T) <: TotallyAntisymmetricSuperType
+#     indsorted = sortperm(T.indices)
+#     ###println(T.indices)
+#     ###println(indsorted)
+#     ###println(swaps)
+#     newinds = T.indices[indsorted]
+#     ###println(newinds)
+#     T.indices = newinds
+#     invcount = is_even_perm(indsorted)
+#     return (-1)^(!invcount) * T
+# end
 #     return T
 # end
 

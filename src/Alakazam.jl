@@ -67,6 +67,9 @@ export same_tensorterm_mod_syms, same_tensor_mod_syms
 export hard_simplify
 export hard_equals
 
+export ⋆,star
+
+
 export read_from_file, write_to_file
 
 

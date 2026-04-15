@@ -8,25 +8,25 @@ abstract type TensorSuperType end
 #pattern matching struct... don't touch
 mutable struct DummyPatternTensor <: TensorSuperType
     name::String
-    indices::Vector{Pair{I, IndexPosition}} where I <: IndexSuperType
+    indices::Vector{Pair{I,IndexPosition}} where I<:IndexSuperType
     function_of::Vector{Coordinate}
-    weights::Dict{String, Number}
+    weights::Dict{String,Number}
 
     function DummyPatternTensor(name::String, args...)
-        indices = Pair{IndexSuperType, IndexPosition}[]  # Initialize indices as an empty array
+        indices = Pair{IndexSuperType,IndexPosition}[]  # Initialize indices as an empty array
         function_of = Coordinate[]  # Initialize function_of as an empty array
-        weights = Dict{String, Number}()  # Initialize an empty weights dictionary
+        weights = Dict{String,Number}()  # Initialize an empty weights dictionary
 
         for arg in args
-            if arg isa Pair{I, IndexPosition} where I <: IndexSuperType
+            if arg isa Pair{I,IndexPosition} where I<:IndexSuperType
                 push!(indices, arg)
-            elseif arg isa Vector{Pair{I, IndexPosition}} where I <: IndexSuperType
+            elseif arg isa Vector{Pair{I,IndexPosition}} where I<:IndexSuperType
                 append!(indices, arg)
             elseif arg isa Coordinate
                 push!(function_of, arg)
             elseif arg isa Vector{Coordinate}
                 append!(function_of, arg)
-            elseif arg isa Dict{String, Number}
+            elseif arg isa Dict{String,Number}
                 weights = arg
             end
         end
@@ -67,9 +67,9 @@ mutable struct Tensor <: TensorSuperType
 
         for arg in args
             if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-                indices = vcat(indices,arg)
+                indices = vcat(indices, arg)
             elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
-                push!(indices,arg)
+                push!(indices, arg)
             elseif arg isa Coordinate
                 function_of = [arg]
             elseif arg isa Vector{Coordinate}
@@ -89,19 +89,19 @@ mutable struct Tensor <: TensorSuperType
             w[coord.name] = 1
         end
 
-        return new(name, indices, function_of, 
-        merge(w, weights), tableaux)
+        return new(name, indices, function_of,
+            merge(w, weights), tableaux)
     end
 end
 
-function SymmetricTensor(name::String,args...)
-    t = Tensor(name,args...)
+function SymmetricTensor(name::String, args...)
+    t = Tensor(name, args...)
     t.tableaux = generate_symmetric_tableau(t.indices)
     return t
 end
 
-function AntisymmetricTensor(name::String,args...)
-    t = Tensor(name,args...)
+function AntisymmetricTensor(name::String, args...)
+    t = Tensor(name, args...)
     t.tableaux = generate_antisymmetric_tableau(t.indices)
     return t
 end
@@ -110,8 +110,8 @@ function RiemannTensor(args...)
     return RiemannTensor("R", args...)
 end
 
-function RiemannTensor(name::String,args...)
-    t = Tensor(name,args...)
+function RiemannTensor(name::String, args...)
+    t = Tensor(name, args...)
     if length(t.indices) != 4
         throw(ArgumentError("Riemann tensor must have exactly 4 indices"))
     end
@@ -126,65 +126,74 @@ abstract type AntisymMetricSuperType <: MetricSuperType end
 abstract type EpsilonTensorSuperType <: AntisymMetricSuperType end
 abstract type KroneckerSuperType <: TensorSuperType end
 
+"""
+    Creates a metric tensor with (-,+) signature. By default, the signature is (1,d-1) where d is the range of the IndexSet of the attached indices, i.e. we use mostly-plus Minkowski convention unless otherwise specified.
+"""
 mutable struct Metric <: SymMetricSuperType
     name::String
-    indices::Vector{Pair{IndexSuperType, IndexPosition}}
+    indices::Vector{Pair{IndexSuperType,IndexPosition}}
     function_of::Vector{Coordinate}
-    weights::Dict{String, Number}
+    weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
+    signature::Pair{Int64} #added metric signature
 
     Metric(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = Metric("η", indices)
-    function Metric(name::String, indices::Vector{Pair{I, IndexPosition}}=Vector{Pair{IndexSuperType, IndexPosition}}()) where {I<:IndexSuperType}
+
+
+    function Metric(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), signature=None) where {I<:IndexSuperType}
         if length(indices) != 2
             throw(ArgumentError("Metric must have exactly 2 indices"))
         end
-        new(name, indices, Vector{Coordinate}(), Dict{String, Number}(),generate_symmetric_tableau(indices))
+        if signature === None
+            signature = (1, indices[1].index_set.range - 1)
+        end
+        new(name, indices, Vector{Coordinate}(), Dict{String,Number}(), generate_symmetric_tableau(indices), signature)
     end
 end
 
 
-mutable struct EpsilonTensor<:EpsilonTensorSuperType
+mutable struct EpsilonTensor <: EpsilonTensorSuperType
     name::String
-    indices::Vector{Pair{I, IndexPosition}} where {I<:IndexSuperType}
+    indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
     weights::Dict{String,Number}
     function_of::Vector{Coordinate}
     tableaux::Vector{YoungTableau}
 
-    
+
     EpsilonTensor(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = EpsilonTensor("ϵ", indices)
-    function EpsilonTensor(name::String,indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
-        if indices[1][2]!=indices[2][2]
+    function EpsilonTensor(name::String, indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
+        if indices[1][2] != indices[2][2]
             throw(InvalidEpsilonIndices()) #should be both upper or both lower
         end
-        if indices[1][1].index_set!=indices[2][1].index_set
+        if indices[1][1].index_set != indices[2][1].index_set
             println(indices[1][1])
             println(indices[2][1])
             throw(InvalidEpsilonIndices()) #should be from the same index set
         end
-        new(name,indices,Dict{String,Number}(),[],generate_antisymmetric_tableau(indices))
+        new(name, indices, Dict{String,Number}(), [], generate_antisymmetric_tableau(indices))
     end
- end
+end
 
 
-mutable struct KroneckerDelta<:KroneckerSuperType
+mutable struct KroneckerDelta <: KroneckerSuperType
     name::String
-    indices::Vector{Pair{I, IndexPosition}}where {I<:IndexSuperType}
+    indices::Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
     weights::Dict{String,Number}
     function_of::Vector{Coordinate}
     tableaux::Vector{YoungTableau}
 
     KroneckerDelta(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = KroneckerDelta("δ", indices)
 
-    function KroneckerDelta(name::String,indices::Vector{Pair{I, IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
-        if indices[1][2]==indices[2][2] #should be one upper and one lower
+    function KroneckerDelta(name::String, indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
+        if indices[1][2] == indices[2][2] #should be one upper and one lower
             throw(InvalidKroneckerIndices())
         end
-        if indices[1][1].index_set!=indices[2][1].index_set #should be from the same index set
+        if indices[1][1].index_set != indices[2][1].index_set #should be from the same index set
             throw(InvalidKroneckerIndices())
         end
-        new(name,indices,Dict{String,Number}(),[],generate_symmetric_tableau(indices))
+        new(name, indices, Dict{String,Number}(), [], generate_symmetric_tableau(indices))
     end
- end
+end
 
 
 
@@ -207,7 +216,7 @@ function generate_antisymmetric_tableau(n::Integer)
     return tableaux = [YoungTableau(fill(1, n), collect(1:n))]
 end
 function generate_riemann_tableau()
-    return tableaux = [YoungTableau([2,2],[1,3,2,4])]
+    return tableaux = [YoungTableau([2, 2], [1, 3, 2, 4])]
 end
 
 
@@ -411,8 +420,8 @@ macro Tensor(expr::Expr)
     symbol = string(expr)[1] # extract the tensor name
     indices = []
     if length(string(expr.args[2])) > 1 && #"name" part should only be one character - if more, then should be _
-       string(expr.args[2])[nextind(string(expr.args[2]),1)] == '_'
-        push!(indices, [ v => lower for v in split(string(expr.args[2])[nextind(string(expr.args[2]),1,2):end], "")]...)
+       string(expr.args[2])[nextind(string(expr.args[2]), 1)] == '_'
+        push!(indices, [v => lower for v in split(string(expr.args[2])[nextind(string(expr.args[2]), 1, 2):end], "")]...)
     else
         @assert length(string(expr.args[2])) == 1 "Tensor symbol must be a single character, not $(expr.args[2])"
     end
@@ -434,18 +443,18 @@ macro Tensor(expr::Expr)
 end
 
 function parse_indices(head, indices, leaf)
-    str_head = [ v for (i,v) in enumerate(string(leaf ? head : head.args[2])) ]
+    str_head = [v for (i, v) in enumerate(string(leaf ? head : head.args[2]))]
     # @show str_head
     if length(str_head) == 1
-            indices = [indices..., str_head[1] => upper]
+        indices = [indices..., str_head[1] => upper]
     else
         underscore = findfirst('_' .== str_head)
         # underscore = underscore === nothing ? length(string(head)) : underscore
         if underscore != nothing
             underscoreless_str = [str_head[1:underscore-1]..., str_head[underscore+1:end]...]
-            indices = [indices..., [ v => i ≥ underscore ? lower : upper for (i,v) in enumerate(underscoreless_str)]...]
+            indices = [indices..., [v => i ≥ underscore ? lower : upper for (i, v) in enumerate(underscoreless_str)]...]
         else
-            indices = [indices..., [ v => upper for (i,v) in enumerate(str_head)]...]
+            indices = [indices..., [v => upper for (i, v) in enumerate(str_head)]...]
         end
     end
     return indices
@@ -458,78 +467,78 @@ macro Tensor(expr::Symbol)
     # split the symbol A_bc at the underscore
     symbol, indices = split(string(expr), "_")
     return quote
-            Tensor(
-                $(string(symbol)),
-                [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
-            )
+        Tensor(
+            $(string(symbol)),
+            [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
+        )
     end
 end
 
 macro Tensor(expr::String)
     length(expr) == 1 && return Tensor(expr) #simple no index tensor
-    symbol=expr[1:1]
+    symbol = expr[1:1]
 
-    indexpos=2#depreciate this
-     @assert  contains("_^([{",expr[indexpos]) "Tensor name should be one character."#throw error if not starting with following
-    positions=[]
-    indices=[]
-    currpos=upper
-    pause=false
-    asym=false
-    sym=false
-    slotnum=0 #current real index pos (for sym/asym logic)
-    functionoflist=[]
-    funof=false
-    tabstart=0
-    tabaccum=[]
-    tableaulist=[]
-    coordstring=""
-    for (i,char) in enumerate(expr)
-        i==1&&continue #skip the first character since its the symbol, and we already extracted it
-        char=string(char)
-        if char=="^"
-            currpos=upper
-        elseif char=="_"
-            currpos=lower
-        elseif char=="|"#pause/unpause sym/asym
-            pause=(!pause) 
-        elseif char=="["
-            tabaccum=Vector{Int64}()
-            asym=true
-            tabstart=slotnum+1
-        elseif char=="]"
-            asym=false
-            push!(tableaulist, YoungTableau(fill(1, slotnum-tabstart+1),tabaccum))
-        elseif char=="("
-            tabaccum=Vector{Int64}()
-            sym=true
-            tabstart=slotnum+1
-        elseif char==")"
-            sym=false
-            push!(tableaulist, YoungTableau([length(tabaccum)],tabaccum))
-        elseif char=="{"
-            funof=true
+    indexpos = 2#depreciate this
+    @assert contains("_^([{", expr[indexpos]) "Tensor name should be one character."#throw error if not starting with following
+    positions = []
+    indices = []
+    currpos = upper
+    pause = false
+    asym = false
+    sym = false
+    slotnum = 0 #current real index pos (for sym/asym logic)
+    functionoflist = []
+    funof = false
+    tabstart = 0
+    tabaccum = []
+    tableaulist = []
+    coordstring = ""
+    for (i, char) in enumerate(expr)
+        i == 1 && continue #skip the first character since its the symbol, and we already extracted it
+        char = string(char)
+        if char == "^"
+            currpos = upper
+        elseif char == "_"
+            currpos = lower
+        elseif char == "|"#pause/unpause sym/asym
+            pause = (!pause)
+        elseif char == "["
+            tabaccum = Vector{Int64}()
+            asym = true
+            tabstart = slotnum + 1
+        elseif char == "]"
+            asym = false
+            push!(tableaulist, YoungTableau(fill(1, slotnum - tabstart + 1), tabaccum))
+        elseif char == "("
+            tabaccum = Vector{Int64}()
+            sym = true
+            tabstart = slotnum + 1
+        elseif char == ")"
+            sym = false
+            push!(tableaulist, YoungTableau([length(tabaccum)], tabaccum))
+        elseif char == "{"
+            funof = true
             println("starting function of")
         else
-             #increase the real indexpos
-            if  !funof
-                slotnum+=1
-                push!(indices,Symbol(char))
-                push!(positions,currpos)
+            #increase the real indexpos
+            if !funof
+                slotnum += 1
+                push!(indices, Symbol(char))
+                push!(positions, currpos)
                 if !pause && asym
                     push!(tabaccum, slotnum)
                 elseif !pause && sym
                     push!(tabaccum, slotnum)
                 end
-            elseif char=="," || char=="}"
-                push!(functionoflist, :( $(esc(Symbol(coordstring))) ))
+            elseif char == "," || char == "}"
+                push!(functionoflist, :($(esc(Symbol(coordstring)))))
                 println("added function of: ", coordstring)
-                coordstring=""
-                if char=="}"
-                    funof=false
+                coordstring = ""
+                if char == "}"
+                    funof = false
                 end
             else
-                coordstring*=char
+                coordstring *= char
             end
         end
         # indexpos+=1
@@ -537,6 +546,8 @@ macro Tensor(expr::String)
     end
     functions_expr = Expr(:vect, functionoflist...)
     #pair indices and pos into a vector
-    indplacement= quote[$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]end
-    return :(Tensor($symbol, [$indplacement...],[$tableaulist...],$functions_expr))
+    indplacement = quote
+        [$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]
+    end
+    return :(Tensor($symbol, [$indplacement...], [$tableaulist...], $functions_expr))
 end

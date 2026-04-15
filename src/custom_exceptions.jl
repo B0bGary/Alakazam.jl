@@ -34,3 +34,13 @@ end
 
 struct InvalidDerivativeBasis <: Exception
 end
+
+struct InvalidDifferentialForm <: Exception
+    T::String
+end
+
+Base.showerror(io::IO, e::InvalidDifferentialForm) = begin
+    println(io, e.T)
+    # println(io, e.T)
+    # println(io, " should be totally antisymmetric.")
+end
