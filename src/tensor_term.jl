@@ -395,6 +395,9 @@ end
 function TensorTerm(term::TensorSuperType)
     TensorTerm([term])
 end
+function TensorTerm(term::TensorTerm)
+    term
+end
 
 mutable struct TensorExpression
     summands::Vector{Pair{SymorNum,TensorTerm}}

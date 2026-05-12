@@ -922,11 +922,19 @@ function graded_sign(perm, ops)
     return sign
 end
 
+function swap_to_perm(N, swap)
+    perm = collect(1:N)
+    i, j = swap
+    perm[i], perm[j] = perm[j], perm[i]
+    return perm
+end
+
 function graded_swap(ops, perm)
-    permuted = ops[perm]
+    perm2=swap_to_perm(length(ops),perm)
+    perm_full=ops[perm2]
     sign = graded_sign(perm, ops)
 
-    return (permuted, sign)
+    return (perm_full, sign)
 end
 
 function graded_swaps(ops)

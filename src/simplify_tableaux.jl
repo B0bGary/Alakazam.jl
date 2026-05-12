@@ -260,17 +260,28 @@ function draw_ind_graph(g1)
 end
 
 
+function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
+    eq,gr=same_tensorterm_mod_syms_grade(T1,T2,debug)
+    # @show T1
+    # @show T2
+    # println(eq)
+    # println(gr)
+    return eq&&gr==1
+end
+
 
 #want a version that handles nested operators nicely
-
-function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
+"""
+Grading is the sign flip to turn T2 into T1
+"""
+function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=false)
     # println("checking term iso")
     # println(T1)
     # println(T2)
     update_indices(T1)
     update_indices(T2)
     if get_free_indices(T1) != get_free_indices(T2)
-        return false
+        return (false,0)
     end
 
     g1 = construct_tensorterm_graph(T1)
@@ -284,14 +295,14 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
     ISO = find_tensor_graph_iso(g1, g2)
 
     if !ISO.is_isomorphic()
-        return false
+        return (false,0)
     end
 
     # println("found iso")
 
     if find_weighted_square(g2) && find_weighted_square(g1) #other cases.....
         #the term is equal to zero.
-        return true
+        return (true,1)
 
     end
     #there should be an isomorphism with tensor rearrange. find the grading of remapping the tensors.
@@ -337,11 +348,13 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
             end
 
             chain = get_operator_chain(TT2.terms[perm_pair[1][1]]) #get the chain of nested ops
+            # println(perm_pair)
             # println("chain")
             # println(chain)
             rt = root_oprnd(chain[1]) #wlog find the root object acted on
             # println("root")
             # println(rt)
+            # println([perm_pair[1][2], perm_pair[2][2]])
             swp = graded_swap(chain, [perm_pair[1][2], perm_pair[2][2]]) #perm_pair[2][2]] #swap within chain
             # println(swp)
             rb = rebuild_nested(swp[1], rt)
@@ -349,6 +362,9 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
             # println("rebuilt")
             # println(rb)
             TT2.terms[perm_pair[1][1]] = rb
+            # println(T2)
+            # println(TT2)
+
             update_indices(TT2)
         end
 
@@ -519,14 +535,14 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
             continue #try a different iso
         end
 
-        oversign = totgrweight * ((-1)^tens_grad)
+        oversign = totgrweight * ((-1)^tens_grad)*sign
         #    println("index perm weight:"*string(totgrweight))
         #    println("tens swap weight:"*string(tens_grad))
 
-        return oversign == 1 #same !!
+        return (true,oversign) #same !!
     end
 
-    return false
+    return (false,0)
 
 end
 

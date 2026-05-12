@@ -1874,8 +1874,8 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType)
     inds1 = [x for x in T1.indices if x[1].index_set == tinds]
     inds2 = [x for x in T2.indices if x[1].index_set == tinds]
     # combinds1=vcat(inds1,inds2)
-    T=T1×T2
-    combinds= [x for x in T.indices if x[1].index_set == tinds]
+    T = T1 × T2
+    combinds = [x for x in T.indices if x[1].index_set == tinds]
     # println(combinds)
     # println([x for x in tinds.indices])
     # println([y for y in combinds])
@@ -1886,15 +1886,15 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType)
     q = length(inds2)
     r = p + q
     dim = tinds.range
-    poss=combinds[1][2]#find the pos of free
-    rem=dim-r
+    poss = combinds[1][2]#find the pos of free
+    rem = dim - r
 
     if r > dim
         return zero
     end
 
-        # --- build epsilon for antisymmetrization ---
-        #fill out the outermost eps
+    # --- build epsilon for antisymmetrization ---
+    #fill out the outermost eps
     # println(combinds)
     epsindlist = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
         vcat(
@@ -1905,50 +1905,50 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType)
     # println(epsindlist)
     eps1 = EpsilonTensor(epsindlist) #the leadings inds will not change
 
-    unused=[x for x in unused if x∉ (y[1] for y in vcat(combinds,eps1.indices))]
+    unused = [x for x in unused if x ∉ (y[1] for y in vcat(combinds, eps1.indices))]
     epsindlist2 = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
         vcat(
             [unused[i] => op_pos(poss) for i in 1:r],
             [eps1.indices[i][1] => op_pos(poss) for i in (r+1):dim] #contract with end of other eps
         )
     )
-    eps2=EpsilonTensor(epsindlist2) 
-    T1c=copy(T1)
-    T1c.indices=[epsindlist2[i][1] => poss for i in 1:p]
-    T2c=copy(T2)
-    T2c.indices=[epsindlist2[i][1] => poss for i in p+1:r]
+    eps2 = EpsilonTensor(epsindlist2)
+    T1c = copy(T1)
+    T1c.indices = [epsindlist2[i][1] => poss for i in 1:p]
+    T2c = copy(T2)
+    T2c.indices = [epsindlist2[i][1] => poss for i in p+1:r]
     println(eps1)
     println(eps2)
     println(T1c)
     println(T2c)
-    prefact=1//(factorial(p)*factorial(q)*factorial(dim-r))
-    return prefact*eps1*eps2*T1c*T2c
+    prefact = 1 // (factorial(p) * factorial(q) * factorial(dim - r))
+    return prefact * eps1 * eps2 * T1c * T2c
 
-#     # --- append epsilon ---
-#     Tdual = TensorExpression(eps × T)
-#     println(Tdual)
-#     coef,term=Tdual.summands[1] #only a single summand
-#     # --- extract indices ---
-#     allinds = [x for x in term.indices[1:end-length(term.terms[end].indices)] if x[1].index_set == tinds]
-#     epsinds = term.terms[end].indices
+    #     # --- append epsilon ---
+    #     Tdual = TensorExpression(eps × T)
+    #     println(Tdual)
+    #     coef,term=Tdual.summands[1] #only a single summand
+    #     # --- extract indices ---
+    #     allinds = [x for x in term.indices[1:end-length(term.terms[end].indices)] if x[1].index_set == tinds]
+    #     epsinds = term.terms[end].indices
 
-#     # --- antisymmetrization via contraction ---
-# contraction = prod(
-#     KroneckerDelta([
-#         allinds[i][1] => op_pos(allinds[i][2]),
-#         epsinds[i][1] => op_pos(epsinds[i][2])
-#     ])
-#     for i in 1:r;
-#     init=1
-# )
+    #     # --- antisymmetrization via contraction ---
+    # contraction = prod(
+    #     KroneckerDelta([
+    #         allinds[i][1] => op_pos(allinds[i][2]),
+    #         epsinds[i][1] => op_pos(epsinds[i][2])
+    #     ])
+    #     for i in 1:r;
+    #     init=1
+    # )
 
-#     # --- normalization ---
-#     norm = factorial(r) // (factorial(p) * factorial(q))
+    #     # --- normalization ---
+    #     norm = factorial(r) // (factorial(p) * factorial(q))
 
-#     Tdual *= norm * contraction*coef
-#     Tdual = eliminate_kronecker(Tdual)
+    #     Tdual *= norm * contraction*coef
+    #     Tdual = eliminate_kronecker(Tdual)
 
-#     return Tdual
+    #     return Tdual
 end
 
 """
@@ -1987,13 +1987,44 @@ end
 
 #equality checking
 
+
+function ==(a::TensorExpression, b::TensorTerm)
+    return a == TensorExpression(b)
+end
+
+function ==(a::TensorTerm, b::TensorExpression)
+    return TensorExpression(a) == b
+end
+
+function ==(a::TensorSuperType, b::TensorExpression)
+    return TensorExpression(a) == b
+end
+
+function ==(a::TensorExpression, b::TensorSuperType)
+    return a == TensorExpression(b)
+end
+
+
+function ==(a::TensorSuperType, b::TensorTerm)
+    return same_tensorterm_mod_syms(TensorTerm(a), b)
+end
+
+function ==(a::TensorTerm, b::TensorSuperType)
+    return same_tensorterm_mod_syms(a, TensorTerm(b))
+end
+
 function ==(a::TensorTerm, b::TensorTerm)
-    return a.terms == b.terms
+    return same_tensorterm_mod_syms(a, b)
 end
 
 function hard_equals(a::TensorTerm, b::TensorTerm)
     return same_tensorterm_mod_syms(a, b)
 end
+
+function hard_equals_graded(a::TensorTerm, b::TensorTerm)
+    return same_tensorterm_mod_syms_grade(a, b)
+end
+
 
 function ≅(a::TensorTerm, b::TensorTerm)
     return hard_equals(a, b)
@@ -2001,7 +2032,8 @@ end
 
 
 function same_summands(a, b)
-    eq(x, y) = is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] : same_tensorterm_mod_syms(x.second, y.second))
+    eq(x, y) = ((is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) && !(typeof(singleterm(x.second))<:OperatorSuperType) && !(typeof(singleterm(y.second))<:OperatorSuperType) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] : same_tensorterm_mod_syms(TensorTerm(x.second),TensorTerm(y.second))))
+||is_equal(x.first, -y.first) && same_tensorterm_mod_syms_grade(TensorTerm(x.second),TensorTerm(y.second))==(true,-1))
     length(a) == length(b) || return false
 
     used = falses(length(b))
@@ -2012,13 +2044,21 @@ function same_summands(a, b)
             # println(x.second)
             # println(b[j].second)
             # println(same_tensorterm_mod_syms(x.second, b[j].second))
+            # @show x
+            # @show b[j]
+            # @show eq(x, b[j])
             if !used[j] && eq(x, b[j])
+                # println(a)
+                # println(x)
+                # println(found)
                 used[j] = true
                 found = true
                 break
             end
         end
+        # println(a)
         # println(x)
+        # println(b)
         # println(found)
         found || return false
     end
@@ -2032,7 +2072,7 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
         return false
     end
     for i = eachindex(a)
-        if !(a[i]==b[i])
+        if !(a[i] == b[i])
             return false
         end
     end
@@ -2783,16 +2823,16 @@ function simplify(TEx::TensorExpression)
     # ##println("renamed: ",new_exp)
     # eliminate_epsilon(new_exp)
     new_exp = rename_dummies(new_exp)
-    contract_metrics(new_exp, Metric)
+    new_exp = contract_metrics(new_exp, Metric)
     # hard_simplify(new_exp)
     # new_exp=symmetrise_partials(new_exp)
     # println("ouput symmetrised partials: ",new_exp)
-    merge_sum(new_exp)
-    new_exp=symmetrise_partials(new_exp)
+    outexp = hard_merge(new_exp)
+    # new_exp=symmetrise_partials(new_exp)
     # println("ouput symmetrised partials: ",new_exp)
 
     # println(new_exp)
-    return new_exp
+    return outexp
 end
 
 function simp_ops_n_sym(exp::TensorExpression)
@@ -2861,13 +2901,14 @@ function hard_merge(TEx::TensorExpression)
         found = false
 
         for i in eachindex(new_merged)
-            if hard_equals(summand[2], new_merged[i][2])
+            (eq, gr) = hard_equals_graded(summand[2], new_merged[i][2])
+            if eq
                 # println("got here")
                 # println(summand[1])
                 # println(new_merged[i][1])
                 # println(summand[2])
                 # println(new_merged[i][2])
-                new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
+                new_merged[i] = (gr * new_merged[i][1] + summand[1] => summand[2])
                 # ##println("sum is")
                 # ##println(new_merged[i])
                 # ##println(new_merged) #not editting in place apparaently....
@@ -2938,7 +2979,7 @@ function merge_sum(TEx::TensorExpression)
                 found = true
                 break
             elseif length(summand[2].terms) == 1 && length(new_merged[i][2].terms) == 1
-                
+
                 rescomp = same_tensor_mod_syms(summand[2].terms[1], new_merged[i][2].terms[1])
                 if rescomp[1] == true
                     # println(rescomp)
@@ -4291,7 +4332,7 @@ end
 
 
 function isTensorTerm(T::TensorExpression)
-    if length(T.summands) == 1 && T.summands[1][1]==1
+    if length(T.summands) == 1 && T.summands[1][1] == 1
         return T.summands[1][2]
     else
         return false
@@ -4302,8 +4343,8 @@ end
 Check if a TensorExpression is a single summand of one tensor with a 1 coefficient. Returns the tensor or false.
 """
 function isTensor(T::TensorExpression)
-    term=isTensorTerm(T)
-    if term!=false && length(term.terms)==1
+    term = isTensorTerm(T)
+    if term != false && length(term.terms) == 1
         return term.terms[1]
     else
         return false
@@ -4312,7 +4353,7 @@ function isTensor(T::TensorExpression)
 end
 
 function isTensor(T::TensorTerm)
-    if  length(T.terms)==1
+    if length(T.terms) == 1
         return T.terms[1]
     else
         return false
