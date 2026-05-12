@@ -8,7 +8,144 @@
 
 
 derivative_actions = Dict{DerivativeSuperType,Dict{TensorSuperType,TensorExpression}}() #where {D<:}
+derivative_algebra = Dict{Pair{DerivativeSuperType,DerivativeSuperType},Pair{Integer,TensorExpression}}() #integer is 1 for comm, -1 for anticommut, expression is the result of the commutator/anticommutator (eg for fermionic derivatives)
 
+
+
+function hard_equals(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    if a.name == b.name && a.operator_indices == b.operator_indices && a.operand == b.operand #basic check
+        return true
+    end
+    opra = isTensor(a.operand)
+    oprab = isTensor(b.operand)
+    if oprab != false && opra != false && typeof(opra) <: DerivativeSuperType && typeof(oprab) <: DerivativeSuperType #nested ops
+
+        # println("checking nested derivatives")
+        # println(opra)        
+        # println(oprab)
+        #check to see if the operand of one derivative is the other, and if the operators are the same (if they commute then this is true)
+        if opra.operator_indices == b.operator_indices && oprab.operator_indices == a.operator_indices && opra.name == b.name && oprab.name == a.name && opra.operand == oprab.operand
+            # println("derivatives could commute")
+            return derivatives_commute(a::DerivativeSuperType, b::DerivativeSuperType)
+        else
+            return false
+        end
+    end
+    return false
+end
+
+
+function ==(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    if a.name == b.name && a.operator_indices == b.operator_indices && a.operand == b.operand #basic check
+        return true
+    end
+    opra = isTensor(a.operand)
+    oprab = isTensor(b.operand)
+    if oprab != false && opra != false && typeof(opra) <: DerivativeSuperType && typeof(oprab) <: DerivativeSuperType #nested ops
+
+        # println("checking nested derivatives")
+        # println(opra)        
+        # println(oprab)
+        #check to see if the operand of one derivative is the other, and if the operators are the same (if they commute then this is true)
+        if opra.operator_indices == b.operator_indices && oprab.operator_indices == a.operator_indices && opra.name == b.name && oprab.name == a.name && opra.operand == oprab.operand
+            # println("derivatives could commute")
+            return derivatives_commute(a::DerivativeSuperType, b::DerivativeSuperType)
+        else
+            return false
+        end
+    end
+    return false
+end
+
+
+
+function signed_equals(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    if a.name == b.name && a.operator_indices == b.operator_indices && a.operand == b.operand #basic check
+        return (true, 1)
+    end
+    opra = isTensor(a.operand)
+    oprab = isTensor(b.operand)
+    if oprab != false && opra != false && typeof(opra) <: DerivativeSuperType && typeof(oprab) <: DerivativeSuperType #nested ops
+
+        # println("checking nested derivatives")
+        # println(opra)        
+        # println(oprab)
+        #check to see if the operand of one derivative is the other, and if the operators are the same (if they commute then this is true)
+        if opra.operator_indices == b.operator_indices && oprab.operator_indices == a.operator_indices && opra.name == b.name && oprab.name == a.name && opra.operand == oprab.operand
+            # println("derivatives could commute")
+            return derivatives_commute_signed(a::DerivativeSuperType, b::DerivativeSuperType)
+        else
+            return (false, 0)
+        end
+    end
+    return (false, 0)
+end
+
+
+
+function register_derivative(name::String, functionof::Union{Coordinate,Vector{Coordinate}}, operator_indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}()) where {I<:IndexSuperType}
+    return Derivative(name, zero, functionof, operator_indices)
+end
+
+
+#logic needs to be more complex, since we want not literal matches but symbolic matches
+function register_derivative_commutation(D1::DerivativeSuperType, D2::DerivativeSuperType, res::TensorExpression, grading::Integer)
+    derivative_algebra[D1=>D2] = grading => res
+    derivative_algebra[D2=>D1] = grading => -res
+end
+
+function register_derivative_commutation(D1::DerivativeSuperType, D2::DerivativeSuperType, res::TensorExpression)
+    derivative_algebra[D1=>D2] = 1 => res
+    derivative_algebra[D2=>D1] = 1 => -res
+end
+
+function register_derivative_anticommutation(D1::DerivativeSuperType, D2::DerivativeSuperType, res::TensorExpression)
+    derivative_algebra[D1=>D2] = -1 => res
+    derivative_algebra[D2=>D1] = -1 => res
+end
+
+function register_derivative_commutation(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    derivative_algebra[D1=>D2] = 1 => zero
+    derivative_algebra[D2=>D1] = 1 => zero
+end
+
+function register_derivative_anticommutation(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    derivative_algebra[D1=>D2] = -1 => zero
+    derivative_algebra[D2=>D1] = -1 => zero
+end
+
+function derivatives_commute_signed(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    if typeof(D1) <: PartialDerivative && typeof(D2) <: PartialDerivative
+        # println(D1)
+        # println(outer_grading(D1))
+        # println(D2)
+        # println(outer_grading(D2))
+        #use grading of the derivative itself, not the grading of full object since we commute ops not expressions
+        if (outer_grading(D1) == 0 && outer_grading(D2) == 0) || (outer_grading(D1) != outer_grading(D2))
+            return (true, 1) #assume partial derivatives commute
+        else
+            return (true, -1) #fermionic derivatives anticommute... add anti behaviour later
+        end
+    end
+    if haskey(derivative_algebra, D1 => D2)
+        return derivative_algebra[D1=>D2][1] == (1, zero)
+    else
+        return (false, 0)
+    end
+end
+
+function derivatives_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    return derivatives_commute_signed(D1, D2) == (true, 1)
+end
+
+
+function operators_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    if haskey(derivative_algebra, D1 => D2)
+        return derivative_algebra[D1=>D2][1] == 1
+    else
+        return false
+    end
+end
 
 function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:DerivativeSuperType}
     ind1 = D1.operator_indices
@@ -192,7 +329,7 @@ function apply_derivative(TEX::TensorExpression)
         nt = summand[1]
         for term in summand[2].terms
             if typeof(term) <: DerivativeSuperType
-
+                # println("applying derivative to term", term)
                 nt *= apply_derivative(term)
             else
                 nt *= term
@@ -200,11 +337,12 @@ function apply_derivative(TEX::TensorExpression)
 
         end
         out = TensorExpression(out)
+        # println("nt is ",nt)
+        # println(out)
         out += TensorExpression(nt)
     end
     return TensorExpression(out)
 end
-
 
 
 #apply the derivative and cancel terms that are annihilated
@@ -215,11 +353,18 @@ function apply_derivative(D::DerivativeSuperType)
     for summandind in eachindex(D.summands) # for each summand (coefficient, tensorterm)
         summand = D.summands[summandind]
         term = summand[1]
+        # println("applying derivative to summand ", summand)
         for tensor in summand[2].terms # for each individual tensor in tensorterm
             if typeof(tensor) <: DerivativeSuperType # if the tensor is an operator
                 operands = tensor.operand #get the operand (should only be one thanks to prod rule)
                 tens = operands.summands[1][2].terms[1] #get the only item in the operand
-                if isempty(intersect(Set(tens.function_of), Set(tensor.coord))) #see if tensor is a function of the derivative coords
+                funcof = get_function_of(tens)
+                if isempty(intersect(funcof, Set(tensor.coord))) #see if tensor is a function of the derivative coords
+                    # println("annihilated by derivative since not a function of the coord")
+                    # println("tens is ", tens)
+                    # println("derivative is ", tensor)
+                    # println("function of is ", tens.function_of)
+                    # println("coord is ", tensor.coord)
                     term *= zero #annihilate the term   
                 else
                     out1 = perform_derivative_action(tensor)
@@ -241,6 +386,27 @@ function apply_derivative(D::DerivativeSuperType)
     end
     out = TensorExpression(out)
     return merge_sum(out)
+end
+
+
+function get_function_of(T::TensorSuperType)
+    if typeof(T) <: DerivativeSuperType
+        return get_function_of(T.operand)
+    elseif hasproperty(T, :function_of)
+        return T.function_of
+    else
+        return Coordinate[]
+    end
+end
+
+function get_function_of(T::TensorExpression)
+    coords = Coordinate[]
+    for (_, term) in T.summands
+        for t in term.terms
+            append!(coords, get_function_of(t))
+        end
+    end
+    return coords
 end
 
 """
@@ -274,7 +440,7 @@ function perform_derivative_action(D::DerivativeSuperType)
                     inverted_dict = Dict(v => k for (k, v) in o)
                     inverted_dict2 = Dict(v => k for (k, v) in op[2])
 
-                    all_invs=merge(inverted_dict,inverted_dict2)
+                    all_invs = merge(inverted_dict, inverted_dict2)
                     # pat_rep = index_to_pattern(replacement, inverted_dict)
                     # println(pat_rep)
                     # pat_rep = index_to_pattern(pat_rep, inverted_dict2)
@@ -299,11 +465,14 @@ Replaces a symbolic derivative with its full form, eg substituting a covariant d
 'TEX' is the original expression. 'D' is the derivative to replace, and 'DExpansion' is a tensor expression that will be a sum of tensors/operators.
 For each operator in 'DExpansion', the operand will be replaced by the matching operand in 'TEX'.
 """
-function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D::DerivativeSuperType, DExpansion::TensorExpression)
+function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D::DerivativeSuperType, DExpansion::TensorExpression, outertex=nothing)
 
-#### keeping all the comments here in case something breaks in future
+    #### keeping all the comments here in case something breaks in future
 
-    if(get_free_indices(D)!=get_free_indices(DExpansion))
+    if (get_free_indices(D) != get_free_indices(DExpansion))
+        println(D)
+        println(DExpansion)
+        println(TEX)
         println("It appears that your expansion is not compatible.")
         throw(FreeIndexMismatch())
     end
@@ -317,6 +486,28 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
     for summand in TEX.summands
         new_summand = summand[1]
         for tensor in summand[2].terms #look at each tensor in the tensor term
+            # println("checking tensor")
+            # println(tensor)
+            if typeof(tensor) <: DerivativeSuperType #apply to operands first recursively
+                # println("expanding operand")
+                # println("expanding operand")
+                # println(tensor.operand)
+                # println("im gunna recooooooorse")
+                # println(tensor)
+                # println(typeof(tensor))
+                # println(typeof(D))
+                if outertex === nothing
+                    tensor.operand = expand_derivative(tensor.operand, D, DExpansion, TEX)
+                else
+                    tensor.operand = expand_derivative(tensor.operand, D, DExpansion, outertex)
+                end
+                #feed in term... need to make sure we dont reuse outer indices
+                #recursively expand the operand if it has the same derivative in it
+                update_ext_indices(tensor)
+                # println("did a hecking recursion")
+                # println(tensor)
+                # println(get_inds(tensor))
+            end
             if typeof(tensor) == typeof(D) && tensor.name == D.name #operator found
                 operand = tensor.operand
                 # println(TensorExpression(D))
@@ -329,9 +520,21 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
 
                 #figure out what indices we're allowed to use in the replacement
                 sets = get_index_sets(tensor) #Set{IndexSet}()
-
+                if outertex === nothing
+                    ref = TEX
+                else
+                    ref = outertex
+                end
                 for set in sets
-                    a = OrderedSet{Index}(get_unused_indices(TEX, set))
+
+                    a1 = OrderedSet{Index}(get_unused_indices(ref, set))
+                    b = OrderedSet{Index}(get_unused_indices(tensor.operand, set)) ##will check for dummies inside...
+                    a = intersect(a1, b)
+                    # println("unused")
+                    # println(a)
+                    # println("tex v ref")
+                    # println(TEX)
+                    # println(ref)
                     push!(avail, set => a) #ones we can replace with
                 end
                 #construct the replacement
@@ -343,13 +546,18 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                     ###############fix index logic for multiple tensors in the expressions
                     ## currently, K^{*β}_{α*}∂^{i*}_{*β}[[0*]]   => goes to K^{*β}_{α*}∂^{i*}_{*β}[[F^{ik**}_{**jβ}]], where F^{ik**}_{**jβ}
 
-
-                    for reptensor in repsummand[2].terms
+                    found_op = false
+                    for reptensor in repsummand[2].terms ##add somewhere to handle a term with no op (like a YM covar).
                         ##println(reptensor)
                         if typeof(reptensor) <: OperatorSuperType
-                            #if we found an operator,
-                            #println("operators")
-                            # println(reptensor)
+                            found_op = true
+                            # #if we found an operator,
+                            # println("operators")
+                            # println("Running on operand")
+                            # println(operand)    
+                            # println("we will try and expand",D)                        
+                            # println(expand_derivative(operand,D,DExpansion))
+                            # println("^result")
                             reptensor.operand = operand#set to correct operand
 
                             #dums=get_dummies(reptensor)#gets the placeholder dummy indices from the pattern
@@ -384,7 +592,11 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                                     ##println(avail)
                                     if !haskey(avail, reptensor.operator_indices[pair][1].index_set)
                                         #if we're using a dummy index type thats not in the orignal expression
-                                        new_index = pop!(get_unused_indices(TEX, reptensor.operator_indices[pair][1].index_set))
+                                        #changed to ref!!
+                                        a11 = OrderedSet{Index}(get_unused_indices(ref, reptensor.operator_indices[pair][1].index_set))
+                                        b1 = OrderedSet{Index}(get_unused_indices(tensor.operand, reptensor.operator_indices[pair][1].index_set)) ##will check for dummies inside...
+                                        aa = intersect(a11, b1)
+                                        new_index = pop!(aa)
                                     else
                                         new_index = pop!(avail[reptensor.operator_indices[pair][1].index_set]) # get an unused index
                                     end
@@ -410,7 +622,12 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                                     if !haskey(avail, reptensor.indices[pair][1].index_set)
                                         #if we're using a dummy index type thats not in the orignal expression
                                         ##println("getta new index for index sets")
-                                        new_index = pop!(get_unused_indices(TEX, reptensor.indices[pair][1].index_set))
+                                        #changed to ref!!!
+                                        a11 = OrderedSet{Index}(get_unused_indices(ref, reptensor.indices[pair][1].index_set))
+                                        b1 = OrderedSet{Index}(get_unused_indices(tensor.operand, reptensor.indices[pair][1].index_set)) ##will check for dummies inside...
+                                        aa = intersect(a11, b1)
+                                        new_index = pop!(aa)
+                                        # new_index = pop!(get_unused_indices(ref, reptensor.indices[pair][1].index_set))
                                         ##println("new index, ", new_index)
                                     else
                                         ##println("none yet taken")
@@ -425,40 +642,53 @@ function expand_derivative(TEX::Union{TensorExpression,<:DerivativeSuperType}, D
                             end
                         end
 
-                        #println("prev new rep: ",new_rep_term) 
-                        #println(typeof(new_rep_term))   
-                        #println("multiplying by: ",reptensor)
+                        # println("prev new rep: ",new_rep_term) 
+                        # println(typeof(new_rep_term))   
+                        # println("multiplying by: ",reptensor)
                         #println(typeof(reptensor))
                         new_rep_term *= reptensor
-                        #println("new_rep_term is ",new_rep_term)
+                        # println("new_rep_term is ",new_rep_term)
 
                     end
+                    # println(found_op)
+                    # println("new rep summand is ",new_rep_term)
                     #  update_ext_indices(new_rep_term)
                     #println("old summand is ",new_rep_summand)
                     #println("adding ",new_rep_term)
+                    # println("new rep term is ",new_rep_term)
                     update_ext_indices(new_rep_term)
                     update_ext_indices(new_rep_summand)
+                    if found_op == false
+                        new_rep_term *= operand #if there was no operator, we need to add the operand at the end, since the pattern is just for the operator part
+                    end
+                    # println("updated ",new_rep_term)
                     ##println(new_rep_term)
                     ##println(get_free_indices(new_rep_term))
                     ##println(new_rep_summand)
                     ##println(get_free_indices(new_rep_summand))
                     new_rep_summand += new_rep_term
                 end
-                #println("timesing here")
+                # println("timesing here")
                 new_summand *= new_rep_summand
-                #println(new_summand)
+                # println(new_summand)
             else#normal tensor
-                #println("timesing here22222")
+                # println("norsml tenstimesing here22222")
+                # println(tensor)
+                # println(typeof(tensor))
+                # println(D)
+                # println(typeof(D))
                 new_summand *= tensor
-                #println(new_summand)
+                # println(new_summand)
             end
         end
         #        update_ext_indices(new_summand)
         #println("adding here22222")
-        new_TEX += summand[1] * new_summand
+        new_TEX += new_summand #*summand[1] * #might be squaring...
         #println(new_TEX)
     end
-    ##println(new_TEX)
+    # println(D)
+    # println("final new tex is")
+    # println(new_TEX)
     return new_TEX
 end
 
@@ -498,7 +728,7 @@ function product_rule(O::LeibnizOperatorSuperType)
         #     summand=product_rule(summand[2].terms[1])
         # end
 
-        
+
         # for summ in summand.summands
 
 
@@ -520,6 +750,8 @@ function product_rule(O::LeibnizOperatorSuperType)
                 if indsss != tensorind
                     ###println(new_prod)
                     ###println(summand[2].terms[indsss])
+                    # println(new_prod)
+                    # println(summand[2].terms[indsss])
                     new_prod = new_prod * summand[2].terms[indsss]
                     ##println("me when zero is , ", zero)
                 else
@@ -558,8 +790,229 @@ function product_rule(O::LeibnizOperatorSuperType)
     return new_summand
 end
 
+function symmetrise_partials(TEX::TensorExpression)
+    new_summand = zero
 
-function update_ext_indices(O::OperatorSuperType)
+    for summand in TEX.summands
+        nterm = summand[1]
+        for term in summand[2].terms
+            if typeof(term) <: PartialSuperType
+                symd, remap = symmetrise_partials(term)
+                temp = zero
+                # temp += (term) / length(symd)
+                # println("symd is ", symd)
+                for par in symd
+                    # println("par is ", par)
+                    temp += (nterm * par) / length(symd) #divide by number of terms to symmetrise
+                    # println("temp is ", temp)
+                end
+                # println("nnnnnnterms is ", nterm)
+                nterm = temp
+                # println("now nterm is ", nterm)
+            else
+                nterm *= term
+            end
+        end
+        # println("nterms is ", nterm)
+        new_summand += nterm
+        # println("new summand is ", new_summand)
+    end
+    # println("symmetrised partials is ", new_summand)
+    # println("original was ", TEX)
+    # println("averaged is ", (new_summand + TEX) / 2)
+    return (new_summand + TEX) / 2
+end
+
+function symmetrise_partials(TT::TensorTerm)
+    new_term = zero
+    for term in TT.terms
+        if typeof(term) <: PartialSuperType
+            (trm,remap)=symmetrise_partials(term)
+            new_term *= trm
+        else
+            new_term *= term
+        end
+    end
+    # println("symmetrised partials is NT ", new_term)
+    # println(remap)
+    return new_term
+end
+
+function root_oprnd(D::PartialSuperType)
+    opr = isTensor(D.operand)
+    if typeof(opr) <: PartialSuperType
+        return root_oprnd(opr)
+    else
+        return D.operand
+    end
+end
+
+function symmetrise_partials(D::PartialSuperType)
+    # println("get_op",get_operator_chain(D))
+    root = root_oprnd(D)
+    # println("root is ", root)
+    chn = get_operator_chain(D) #get the chain of ops
+    # println("operator chain:")
+    # println(chn)
+    inds = [op.operator_indices[1][1] for op in chn]
+    # println("indices are ", inds)
+    swps = graded_swaps(chn)
+    # println("graded swaps:")
+    # println(swps)
+    term = []
+    indpermsfor = graded_swaps_opinds(chn)
+    indpermsforpass = [(inds[swp[1]], swp[2]) for swp in indpermsfor]
+    # println("graded swaps for indices:")
+    # println(indpermsforpass)
+    for swp in swps
+        # println("permuted is ", swp[1], " with sign ", swp[2])
+        permuted = swp[1]
+        sign = swp[2]
+        push!(term, sign * rebuild_nested(permuted, root))
+    end
+    # println("symmetrised term is ", term)
+    return (term,indpermsforpass)
+    # println("symmetrising ", D)
+    # println("operand is ", D.operand)
+    # tyot=isTensor(D.operand)
+    # if typeof(tyot) <: PartialSuperType
+    #     # println("got a nested one")
+    #     new_op = symmetrise_derivs(D.operand)
+    #     # println("new op is ", new_op)
+    #     return new_op
+    # else
+    #     return D
+    # end
+end
+
+function rebuild_nested(permuted, root)
+    expr = root
+
+    for op in reverse(permuted)
+        expr = typeof(op)(
+            op.name,
+            expr,
+            op.coord,
+            op.function_of,
+            op.operator_indices
+        )
+    end
+
+    return expr
+end
+
+
+function graded_sign(perm, ops)
+    sign = 1
+
+    for i in 1:length(perm)
+        for j in i+1:length(perm)
+
+            # inversion in permutation
+            if perm[i] > perm[j]
+
+                gi = grading(ops[perm[i]].operator_indices)
+                gj = grading(ops[perm[j]].operator_indices)
+
+                sign *= (-1)^(gi * gj)
+            end
+        end
+    end
+
+    return sign
+end
+
+function graded_swap(ops, perm)
+    permuted = ops[perm]
+    sign = graded_sign(perm, ops)
+
+    return (permuted, sign)
+end
+
+function graded_swaps(ops)
+    results = []
+
+    n = length(ops)
+
+    for p in permutations(1:n)
+        permuted = ops[p]
+        sign = graded_sign(p, ops)
+
+        push!(results, (permuted, sign))
+    end
+
+    return results
+end
+
+function graded_swaps_opinds(ops)
+    results = []
+
+    n = length(ops)
+
+    for p in permutations(1:n)
+        # println("permutation: ", p)
+        permuted = ops[p]
+        sign = graded_sign(p, ops)
+
+        push!(results, (p, sign))
+    end
+
+    return results
+end
+
+function get_operator_chain(T::OperatorSuperType)
+    chain = []
+    current = T
+    while typeof(current) <: OperatorSuperType
+        push!(chain, current)
+        current = isTensor(current.operand) #get the operand tensor
+    end
+    return chain
+end
+
+
+
+"""Creates a new derivative tensor, with multiple indices if the operand is itself a derivative.
+Hopefully makes things easier when it comes to simplify algos.
+"""
+function to_nested(D::PartialSuperType, top=true)
+    inds = D.operator_indices
+    # println(D.operand)
+    # println(isTensor(D.operand))
+    # println(typeof(D.operand))
+    tyot = isTensor(D.operand)
+    if tyot != false && typeof(tyot) <: PartialSuperType
+        println("got")
+        tmp = to_nested(tyot, false)
+        append!(inds, tmp[1])
+        if top == false
+            return (inds, tmp[2]) #recursive step
+        else
+            # println(inds)
+            return Derivative("D" * string(length(inds)), tmp[2], D.coord, D.function_of, inds) #base case
+        end
+    elseif top == false
+        return (inds, D.operand) ## this is not a deriv
+    else
+        return D
+    end
+end
+
+
+"""
+Deep check to see if two operators are the same, by recursively checking if their operands are the same in the case of nested operators.
+"""
+function nested_opertor_equality(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    if D1.name == D2.name && typeof(D1.operand) == typeof(D2.operand) && D1.coord == D2.coord && D1.function_of == D2.function_of && D1.operator_indices == D2.operator_indices
+        return true
+    else
+        return false
+    end
+end
+
+
+
+function update_ext_indices(O::OperatorSuperType) #probably needs to include dummies...
     if typeof(O.operand) <: TensorSuperType || typeof(O.operand) <: TensorTerm
         O.indices = vcat(O.operator_indices, O.operand.indices)
     elseif typeof(O.operand) <: TensorExpression
@@ -568,8 +1021,13 @@ function update_ext_indices(O::OperatorSuperType)
 end
 
 
-
-
+function outer_grading(T::OperatorSuperType)
+    grade = 0
+    for (ind, pos) in T.operator_indices
+        grade = grade + ind.grading
+    end
+    return grade % 2
+end
 function *(TEx::TensorExpression, T::OperatorSuperType)
     # println("doing this sort of multiplcation5")
     return update_indices(TEx * TensorExpression(T))
@@ -580,6 +1038,6 @@ function *(T::OperatorSuperType, TEx::TensorExpression)
     return update_indices(TensorExpression(T) * TEx)
 end
 
-function copy(T::DerivativeSuperType)
-    return typeof(T)(T.name, copy(T.operand), copy(T.coord), copy(T.operator_indices))
+function copy(T::DerivativeSuperType) #this needs to actually be a deep copy...
+    return typeof(T)(T.name, copy(T.operand), copy(T.coord), copy(T.function_of), copy(T.operator_indices))
 end

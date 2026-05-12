@@ -5,58 +5,205 @@
 #     return (false,0)
 # end
 
+# function graded_sign(perm, ops)
+#     sign = 1
+
+#     for i in 1:length(perm)
+#         for j in i+1:length(perm)
+
+#             # inversion in permutation
+#             if perm[i] > perm[j]
+
+#                 gi = grading(ops[perm[i]].operator_indices)
+#                 gj = grading(ops[perm[j]].operator_indices)
+
+#                 sign *= (-1)^(gi * gj)
+#             end
+#         end
+#     end
+
+#     return sign
+# end
+
+# function graded_swaps(ops)
+#     results = []
+
+#     n = length(ops)
+
+#     for p in permutations(1:n)
+#         permuted = ops[p]
+#         sign = graded_sign(p, ops)
+
+#         push!(results, (permuted, sign))
+#     end
+
+#     return results
+# end
+
+# function get_operator_chain(T::OperatorSuperType)
+#     chain = []
+#     current = T
+#     while typeof(current) <: OperatorSuperType
+#         push!(chain, current)
+#         current=isTensor(current.operand) #get the operand tensor
+#     end
+#     return chain
+# end
 
 
-function construct_tensorterm_graph(T1::TensorTerm,debug=false)
+function construct_tensorterm_graph(T1::TensorTerm, debug=false)
     # println("mking graph")
     # println("Checking if nx is correctly imported:", Alakazam.nx)
     g1 = nx.MultiGraph()
     # n_primes=primes(length(T1.terms)) # will use prime fact theorem to assign ids to index nodes
-    node_counter=0
+    node_counter = 0
 
-    dums=get_dummies(T1) #dont name dums in graph
+    dums = get_dummies(T1) #dont name dums in graph
+    # println("term dummies:")
     # println(dums)
     for t1pl in 1:length(T1.terms) #for each tensor vector index
-        tens1=T1.terms[t1pl]
-        if typeof(tens1)<:OperatorSuperType
-            oprnd=tens1.operand #get the operand tensor
-            opr_name=oprnd.summands[1][2].terms[1].name #name of first tensor in the operator..... this is only a temp solution assuming that the oeprator is on a single tensor
+        tens1 = T1.terms[t1pl]
 
-            g1.add_node(2*t1pl, name=(tens1.name*"_"*opr_name)) #we add the oprator name to see if theyre the same!!!
-            # println("opr name")
-            # println(tens1.name*"_"*opr_name)
-        else
-        g1.add_node(2*t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
-        end
-        for indexx in 1:length(tens1.indices)
-            if !(tens1.indices[indexx] in dums)
-                g1.add_node((2*(node_counter+indexx)+1),name= tens1.indices[indexx][1].name) #assigns index
-            else
-                g1.add_node((2*(node_counter+indexx)+1),name="" ) #assigns index, its a dummy so no name
-            end
-            g1.add_edge(2*t1pl, (2*(node_counter+indexx)+1), weight=0) #edge between tensor and index
-        end
-        for tab in tens1.tableaux
-            adm = tab.adj_matrix
-            dims = size(adm)[1]
-            for i in 1:dims
-                for j in (i+1):dims
-                    if debug
-                    println(" edge add:")
-                    println(2*(node_counter+i)+1)
-                    println(2*(node_counter+j)+1)
+
+        #messed up operator logic...
+        if typeof(tens1) <: OperatorSuperType
+            chn = get_operator_chain(tens1) #get the chain of ops
+            # println("operator chain:")
+            # println(chn)
+            swps = graded_swaps(chn)
+            # println("graded swaps:", swps)
+
+            # oprnd = tens1.operand #get the operand tensor
+            # opr_name = oprnd.summands[1][2].terms[1].name #name of first tensor in the operator..... this is only a temp solution assuming that the oeprator is on a single tensor
+
+            # g1.add_node(2 * t1pl, name=(operator_name)) #we add the oprator name to see if theyre the same!!!
+            # for indexx in 1:length(tens1.operator_indices)
+            #     if !(tens1.operator_indices[indexx] in dums)
+            #         g1.add_node((2 * (node_counter + indexx) + 1), name=tens1.operator_indices[indexx][1].name) #assigns index
+            #     else
+            #         g1.add_node((2 * (node_counter + indexx) + 1), name="") #assigns index, its a dummy so no name
+            #     end
+            #     g1.add_edge(2 * t1pl, (2 * (node_counter + indexx) + 1), weight=0) #edge between tensor and index
+            # end
+            for ch in 1:length(chn)
+                opnm = chn[ch].name
+                opp = chn[ch]
+                #prime number decomp to assign unnique ids to nodes...
+                g1.add_node(-2^t1pl * 3^ch, name=opnm) #we add the oprator name to see if theyre the same!!!
+                for indexx in 1:length(opp.operator_indices)
+                    if !(opp.operator_indices[indexx][1] in dums)
+                        g1.add_node((2 * (node_counter + indexx) + 1), name=opp.operator_indices[indexx][1].name) #assigns index
+                    else
+                        # println("dummy index in operator")
+                        # println(opp.operator_indices[indexx])
+                        g1.add_node((2 * (node_counter + indexx) + 1), name="") #assigns index, its a dummy so no name
                     end
-                    g1.add_edge( (2*(node_counter+i)+1), (2*(node_counter+j)+1), weight=adm[i, j]) # should add the correct edges between indices
+                    g1.add_edge(-2^t1pl * 3^ch, (2 * (node_counter + indexx) + 1), weight=0) #edge between tensor and index
+                end
+                if ch > 1
+                    # g1.add_edge(-2^t1pl * 3^(ch - 1), -2^t1pl * 3^ch, weight=3, dir=+1) #edge between operators in the chain
+                    for bk in 1:(ch-1)
+                        g1.add_edge(-2^t1pl * 3^bk, -2^t1pl * 3^ch, weight=3) #edge between operators in the chain
+                    end
+                    node_counter += (length(opp.operator_indices))
+                else
+                    node_counter += length(opp.operator_indices)
+                end
+                oprnd = chn[ch].operand #get the operand tensor
+                singl = isTensor(oprnd) #check if operand is a single tensor or a sum
+                if !(singl == false)
+                    # println("operand is a single tensor")
+                    # println(singl)
+                    opr_name = singl.name #name of first tensor in the operator..... this is only a temp solution assuming that the oeprator is on a single tensor
+                    # println("opr name")
+                    # println(opr_name)
+                    if ch == length(chn) #if its the last operator in the chain, add operand node
+                        g1.add_node(2 * t1pl, name=opr_name)
+                        for bk in 1:(ch)
+                            g1.add_edge(-2^t1pl * 3^bk, 2 * t1pl, weight=3) #edge between operators in the chain
+                        end
+                        # g1.add_edge(-2^t1pl * 3^(ch), 2 * t1pl, weight=3, dir=+1) #edge between operators in the chain
+                        # println("tried to add edge between operator and operand")
+                        # println(-2^t1pl * 3^(ch))
+                        # println(2 * t1pl)
+                        for indexx in 1:length(singl.indices)
+                            if !(singl.indices[indexx][1] in dums)
+                                g1.add_node((2 * (node_counter + indexx) + 1), name=singl.indices[indexx][1].name) #assigns index
+                            else
+                                g1.add_node((2 * (node_counter + indexx) + 1), name="") #assigns index, its a dummy so no name
+                            end
+                            g1.add_edge(2 * t1pl, (2 * (node_counter + indexx) + 1), weight=0) #edge between tensor and index
+                        end
+                        for tab in singl.tableaux
+                            adm = tab.adj_matrix
+                            dims = size(adm)[1]
+                            for i in 1:dims
+                                for j in (i+1):dims
+                                    if debug
+                                        # println(" edge add:")
+                                        # println(2 * (node_counter + i) + 1)
+                                        # println(2 * (node_counter + j) + 1)
+                                    end
+                                    g1.add_edge((2 * (node_counter + i) + 1), (2 * (node_counter + j) + 1), weight=adm[i, j]) # should add the correct edges between indices
+                                end
+                            end
+                        end
+                        node_counter += (length(singl.indices)) #removed the plus 1...
+                    end
+                end
+
+            end
+
+
+            # for ind in 1:length(swps)
+            #     (chain, weight) = swps[ind]#get the next nested
+            #     for term in 1:length(chain)
+            #         g1.add_node(-2 * (t1pl * ind) + 1) #add each operator node
+            #     end
+            # end
+
+            # #if we have a node that is an op, lets attach whats inside
+
+            # g1.add_edge(2 * t1pl, (2 * (node_counter + indexx) + 1), weight=0)
+
+            # println("opr name")
+            # println(tens1.name * "_" * opr_name)
+        else
+            g1.add_node(2 * t1pl, name=tens1.name) #give tensor nodes an even power of 2. then, can easily extract from the id.
+        end
+        if typeof(tens1) <: OperatorSuperType
+            continue
+        else
+            for indexx in 1:length(tens1.indices)
+                if !(tens1.indices[indexx][1] in dums)
+                    g1.add_node((2 * (node_counter + indexx) + 1), name=tens1.indices[indexx][1].name) #assigns index
+                else
+                    g1.add_node((2 * (node_counter + indexx) + 1), name="") #assigns index, its a dummy so no name
+                end
+                g1.add_edge(2 * t1pl, (2 * (node_counter + indexx) + 1), weight=0) #edge between tensor and index
+            end
+            for tab in tens1.tableaux
+                adm = tab.adj_matrix
+                dims = size(adm)[1]
+                for i in 1:dims
+                    for j in (i+1):dims
+                        if debug
+                            # println(" edge add:")
+                            # println(2 * (node_counter + i) + 1)
+                            # println(2 * (node_counter + j) + 1)
+                        end
+                        g1.add_edge((2 * (node_counter + i) + 1), (2 * (node_counter + j) + 1), weight=adm[i, j]) # should add the correct edges between indices
+                    end
                 end
             end
+            node_counter += length(tens1.indices)
         end
-        node_counter+=length(tens1.indices)
     end
 
     #should handle all dummies in term
     dums11 = get_dummies_with_pos_index_and_pos_ul(T1)
 
-        #elements are (i, pair), where pair is name=>upper/lower
+    #elements are (i, pair), where pair is name=>upper/lower
     contractions1 = [(x, y) for x in dums11 for y in dums11 if x[2][1] == y[2][1] && x != y]
 
     if debug
@@ -68,19 +215,19 @@ function construct_tensorterm_graph(T1::TensorTerm,debug=false)
         println(contractions1)
     end
     for pair in contractions1
-        if debug
+        if true
 
-            println("dummy edge pair:")
-            println(2*pair[1][1]+1)
-            println(2*pair[2][1]+1)
+            # println("dummy edge pair:")
+            # println(2 * pair[1][1] + 1)
+            # println(2 * pair[2][1] + 1)
         end
-        g1.add_edge((2*pair[1][1]+1), (2*pair[2][1]+1), weight=2) #contraction edge
+        g1.add_edge((2 * pair[1][1] + 1), (2 * pair[2][1] + 1), weight=2) #contraction edge
         # println(pair)
         # println(pair[1][2][2])
-        if pair[1][2][2]==upper
-            g1.add_edge((2*pair[1][1]+1), (2*pair[1][1]+1), weight=-2) #mark the uppers
+        if pair[1][2][2] == upper
+            g1.add_edge((2 * pair[1][1] + 1), (2 * pair[1][1] + 1), weight=-2) #mark the uppers
         else
-            g1.add_edge((2*pair[2][1]+1), (2*pair[2][1]+1), weight=-2)
+            g1.add_edge((2 * pair[2][1] + 1), (2 * pair[2][1] + 1), weight=-2)
         end
     end
 
@@ -101,11 +248,11 @@ function draw_ind_graph(g1)
         println(n[2])
         println(n[2]["name"])
     end
-    node_labels = Dict(n[1] => string(n[1])*":"*string(n[2]["name"]) for n in g1.nodes(data=true))
+    node_labels = Dict(n[1] => string(n[1]) * ":" * string(n[2]["name"]) for n in g1.nodes(data=true))
 
     # Draw node labels (custom or default)
     nx.draw_networkx_labels(g1, pos, labels=node_labels, font_size=12, font_color="black")
-    
+
     # Add edge weight labels to the graph
     nx.draw_networkx_edge_labels(g1, pos, edge_labels=edge_labels, font_size=10)
     plt.title("Tensor")
@@ -114,71 +261,153 @@ end
 
 
 
-function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
+#want a version that handles nested operators nicely
+
+function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
+    # println("checking term iso")
+    # println(T1)
+    # println(T2)
     update_indices(T1)
     update_indices(T2)
-    if get_free_indices(T1)!=get_free_indices(T2)
+    if get_free_indices(T1) != get_free_indices(T2)
         return false
     end
 
-   g1=construct_tensorterm_graph(T1)
-   g2=construct_tensorterm_graph(T2)
+    g1 = construct_tensorterm_graph(T1)
+    g2 = construct_tensorterm_graph(T2)
 
-   if false #plot debug
-   draw_ind_graph(g1)
-   draw_ind_graph(g2)
-   end
+    if debug #plot debug
+        draw_ind_graph(g1)
+        draw_ind_graph(g2)
+    end
 
-   ISO=find_tensor_graph_iso(g1,g2)
+    ISO = find_tensor_graph_iso(g1, g2)
 
-   if !ISO.is_isomorphic()
-    return false
-   end
+    if !ISO.is_isomorphic()
+        return false
+    end
 
-    println("found iso")
+    # println("found iso")
 
-   if find_weighted_square(g2) && find_weighted_square(g1) #other cases.....
-    #the term is equal to zero.
-    return true
+    if find_weighted_square(g2) && find_weighted_square(g1) #other cases.....
+        #the term is equal to zero.
+        return true
 
-   end
-   #there should be an isomorphism with tensor rearrange. find the grading of remapping the tensors.
+    end
+    #there should be an isomorphism with tensor rearrange. find the grading of remapping the tensors.
     # isom_map= iterate(ISO.isomorphisms_iter())[1] # just get the first map, doesn't matter. [1] denotes the dict part of the pythonobj
 
-    for isom_map in  iterate(ISO.isomorphisms_iter())
+    for isom_map in ISO.isomorphisms_iter()
         # isom_map=isom[1]
 
+
         # println(isom_map)
-        filtered_even = Dict(k÷2 => v ÷ 2 for (k, v) in isom_map if iseven(k) && iseven(v)) #get just the tensors swapps
-        filtered_odd = Dict((k-1)÷2 => (v - 1) ÷ 2 for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the inidices
-        filtered_odd_undiv = Dict(k => v for (k, v) in isom_map if isodd(k) && isodd(v)) # gets the indices
-    
-        TT2=copy(T2)
-    
-    
-        counter=0
+
+
+        #here, we find the isomorphism map in terms of the original indices and tensor positions from the graph encoding 
+        #we also remove -ves which come from operators...
+        filtered_even = Dict(k ÷ 2 => v ÷ 2 for (k, v) in isom_map if k > 0 && v > 0 && iseven(k) && iseven(v)) #get just the tensors swapps
+        filtered_odd = Dict((k - 1) ÷ 2 => (v - 1) ÷ 2 for (k, v) in isom_map if k > 0 && v > 0 && isodd(k) && isodd(v)) # gets the inidices
+        filtered_odd_undiv = Dict(k => v for (k, v) in isom_map if k > 0 && v > 0 && isodd(k) && isodd(v)) # gets the indices
+
+        #negative come from operators, need to do prime factorisation to extract
+        filtered_nega = Dict(-k => -v for (k, v) in isom_map if k < 0 && v < 0)
+
+        #can use factor_2_3 on each of the negative to find op pos in term and depth
+        filtered_ops = Dict(factor_2_3(k) => factor_2_3(v) for (k, v) in filtered_nega)
+        # println("operators are", filtered_ops)
+        # println(filtered_ops)
+        TT2 = copy(T2)
+
+        sign = 1
+        flag = false
+        # things are cooked if we have operators. perhaps first we commute the operators. we will also need to go deep into the operators to maybe do dummy inds.
+        treeswaps = Dict()
+        for perm_pair in filtered_ops
+            if haskey(treeswaps, perm_pair[1][1])
+                if treeswaps[perm_pair[1][1]] != perm_pair[2][1]
+                    println("Nested operators are switching trees!")
+                    println("Inconsistent!")
+                    flag = true
+                    break
+                end
+            else
+                #suppose we have (3, 2) => (5, 1). then, we need to reorder nesting, and swap trees. 
+                treeswaps[perm_pair[1][1]] = perm_pair[2][1] #record we need to swap trees 3,5 at the end
+            end
+
+            chain = get_operator_chain(TT2.terms[perm_pair[1][1]]) #get the chain of nested ops
+            # println("chain")
+            # println(chain)
+            rt = root_oprnd(chain[1]) #wlog find the root object acted on
+            # println("root")
+            # println(rt)
+            swp = graded_swap(chain, [perm_pair[1][2], perm_pair[2][2]]) #perm_pair[2][2]] #swap within chain
+            # println(swp)
+            rb = rebuild_nested(swp[1], rt)
+            sign *= swp[2]#graded swaps
+            # println("rebuilt")
+            # println(rb)
+            TT2.terms[perm_pair[1][1]] = rb
+            update_indices(TT2)
+        end
+
+        if flag
+            continue
+        end
+
+        # println("after op step")
+        # println("old T2")
+        # println(T2)
+        # println("new TT2")
+        # println(TT2)
+
+
+        counter = 0
         #reassign dummies first!
         # println("pre dum rep:")
         # println(TT2)
         for termid in 1:length(TT2.terms)
-            ttensor=TT2.terms[termid] #get a tensor
+            ttensor = TT2.terms[termid] #get a tensor
             for indid in 1:length(ttensor.indices)
-                wgtd=edges_with_weight(g2, 2*(indid+counter)+1, 2) # look for where this index is contracted
+                wgtd = edges_with_weight(g2, 2 * (indid + counter) + 1, 2) # look for where this index is contracted
                 if !isempty(wgtd) #look for dummies
-                    contr=wgtd[1] #we are contracted with this.
+                    contr = wgtd[1] #we are contracted with this.
                     #if contracted, its a dummy anyway and we can just rename
                     #has a dummy.
                     #get the index from T1 so the dummies match
-                    TT2.terms[termid].indices[indid] =   T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1]-1)/2)] #if was a dummy index, set to whatever the dummy is in T1
+
+                    #need operator logic!!!!
+                    if typeof(TT2.terms[termid]) <: OperatorSuperType #dives into the operand to find the actual index needed to be updated
+                        ind_id_counter = indid
+                        nested = isTensor(TT2.terms[termid])
+                        # println(typeof(nested))
+                        while typeof(isTensor(nested)) <: OperatorSuperType && length(isTensor(nested).operator_indices) < ind_id_counter
+                            ind_id_counter -= length(nested.operator_indices) #find the nested operator who the index actually is
+                            nested = nested.operand
+                        end
+                        if typeof(isTensor(nested))  <: OperatorSuperType
+                            # println(isTensor(nested))
+                            # println(indid)
+                            # println(ind_id_counter)
+                            # println(T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)])
+                            isTensor(nested).operator_indices[ind_id_counter] = T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)]
+                        else
+                            isTensor(nested).indices[ind_id_counter] = T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)]
+                        end
+                        update_indices(TT2)
+                    else
+                        TT2.terms[termid].indices[indid] = T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)] #if was a dummy index, set to whatever the dummy is in T1
+                    end
                 else
                     continue
                 end
             end
-            counter+=length(ttensor.indices) #shift the counter
+            counter += length(ttensor.indices) #shift the counter
         end
         # println("post dum rep:")
         # println(TT2)
-    
+
         ##all dummies in TT2 shoud now be same as in T1
         # for perm_pair in filtered_odd_undiv
         #     wgtd=edges_with_weight(g2, permpair[1], 2) #look for dummies
@@ -190,31 +419,40 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
         #         newinds[perm_pair[2]] =T2.indices[permpair[1]] #what is now ___ was ____
         #         end
         # end
-    
-    
-        tens_grad=perm_grading(filtered_even,TT2) #grading for swapping
-    
-        newts=Vector{TensorSuperType}(undef, length(TT2.terms)) #where T<:TensorSuperType
+
+        # println("TT2 after dummy rep:")
+        # println(TT2)
+        # println("filtered even")
+        # println(filtered_even)
+        # println("tree swaps")
+        # println(treeswaps)
+        filtered_even = merge!(filtered_even, treeswaps)#tree swaps also allowed
+        # println("new filtered even")
+        # println(filtered_even)
+        tens_grad = perm_grading(filtered_even, TT2) #grading for swapping
+
+
+        newts = Vector{TensorSuperType}(undef, length(TT2.terms)) #where T<:TensorSuperType
         for perm_pair in filtered_even
-            newts[perm_pair[2]] =TT2.terms[perm_pair[1]] #check order?
+            newts[perm_pair[2]] = TT2.terms[perm_pair[1]] #check order?
         end
-    
-        newtenter=TensorTerm(newts) #new tensor with the swaps tensors. 
-    
+
+        newtenter = TensorTerm(newts) #new tensor with the swaps tensors. 
+
         # println("new term after graded tens swap:")
         # println(newtenter)
-    
-    
-       #then, map the indices to new positions via the isomorphism
-       newinds=Vector{Pair{IndexSuperType,IndexPosition}}(undef, length(T2.indices))
-       for perm_pair in filtered_odd
-        # wgtd=edges_with_weight(g2, permpair[1], 2)
-        #     if !isempty(wgtd) #look for dummies
-        #         #has a dummy.
-        #         #get the index from T1 so the dummies match
-        #         continue #skip dummies
-        #       #  newinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
-        #     else
+
+
+        #then, map the indices to new positions via the isomorphism
+        newinds = Vector{Pair{IndexSuperType,IndexPosition}}(undef, length(T2.indices))
+        for perm_pair in filtered_odd
+            # wgtd=edges_with_weight(g2, permpair[1], 2)
+            #     if !isempty(wgtd) #look for dummies
+            #         #has a dummy.
+            #         #get the index from T1 so the dummies match
+            #         continue #skip dummies
+            #       #  newinds[permpair[2]] =   T1.indices[perm_pair[2]] #if was a dummy index, set to whatever the dummy is in T1
+            #     else
             # println("TT2 inds:")
             # println(isom_map)
             # println(T1)
@@ -223,75 +461,96 @@ function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm)
             # println(TT2.indices)
             # println(perm_pair)
             # println(filtered_odd)
-            try 
-                newinds[perm_pair[2]] =TT2.indices[perm_pair[1]] 
+            try
+                newinds[perm_pair[2]] = TT2.indices[perm_pair[1]]
             catch e
                 println("Error occurred while checking isomorphisms: ", e)
-                g1=construct_tensorterm_graph(T1,true)
+                g1 = construct_tensorterm_graph(T1, true)
                 draw_ind_graph(g1)
             end
-           #what is now ___ was ____ !! use original TT2
+            #what is now ___ was ____ !! use original TT2
             # end
-       end
+        end
         #this should be a vector with inds in the correct spot.
-    
-       #now, take our rearranged tensor and fill with the new indices
-    
-    #    counter=1
-    #    for termmm in 1:length(newtenter.terms)
-    #     newtenter.terms
-    
-    #    end
-    
-       #now, check the sign between the rearranged tensors and the new index positions
-    #    println("indices under isomorphism")
-    #    println(newinds)
-       counter=1
-       totgrweight=1
-       flag=false
-       for tensid in 1:length(newtenter.terms)
-            ntensinds=newtenter.terms[tensid].indices # get the indices. now, compare to 
-            rearrinds=newinds[counter:counter+length(ntensinds)-1] # get the next subset of inds
-            curtens=newtenter.terms[tensid]
-            comptens=copy(curtens)
-            comptens.indices=rearrinds
+
+        #now, take our rearranged tensor and fill with the new indices
+
+        #    counter=1
+        #    for termmm in 1:length(newtenter.terms)
+        #     newtenter.terms
+
+        #    end
+
+        #now, check the sign between the rearranged tensors and the new index positions
+        #    println("indices under isomorphism")
+        #    println(newinds)
+        counter = 1
+        totgrweight = 1
+        flag = false
+        for tensid in 1:length(newtenter.terms)
+            ntensinds = newtenter.terms[tensid].indices # get the indices. now, compare to 
+            rearrinds = newinds[counter:counter+length(ntensinds)-1] # get the next subset of inds
+            curtens = newtenter.terms[tensid]
+            comptens = copy(curtens)
+            comptens.indices = rearrinds
             #compare tensors!
             # println("compare:")
             # println(comptens)
-    
+
             #comapre to T1
-            compariT1tens=TT2.terms[tensid] #compare change under iso??? T1 or T2??
+            compariT1tens = TT2.terms[tensid] #compare change under iso??? T1 or T2??
             # println(curtens)
-            (same,grweight)=same_tensor_mod_syms(comptens,curtens)
+            (same, grweight) = same_tensor_mod_syms(comptens, curtens)
             # println("grwe")
             # println(grweight)
             if !same
                 #this means the isomorphisms is wrong: ie we need to use a symmetry of the tensor that doesn't exists
                 # i think if we get here we should iterate over all the isomorphisms. just incase one is a bad one
                 println("Inconsistent!")
-                flag=true
+                flag = true
                 break
             end
-        
-            totgrweight*=grweight
+
+            totgrweight *= grweight
             #should be a perm, up to dumie inds...
-            counter+=length(ntensinds)
+            counter += length(ntensinds)
         end
         if flag
-            break
+            continue #try a different iso
         end
-    
-       oversign=totgrweight*((-1)^tens_grad)
-    #    println("index perm weight:"*string(totgrweight))
-    #    println("tens swap weight:"*string(tens_grad))
-    
-       return oversign==1 #same !!
+
+        oversign = totgrweight * ((-1)^tens_grad)
+        #    println("index perm weight:"*string(totgrweight))
+        #    println("tens swap weight:"*string(tens_grad))
+
+        return oversign == 1 #same !!
     end
-   
+
     return false
 
 end
 
+
+function factor_2_3(n::Int)
+    n < 1 && error("n must be positive")
+
+    n2 = 0
+    n3 = 0
+
+    while iseven(n)
+        n >>>= 1
+        n2 += 1
+    end
+
+    while n % 3 == 0
+        n ÷= 3
+        n3 += 1
+    end
+
+    n == 1 || error("has primes other than 2 and 3")
+
+    return n2, n3
+end
 
 # Function to find cycles of a given length
 function find_cycles_of_length(g, cycle_length)
@@ -333,7 +592,7 @@ function find_weighted_square(g)
 
     for cycle in four_cycles
         # println(cycle)
-        edges = [(cycle[i], cycle[mod1(i+1, 4)]) for i in 1:4]
+        edges = [(cycle[i], cycle[mod1(i + 1, 4)]) for i in 1:4]
 
         # Extract weights
         weights = []
@@ -387,6 +646,7 @@ end
 
 # Function to find edges with a specific weight
 function edges_with_weight(g, vertex_id, target_weight)
+    # println("checking edges with weight ", target_weight, " for vertex ", vertex_id)
     edges = pycall(g.edges, PyObject, vertex_id, data="weight")
     linked_vertex_ids = []
 
@@ -407,12 +667,12 @@ end
 
 
 ## finds the overall sign change when permuting graded tensors with a particular perm
-function perm_grading(perm_dict::Dict{Int,Int},tt::TensorTerm)
+function perm_grading(perm_dict::Dict{Int,Int}, tt::TensorTerm)
     n = length(tt.terms)
-    
+
     # Initialize inversion count
     inv_count = 0
-    
+
     # Loop over each pair of indices in the original permutation
     for i in 1:n-1
         for j in i+1:n
@@ -420,13 +680,13 @@ function perm_grading(perm_dict::Dict{Int,Int},tt::TensorTerm)
             # println(perm_dict)
             if perm_dict[i] > perm_dict[j]
                 # Check if the grading of elements at i and j are different
-                if grading(tt.terms[i]) * grading(tt.terms[j])==1
+                if grading(tt.terms[i]) * grading(tt.terms[j]) == 1
                     inv_count += 1
                 end
             end
         end
     end
-    
+
     # If the number of inversions is even, return true (even permutation), else false (odd permutation)
     return inv_count % 2 # to then do (-1)^perm_grading
 
@@ -435,24 +695,26 @@ end
 
 
 
-function find_tensor_graph_iso(g1,g2)
+function find_tensor_graph_iso(g1, g2)
     # println("iso check...")
-        # Perform the isomorphism check using vf2pp_isomorphism and edge_match #check order g2 g1. i think its opposite of 
-        ISO = nx.algorithms.isomorphism.GraphMatcher(g2, g1, edge_match=nx.algorithms.isomorphism.numerical_multiedge_match("weight",-10),node_match=nx.algorithms.isomorphism.categorical_node_match("name", "")) #need some unused number here for edge w/o weight just in case
-        if ISO.is_isomorphic()
-            try
-                all_isomorphisms = ISO.isomorphisms_iter()
-            
-                # Iterate through all isomorphisms and print them
-                # for iso in all_isomorphisms
-                #     # println("Isomorphism: ", iso)
-                # end
-            catch e
-                println("Error occurred while checking isomorphisms: ", e)
-            end
-        else
-            # println("The graphs are not isomorphic considering edge weights and node names.")
+    # Perform the isomorphism check using vf2pp_isomorphism and edge_match #check order g2 g1. i think its opposite of 
+    ISO = nx.algorithms.isomorphism.GraphMatcher(g2, g1, edge_match=nx.algorithms.isomorphism.numerical_multiedge_match("weight", -10), node_match=nx.algorithms.isomorphism.categorical_node_match("name", "")) #need some unused number here for edge w/o weight just in case
+    # println("isomorphism check done")
+    # println("isomorphic: ", ISO.is_isomorphic())
+    if ISO.is_isomorphic()
+        try
+            all_isomorphisms = ISO.isomorphisms_iter()
+
+            # Iterate through all isomorphisms and print them
+            # for iso in all_isomorphisms
+            #     # println("Isomorphism: ", iso)
+            # end
+        catch e
+            println("Error occurred while checking isomorphisms: ", e)
         end
+    else
+        # println("The graphs are not isomorphic considering edge weights and node names.")
+    end
     return ISO
 end
 
@@ -462,18 +724,23 @@ end
 function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
 
     #names don't match
-    if T1.name != T2.name
+    if !(typeof(T1) <: OperatorSuperType && typeof(T2) <: OperatorSuperType) && T1.name != T2.name
         return (false, 0)
 
-    #dirty fix to stop the operator from being a problem... not fully general
-    elseif typeof(T1)<:OperatorSuperType && typeof(T2)<:OperatorSuperType #types don't match
-        t1opnd=T1.operand.summands[1][2].terms[1]
-        t2opnd=T2.operand.summands[1][2].terms[1]
-        if t1opnd.name != t2opnd.name
-            return (false, 0)
-        end
+        #dirty fix to stop the operator from being a problem... not fully general
+    elseif typeof(T1) <: DerivativeSuperType && typeof(T2) <: DerivativeSuperType #types don't match
+        # println("checking derivative commute")
+        return signed_equals(T1, T2)
+        # #pointer here to the operator checks
+        # t1opnd=T1.operand.summands[1][2].terms[1]
+        # t2opnd=T2.operand.summands[1][2].terms[1]
+        # if t1opnd.name != t2opnd.name
+        #     return (false, 0)
+        # end
+    elseif typeof(T1) <: OperatorSuperType && typeof(T2) <: OperatorSuperType
+        return (false, 0) #dont touch other operators for now
     end
-        
+
     dums1 = get_dummies(T1)
     dums2 = get_dummies(T2)
     #if we dont need to worry about dummies, do simple algo
@@ -502,8 +769,8 @@ function do_swaps(T1::TensorSuperType, patt::OrderedSet, movers::Dict)
     #where {I<:IndexSuperType}
     #elemetns in patt: indiceobj, intpos
     #elemtns in mover: intpos, indiceobj
-    if length(patt) ==1 || length(patt)==0
-       return 1 #no swap needed
+    if length(patt) == 1 || length(patt) == 0
+        return 1 #no swap needed
     else
         #loop over movers, see if a move exists
         for (intpos, indiceobj) in movers
@@ -537,7 +804,7 @@ function dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     # (sign, new_inds) = find_canonical_rep(T)(T1) #just to make sure the tableaux are in the correct order, since the swapping algo relies on this. also should be a no-op
     (sign1, new_inds1) = find_canonical_rep(T1)
     (sign2, new_inds2) = find_canonical_rep(T2)
-    return new_inds1==new_inds2 ? sign1*sign2 : 0
+    return new_inds1 == new_inds2 ? sign1 * sign2 : 0
 
     # inds1 = get_index_index(T1)
     # inds2 = get_index_index(T2)
@@ -545,7 +812,7 @@ function dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
     # needperm2 = setdiff(inds2, inds1) #indices of T2 that don't match T1
     # inds_to_move = index_index_to_dict(needperm2)
 
-    
+
     # # println("do dum by default")
     # # println(T1)
     # # println(needperm1)
@@ -567,17 +834,17 @@ function to_dumless_same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperTyp
     # println(T2)
 
     inds1 = get_index_index(T1)
-    dums1=get_dummies(T1)
-    dums2=get_dummies(T2)
+    dums1 = get_dummies(T1)
+    dums2 = get_dummies(T2)
     inds2 = get_index_index(T2)
     # #remove dummies
     # println("inds before")
     # println(inds1)
     # println(dums1)
-    inds1=OrderedSet([pair for pair in (inds1) if !(pair[1] in dums1)])
+    inds1 = OrderedSet([pair for pair in (inds1) if !(pair[1] in dums1)])
     # println("inds after")
     # println(inds1)
-    inds2=OrderedSet([pair for pair in (inds2) if !(pair[1] in dums2)])
+    inds2 = OrderedSet([pair for pair in (inds2) if !(pair[1] in dums2)])
 
     # println(inds2)
 
@@ -642,7 +909,7 @@ function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
         g1.add_edge(pair[1][1], pair[2][1], weight=2)
         # println(pair)
         # println(pair[1][2][2])
-        if pair[1][2][2]==upper
+        if pair[1][2][2] == upper
             g1.add_edge(pair[1][1], pair[1][1], weight=-2)
         else
             g1.add_edge(pair[2][1], pair[2][1], weight=-2)
@@ -650,7 +917,7 @@ function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
     end
     for pair in contractions2
         g2.add_edge(pair[1][1], pair[2][1], weight=2)
-        if pair[1][2][2]==upper
+        if pair[1][2][2] == upper
             g2.add_edge(pair[1][1], pair[1][1], weight=-2)
         else
             g2.add_edge(pair[2][1], pair[2][1], weight=-2)
@@ -705,23 +972,23 @@ function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
         return 0
     end
 
-    T3=copy(T2)
+    T3 = copy(T2)
     #we'll map dummies of T2 to dummies of T1, resulting in a new tensor with some stuff in the wrong place
     #we'll next compute the grading of this process, then palm off T3 do do patt matching with T1 ignoring the dummies
 
     for (oldpos, newpos) in pairs(ISO)
-        T3.indices[newpos]=T2.indices[oldpos]
+        T3.indices[newpos] = T2.indices[oldpos]
     end
 
     # println(T2)
     # println(T3)
 
-    out=bubble_sort_index_with_grading!(T2, ISO)
-    grad=out[1]
+    out = bubble_sort_index_with_grading!(T2, ISO)
+    grad = out[1]
     # println("ubblesort grad")
     # println(grad)
 
-    grad*=to_dumless_same_tensor_mod_syms(T1,T3)
+    grad *= to_dumless_same_tensor_mod_syms(T1, T3)
     #now, check T1, T3
     # println("dumlessgrad")
     # println(grad)

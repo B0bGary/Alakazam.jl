@@ -87,8 +87,8 @@ function pop_metric(T::TensorSuperType, orig_exp::Union{TensorExpression,TensorT
 
             ###println(spare)
             if isempty(spare)
-                println(index[1].index_set)
-                throw(OutOfIndices())
+                # println(index[1].index_set)
+                throw(OutOfIndices(index[1].index_set))
             end
             use_this = pop!(spare)
             dummy = use_this => index[1].index_set.default_position == upper ? lower : upper
@@ -1117,36 +1117,6 @@ end
 ##############################################################################################################################
 
 
-"""
-Checks a tensor's Young Tableau to see if it is a totally antisymmetric tensor.
-Tensors with 0 or 1 index will be considered antisymmetric, so that they can be interpretted as differential forms.
-"""
-function isAntisymmetric(T::TensorSuperType)
-    if isempty(T.tableaux)
-        return length(T.indices) <= 1 #no tableau -> still a 0 or 1-form
-    end
-    tab = T.tableaux[1] #totally antisymm so only should have 1 anyway
-    # println(tab.row_lengths)
-    return length(tab.row_lengths) == length(T.indices)#should be a column of n rows
-end
-
-"""
-Checks a tensor's Young Tableau to see if it is a totally symmetric tensor.
-Tensors with 0 or 1 index will be considered symmetric.
-"""
-function isSymmetric(T::TensorSuperType)
-    if isempty(T.tableaux)
-        return length(T.indices) <= 1 #no tableau 
-    end
-    tab = T.tableaux[1] #totally symm so only should have 1 anyway
-    return tab.row_lengths[1] == length(T.indices)#should only have a single row of length n
-end
-
-
-
-
-
-
 
 
 ##############################################################################################################################
@@ -1713,7 +1683,7 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::T) where {T<:TensorSuperT
                 T2.indices[ind[1]] = nind => T2.indices[ind[1]][2]
             else
                 if isempty(avail[ind[2].index_set])
-                    throw(OutOfIndices)
+                    throw(OutOfIndices(ind[2].index_set))
                 end
                 nind = popfirst!(avail[ind[2].index_set])
                 push!(dummie_matchup, ind[2] => nind)
@@ -1721,7 +1691,7 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::T) where {T<:TensorSuperT
             end
         else
             if isempty(avail[ind[2].index_set])
-                throw(OutOfIndices)
+                throw(OutOfIndices(ind[2].index_set))
             end
             nind = popfirst!(avail[ind[2].index_set])
             ###println(nind)
@@ -1783,7 +1753,7 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
                         tens.indices[ind[1]] = nind => tens.indices[ind[1]][2]
                     else
                         if isempty(avail[ind[2].index_set])
-                            throw(OutOfIndices)
+                            throw(OutOfIndices(ind[2].index_set))
                         end
                         nind = popfirst!(avail[ind[2].index_set])
                         push!(dummie_matchup, ind[2] => nind)
@@ -1791,7 +1761,7 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
                     end
                 else
                     if isempty(avail[ind[2].index_set])
-                        throw(OutOfIndices)
+                        throw(OutOfIndices(ind[2].index_set))
                     end
                     nind = popfirst!(avail[ind[2].index_set])
                     ###println(nind)
@@ -1812,6 +1782,11 @@ function ×(T1::Union{TensorTerm,TensorSuperType}, T2::TensorTerm)
 end
 
 
+function isForm(T::TensorSuperType)
+    return isAntisymmetric(T) #will update this eventually to be only antisymmetric in "spacetime"
+end
+
+
 
 """Take the Hodge star of a form.
 This operation will automatically be taken with respect to spacetime indices, if they are defined on the tensor.
@@ -1821,12 +1796,12 @@ star(T::TensorSuperType, index_type::IndexSet=nothing) = ⋆(T, index_type)
 """Take the Hodge star of a form.
 This operation will automatically be taken with respect to spacetime indices, if they are defined on the tensor.
 """
-function ⋆(T::TensorSuperType,  index_type::Union{IndexSet, Nothing}=nothing)
-    if index_type===nothing && length(T.indices)==0
-        throw(InvalidDifferentialForm("The tensor "*tens2str(T)*" has no indices, please specify the spacetime indices for the Hodge star."))
+function ⋆(T::TensorSuperType, index_type::Union{IndexSet,Nothing}=nothing)
+    if index_type === nothing && length(T.indices) == 0
+        throw(InvalidDifferentialForm("The tensor " * tens2str(T) * " has no indices, please specify the spacetime indices for the Hodge star."))
     end
-    if !isAntisymmetric(T) ### actually... need to do a different check because we may have flavour indices
-        throw(InvalidDifferentialForm("The tensor "*tens2str(T)*" should be totally antisymmetric."))
+    if !isForm(T) ### actually... need to do a different check because we may have flavour indices
+        throw(InvalidDifferentialForm("The tensor " * tens2str(T) * " should be totally antisymmetric."))
     end
     has_spacetime = false
     mismatch = false
@@ -1849,7 +1824,7 @@ function ⋆(T::TensorSuperType,  index_type::Union{IndexSet, Nothing}=nothing)
         tinds = index_type
     end
     if has_spacetime == false && mismatch == true
-         throw(InvalidDifferentialForm("The tensor "*tens2str(T)*"has multiple index types, none of which are 'spacetime'. Indicate which indices should be dualised."))
+        throw(InvalidDifferentialForm("The tensor " * tens2str(T) * "has multiple index types, none of which are 'spacetime'. Indicate which indices should be dualised."))
     end
     dimension = tinds.range
     #add logic to raise/lower indices... pop to canonical...
@@ -1862,18 +1837,18 @@ function ⋆(T::TensorSuperType,  index_type::Union{IndexSet, Nothing}=nothing)
 
     # println(T)
     #start the epsilon with the free inds
-    epsindlist=Vector{Pair{IndexSuperType, Alakazam.IndexPosition}}([  tinds.indices[i] => op_pos(filtered[i][2]) for i in 1:p] ∪ [tinds.indices[i]=> op_pos(tinds.default_position) for i in (p+1):dimension])#will work after popping the tensor
+    epsindlist = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}([tinds.indices[i] => op_pos(filtered[i][2]) for i in 1:p] ∪ [tinds.indices[i] => op_pos(tinds.default_position) for i in (p+1):dimension])#will work after popping the tensor
     println(epsindlist)
     # println(typeof(epsindlist))
     # println(T)
-    eps=EpsilonTensor(epsindlist) #create an n dim epsilon
-    Tdual=eps×T #append the epsilon first -> this order should ensure we keep (atleast) the same free inds...
+    eps = EpsilonTensor(epsindlist) #create an n dim epsilon
+    Tdual = eps × T #append the epsilon first -> this order should ensure we keep (atleast) the same free inds...
     # println(Tdual.terms[2].indices)
-    forminds=[x for x in Tdual.terms[2].indices if x[1].index_set == tinds]
-    epsinds=Tdual.terms[1].indices
-    contraction = 1//factorial(p)*prod(KroneckerDelta([ti[1] => op_pos(ti[2]),ei[1] => op_pos(ei[2])]) for (ti, ei) in zip(forminds, epsinds[dimension-p+1:end]);init=1)#form the contraction with epsilon. we go backwards to preserve
-    Tdual*=contraction
-    Tdual=eliminate_kronecker(Tdual)
+    forminds = [x for x in Tdual.terms[2].indices if x[1].index_set == tinds]
+    epsinds = Tdual.terms[1].indices
+    contraction = 1 // factorial(p) * prod(KroneckerDelta([ti[1] => op_pos(ti[2]), ei[1] => op_pos(ei[2])]) for (ti, ei) in zip(forminds, epsinds[dimension-p+1:end]); init=1)#form the contraction with epsilon. we go backwards to preserve
+    Tdual *= contraction
+    Tdual = eliminate_kronecker(Tdual)
 
     return Tdual
 end
@@ -1883,7 +1858,119 @@ wedge(T1::TensorSuperType, T2::TensorSuperType) = ∧(T1::TensorSuperType, T2::T
 
 """Take the wedge exterior product between two forms"""
 function ∧(T1::TensorSuperType, T2::TensorSuperType)
-    return
+
+    if !isForm(T1) || !isForm(T2)
+        throw(InvalidDifferentialForm("Both tensors must be antisymmetric forms."))
+    end
+
+    # --- detect index set (same logic as your ⋆) ---
+    tinds = nothing
+    for (ind, _) in T1.indices
+        tinds = ind.index_set
+        break
+    end
+
+    # --- extract spacetime indices only ---
+    inds1 = [x for x in T1.indices if x[1].index_set == tinds]
+    inds2 = [x for x in T2.indices if x[1].index_set == tinds]
+    # combinds1=vcat(inds1,inds2)
+    T=T1×T2
+    combinds= [x for x in T.indices if x[1].index_set == tinds]
+    # println(combinds)
+    # println([x for x in tinds.indices])
+    # println([y for y in combinds])
+    # println([y[1] for y in combinds])
+
+    unused = [x for x in tinds.indices if x ∉ [y[1] for y in combinds]]
+    p = length(inds1)
+    q = length(inds2)
+    r = p + q
+    dim = tinds.range
+    poss=combinds[1][2]#find the pos of free
+    rem=dim-r
+
+    if r > dim
+        return zero
+    end
+
+        # --- build epsilon for antisymmetrization ---
+        #fill out the outermost eps
+    # println(combinds)
+    epsindlist = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
+        vcat(
+            [combinds[i][1] => poss for i in 1:r],
+            [unused[i] => poss for i in (r+1):dim]
+        )
+    )
+    # println(epsindlist)
+    eps1 = EpsilonTensor(epsindlist) #the leadings inds will not change
+
+    unused=[x for x in unused if x∉ (y[1] for y in vcat(combinds,eps1.indices))]
+    epsindlist2 = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
+        vcat(
+            [unused[i] => op_pos(poss) for i in 1:r],
+            [eps1.indices[i][1] => op_pos(poss) for i in (r+1):dim] #contract with end of other eps
+        )
+    )
+    eps2=EpsilonTensor(epsindlist2) 
+    T1c=copy(T1)
+    T1c.indices=[epsindlist2[i][1] => poss for i in 1:p]
+    T2c=copy(T2)
+    T2c.indices=[epsindlist2[i][1] => poss for i in p+1:r]
+    println(eps1)
+    println(eps2)
+    println(T1c)
+    println(T2c)
+    prefact=1//(factorial(p)*factorial(q)*factorial(dim-r))
+    return prefact*eps1*eps2*T1c*T2c
+
+#     # --- append epsilon ---
+#     Tdual = TensorExpression(eps × T)
+#     println(Tdual)
+#     coef,term=Tdual.summands[1] #only a single summand
+#     # --- extract indices ---
+#     allinds = [x for x in term.indices[1:end-length(term.terms[end].indices)] if x[1].index_set == tinds]
+#     epsinds = term.terms[end].indices
+
+#     # --- antisymmetrization via contraction ---
+# contraction = prod(
+#     KroneckerDelta([
+#         allinds[i][1] => op_pos(allinds[i][2]),
+#         epsinds[i][1] => op_pos(epsinds[i][2])
+#     ])
+#     for i in 1:r;
+#     init=1
+# )
+
+#     # --- normalization ---
+#     norm = factorial(r) // (factorial(p) * factorial(q))
+
+#     Tdual *= norm * contraction*coef
+#     Tdual = eliminate_kronecker(Tdual)
+
+#     return Tdual
+end
+
+"""
+Interior product (contraction) of a vector with a differential form.
+"""
+ι(T1::TensorSuperType, T2::TensorSuperType) = ⨼(T1, T2)
+
+"""
+Interior product (contraction) of a vector with a differential form.
+"""
+function ⨼(T1::TensorSuperType, T2::TensorSuperType)
+    if length(T1.indices) != 1 #will need to update this, really
+        throw(ArgumentError("Vector must have one index of the contraction type."))
+    end
+    if !isForm(T2)
+        throw(InvalidDifferentialForm("The tensor " * tens2str(T2) * " should be totally antisymmetric."))
+    end
+
+    T2cp = copy(T2)
+    T2cp.indices[1] = (T1.indices[1][1] => op_pos(T1.indices[1][2]))
+
+    return T1 * T2cp
 end
 
 
@@ -1945,7 +2032,7 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
         return false
     end
     for i = eachindex(a)
-        if a[i] != b[i]
+        if !(a[i]==b[i])
             return false
         end
     end
@@ -1970,6 +2057,7 @@ function ==(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau co
         return false
     end
 end
+
 
 # function Base.isequal(a::Pair{<:SymorNum,TensorTerm},b::Pair{SymorNum,TensorTerm})
 #     println("aprichecl")
@@ -2233,8 +2321,8 @@ function get_dummies(T::Union{TensorSuperType,TensorTerm})
             if ind[1].index_set.name != "lightcone"
                 if haskey(poscheck, ind[1])
                     if poscheck[ind[1]] == ind[2]
-                        # println(T)
-                        # println(ind)
+                        println(T)
+                        println(ind)
                         throw(SameLevelDummieError())
                     end
                 else
@@ -2697,6 +2785,13 @@ function simplify(TEx::TensorExpression)
     new_exp = rename_dummies(new_exp)
     contract_metrics(new_exp, Metric)
     # hard_simplify(new_exp)
+    # new_exp=symmetrise_partials(new_exp)
+    # println("ouput symmetrised partials: ",new_exp)
+    merge_sum(new_exp)
+    new_exp=symmetrise_partials(new_exp)
+    # println("ouput symmetrised partials: ",new_exp)
+
+    # println(new_exp)
     return new_exp
 end
 
@@ -2837,20 +2932,28 @@ function merge_sum(TEx::TensorExpression)
                 # println(summand[2])
                 # println(new_merged[i][2])
                 new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
-                # ##println("sum is")
-                # ##println(new_merged[i])
-                # ##println(new_merged) #not editting in place apparaently....
+                # println("sum is")
+                # println(new_merged[i])
+                # println(new_merged) #not editting in place apparaently....
                 found = true
                 break
             elseif length(summand[2].terms) == 1 && length(new_merged[i][2].terms) == 1
-
+                
                 rescomp = same_tensor_mod_syms(summand[2].terms[1], new_merged[i][2].terms[1])
                 if rescomp[1] == true
                     # println(rescomp)
                     new_merged[i] = (rescomp[2] * new_merged[i][1] + summand[1] => summand[2])
                     found = true
                 end
+            elseif length(summand[2].terms) == length(new_merged[i][2].terms)
+                # println("checking for same tensor mod syms with more terms")
+                # println(summand[2])
+                # println(new_merged[i][2])
+                # println(symmetrise_partials(summand[2]))
+                # println(same_tensorterm_mod_syms(summand[2],new_merged[i][2]))
             end
+
+
 
             # (res,val)=combine_same_tensors(summand[2],new_merged[i][2])
             # if res
@@ -2880,6 +2983,13 @@ end
 
 #gradings
 
+function grading(inds::Vector{Pair{IndexSuperType,IndexPosition}})
+    grade = 0
+    for (ind, pos) in inds
+        grade = grade + ind.grading
+    end
+    return grade % 2
+end
 
 function grading(T::TensorSuperType)
     grade = 0
@@ -4155,6 +4265,10 @@ end
 ##############################################################################################################################
 #more or less generic functions that either are simple or have many uses across the codebase
 
+
+
+
+
 function hasIndices(T::TensorSuperType)
     return length(T.indices) != 0
 end
@@ -4173,6 +4287,41 @@ function isZeroTens(T::TensorExpression)
     else
         return false
     end
+end
+
+
+function isTensorTerm(T::TensorExpression)
+    if length(T.summands) == 1 && T.summands[1][1]==1
+        return T.summands[1][2]
+    else
+        return false
+    end
+end
+
+"""
+Check if a TensorExpression is a single summand of one tensor with a 1 coefficient. Returns the tensor or false.
+"""
+function isTensor(T::TensorExpression)
+    term=isTensorTerm(T)
+    if term!=false && length(term.terms)==1
+        return term.terms[1]
+    else
+        return false
+    end
+
+end
+
+function isTensor(T::TensorTerm)
+    if  length(T.terms)==1
+        return T.terms[1]
+    else
+        return false
+    end
+
+end
+
+function isTensor(T::TensorSuperType)
+    return T
 end
 
 

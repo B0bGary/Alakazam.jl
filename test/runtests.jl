@@ -9,8 +9,12 @@ zero=Alakazam.zero
 
 
 
-include("test_arithmetic.jl")
-include("test_tableaux.jl")
+# include("test_arithmetic.jl")
+# include("test_tableaux.jl")
+
+
+# include("test_superspace.jl")
+include("test_graph.jl")
 
 
 #include("test_tensor_term.jl")

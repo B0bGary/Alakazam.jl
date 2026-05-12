@@ -264,6 +264,7 @@ end
     F=AntisymmetricTensor("F",[a=>upper,μ=>lower,ν=>lower])
     Fd=1/2*EpsilonTensor([μ=>upper,ν=>upper,τ=>upper,λ=>upper])*AntisymmetricTensor("F",[a=>upper,τ=>lower,λ=>lower])
     @test ⋆(F)==Fd
+    @show ⋆(F)
     A=AntisymmetricTensor("A",[a=>upper,b=>upper,μ=>lower])
     Ad=EpsilonTensor([μ=>upper,ν=>upper,ρ=>upper,τ=>upper])*Tensor("A",[a=>upper,b=>upper,τ=>lower])
     # @test ⋆(A)==Ad #failed for some reason... need to fix equality logic
@@ -281,6 +282,14 @@ end
     α = Index("α", spacetime_indices)
     β = Index("β", spacetime_indices)
     γ = Index("γ", spacetime_indices)
+    δ = Index("δ", spacetime_indices)
+    χ = Index("χ", spacetime_indices)
+    ϕ = Index("ϕ", spacetime_indices)
+    κ = Index("κ", spacetime_indices)
+    ο = Index("ο", spacetime_indices)
+    ω = Index("ω", spacetime_indices)
+    θ = Index("θ", spacetime_indices)
+    υ = Index("υ", spacetime_indices)
     # 2-form in 6D
     F=AntisymmetricTensor("F",[a=>upper,μ=>lower,ν=>lower])
     Fd=1/2*EpsilonTensor([μ=>upper,ν=>upper,ρ=>upper,σ=>upper,α=>upper,β=>upper])*AntisymmetricTensor("F",[a=>upper,α=>lower,β=>lower])
@@ -290,5 +299,15 @@ end
     Hd=1/factorial(3)*EpsilonTensor([μ=>upper,ν=>upper,ρ=>upper,α=>upper,β=>upper,γ=>upper])*AntisymmetricTensor("H",[a=>upper,α=>lower,β=>lower,γ=>lower])
     @show ⋆(H)
 
+   
+    V=Tensor("v",[μ=>lower])
+    ω=AntisymmetricTensor("ω",[τ=>lower,ν=>lower,ρ=>lower])
+    @show V⨼ω
+    @show ι(V,ω)
 
+    F=AntisymmetricTensor("F",[μ=>lower,ν=>lower])
+    H=AntisymmetricTensor("H",[λ=>lower,ρ=>lower,σ=>lower])
+    @show F∧H
+    @show H∧F
+    # @show contract_metrics(Alakazam.simplify(rename_dummies(F∧H)-rename_dummies(sort(H∧F)))) #want this to simplify....
 end

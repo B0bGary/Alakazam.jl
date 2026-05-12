@@ -49,6 +49,51 @@ end
 
 
 #####################
+####### tensor data struct. more universal.
+#####################
+"""
+Mutual tensor data that all tensors should have in common.
+"""
+mutable struct TensorData
+    name::String
+    indices::Vector{Pair{M,IndexPosition}} where {M<:IndexSuperType}
+    function_of::Vector{Coordinate}
+    weights::Dict{String,Number}
+    tableaux::Vector{YoungTableau}
+
+    function TensorData(name::String, args...)
+        indices = Vector{Pair{IndexSuperType,IndexPosition}}()
+        function_of = Vector{Coordinate}()
+        weights = Dict{String,Number}()
+        tableaux = Vector{YoungTableau}()
+        for arg in args
+            if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+                indices = vcat(indices, arg)
+            elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+                push!(indices, arg)
+            elseif arg isa Coordinate
+                function_of = [arg]
+            elseif arg isa Vector{Coordinate}
+                function_of = arg
+            elseif arg isa Dict{String,Number}
+                weights = arg
+            elseif arg isa YoungTableau
+                tableaux = [arg]
+            elseif arg isa Vector{YoungTableau}
+                tableaux = arg
+            end
+        end
+        w = Dict{String,Number}()
+        for coord in function_of
+            w[coord.name] = 1
+        end
+        return new(name, indices, function_of,
+            merge(w, weights), tableaux)
+    end
+end
+
+
+#####################
 ####### primitive tensor types
 #####################
 
@@ -119,6 +164,100 @@ function RiemannTensor(name::String, args...)
     return t
 end
 
+abstract type MatrixSuperType <: TensorSuperType end #supertype which may not commute
+abstract type PauliSuperType <: MatrixSuperType end #new supertype for pauli matrices, since they have special properties that we want to be able to check for in simplification rules
+abstract type GammaSuperType <: MatrixSuperType end #new supertype for pauli matrices, since they have special properties that we want to be able to check for in simplification rules
+
+
+# mutable struct Pauli <: PauliSuperType
+#     name::String
+#     indices::Vector{Pair{M,IndexPosition}} where {M<:IndexSuperType}
+#     function_of::Vector{Coordinate}
+#     weights::Dict{String,Number}
+#     tableaux::Vector{YoungTableau}
+
+
+#     t = Tensor(name, args...)
+#     if length(t.indices) != 3 || length(t.indices) != 1
+#         throw(ArgumentError("Pauli matrices must have exactly 1 or 3 indices"))
+#     end
+#     t.tableaux = generate_symmetric_tableau(t.indices)
+#     return t
+
+#     function Tensor(name::String, args...)
+#         indices = Vector{Pair{IndexSuperType,IndexPosition}}()
+#         function_of = Vector{Coordinate}()
+#         weights = Dict{String,Number}()
+#         tableaux = Vector{YoungTableau}()
+
+#         for arg in args
+#             if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+#                 indices = vcat(indices, arg)
+#             elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+#                 push!(indices, arg)
+#             elseif arg isa Coordinate
+#                 function_of = [arg]
+#             elseif arg isa Vector{Coordinate}
+#                 function_of = arg
+#             elseif arg isa Dict{String,Number}
+#                 weights = arg
+#             elseif arg isa YoungTableau
+#                 tableaux = [arg]
+#             elseif arg isa Vector{YoungTableau}
+#                 tableaux = arg
+#             end
+#         end
+
+#         w = Dict{String,Number}()
+
+#         for coord in function_of
+#             w[coord.name] = 1
+#         end
+
+#         return new(name, indices, function_of,
+#             merge(w, weights), tableaux)
+#     end
+# end
+
+
+# """
+# Pauli Matrices. 3 index version are numbers and can commute. The 1 index version are matrices and do not commute.
+# """
+# function Pauli(name::String="σ", args...)
+#     <:PauliSuperType
+#     t = Tensor(name, args...)
+#     if length(t.indices) != 3 || length(t.indices) != 1
+#         throw(ArgumentError("Pauli matrices must have exactly 1 or 3 indices"))
+#     end
+#     t.tableaux = generate_symmetric_tableau(t.indices)
+#     return t
+# end
+
+
+# """
+# Gamma Matrices. 3 index version are numbers and can commute. The 1 index version are matrices and do not commute.
+# """
+# function Gamma(name::String="γ", args...)
+#     <:GammaSuperType
+#     t = Tensor(name, args...)
+#     if length(t.indices) != 3 || length(t.indices) != 1
+#         throw(ArgumentError("Pauli matrices must have exactly 1 or 3 indices"))
+#     end
+#     t.tableaux = generate_symmetric_tableau(t.indices)
+#     return t
+# end
+
+# function Gamma5(name::String="γ5", args...)
+#     <:GammaSuperType
+#     t = Tensor(name, args...)
+#     if length(t.indices) != 3 || length(t.indices) != 1
+#         throw(ArgumentError("Pauli matrices must have exactly 1 or 3 indices"))
+#     end
+#     t.tableaux = generate_symmetric_tableau(t.indices)
+#     return t
+# end
+
+
 # keep these, since we need to check if metrics in some checks
 abstract type MetricSuperType <: TensorSuperType end
 abstract type SymMetricSuperType <: MetricSuperType end
@@ -135,17 +274,18 @@ mutable struct Metric <: SymMetricSuperType
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
     tableaux::Vector{YoungTableau}
+
     signature::Pair{Int64} #added metric signature
 
     Metric(indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType} = Metric("η", indices)
 
 
-    function Metric(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), signature=None) where {I<:IndexSuperType}
+    function Metric(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), signature=nothing) where {I<:IndexSuperType}
         if length(indices) != 2
             throw(ArgumentError("Metric must have exactly 2 indices"))
         end
-        if signature === None
-            signature = (1, indices[1].index_set.range - 1)
+        if signature === nothing
+            signature = (1 => indices[1][1].index_set.range - 1)
         end
         new(name, indices, Vector{Coordinate}(), Dict{String,Number}(), generate_symmetric_tableau(indices), signature)
     end
@@ -186,10 +326,10 @@ mutable struct KroneckerDelta <: KroneckerSuperType
 
     function KroneckerDelta(name::String, indices::Vector{Pair{I,IndexPosition}}) where {I<:IndexSuperType}#lets you have scalars with no indices
         if indices[1][2] == indices[2][2] #should be one upper and one lower
-            throw(InvalidKroneckerIndices())
+            throw(InvalidKroneckerIndices(indices))
         end
         if indices[1][1].index_set != indices[2][1].index_set #should be from the same index set
-            throw(InvalidKroneckerIndices())
+            throw(InvalidKroneckerIndices(indices))
         end
         new(name, indices, Dict{String,Number}(), [], generate_symmetric_tableau(indices))
     end
@@ -224,7 +364,6 @@ end
 #####
 # access properties of tensors
 #####
-
 
 #will implement this soon... but will require work to change across everything...
 
@@ -479,6 +618,7 @@ macro Tensor(expr::String)
     symbol = expr[1:1]
 
     indexpos = 2#depreciate this
+    #allow more flexible names (may have bars and dots maybe or other eg "det" for op name etc)
     @assert contains("_^([{", expr[indexpos]) "Tensor name should be one character."#throw error if not starting with following
     positions = []
     indices = []
