@@ -39,7 +39,7 @@
         e2=B3*B4*PartialDerivative("∇",PartialDerivative("∇",A, [x], [ν => lower]), [x], [ρ => lower])
         es= Alakazam.simplify(e1+e2)
         ex=2*Tensor("B", [ρ=>upper,σ=>upper],x)*Tensor("B", [ν=>upper,κ=>upper],x)*PartialDerivative("∇",PartialDerivative("∇",A, [x], [ν => lower]), [x], [ρ => lower])
-        @test es==ex
+        @test es≅ex
 
         #same, but now Bs are SUSY, so the swap should make everything zero.
         A=Tensor("A", [μ=>upper],x)
@@ -50,48 +50,48 @@
         e1=B2*B*PartialDerivative("∇",PartialDerivative("∇",A, [x], [ν => lower]), [x], [ρ => lower])
         e2=B3*B4*PartialDerivative("∇",PartialDerivative("∇",A, [x], [ν => lower]), [x], [ρ => lower])
         es= Alakazam.simplify(e1+e2)
-        @test es==Alakazam.zero
+        @test es≅Alakazam.zero
 
 
         #commute an ordinary PD with SUSY PD
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         e1=PartialDerivative("∂",PartialDerivative("∇",A, [x], [ν => lower]), [θ], [α => lower])
         e2=PartialDerivative("∇",PartialDerivative("∂",A, [θ], [α => lower]), [x], [ν => lower])
-        @test e1==e2
+        @test e1≅e2
 
         #commute a SUSY with SUSY PD
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         e1=PartialDerivative("∂",PartialDerivative("∂",A, [θ], [β => lower]), [θ], [α => lower])
         e2=-PartialDerivative("∂",PartialDerivative("∂",A, [θ], [α => lower]), [θ], [β => lower])
-        @test e1==e2
+        @test e1≅e2
 
 
         #commute a SUSY with different SUSY PD
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         e1=PartialDerivative("𝛛",PartialDerivative("∂",A, [θ], [β => lower]), [θbar], [αd => lower])
         e2=-PartialDerivative("∂",PartialDerivative("𝛛",A, [θbar], [αd => lower]), [θ], [β => lower])
-        @test e1==e2
+        @test e1≅e2
 
         #commute a tensor past susy diff op
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         B=Tensor("B", [ϕ=>upper],[x,θ,θbar])
         e1=B*PartialDerivative("𝛛",PartialDerivative("∂",A, [θ], [β => lower]), [θbar], [αd => lower])
         e2=-PartialDerivative("∂",PartialDerivative("𝛛",A, [θbar], [αd => lower]), [θ], [β => lower])*B
-        @test e1==e2
+        @test e1≅e2
 
         #commute a susy tensor past susy diff op
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         B=Tensor("B", [γ=>upper],[x,θ,θbar])
         e1=B*PartialDerivative("𝛛",PartialDerivative("∂",A, [θ], [β => lower]), [θbar], [αd => lower])
         e2=-PartialDerivative("∂",PartialDerivative("𝛛",A, [θbar], [αd => lower]), [θ], [β => lower])*B
-        @test e1==e2
+        @test e1≅e2
 
         #commute a susy tensor past differnt susy diff op
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         B=Tensor("B", [γ=>upper],[x,θ,θbar])
         e1=B*PartialDerivative("∂",PartialDerivative("∇",A, [x], [ν => lower]), [θ], [α => lower])
         e2=-PartialDerivative("∇",PartialDerivative("∂",A, [θ], [α => lower]), [x], [ν => lower])*B
-        @test e1==e2
+        @test e1≅e2
 
 
         
@@ -100,13 +100,13 @@
         B=Tensor("B", [γ=>upper],[x,θ,θbar])
         e1=PartialDerivative("∇",A, [x], [ν => lower])*PartialDerivative("∂",B, [θ], [α => lower])
         e2=PartialDerivative("∂",B, [θ], [α => lower])*PartialDerivative("∇",A, [x], [ν => lower])
-        @test e1==e2
+        @test e1≅e2
 
         #products of nested diff ops, with different levels
         A=Tensor("A", [μ=>upper],[x,θ,θbar])
         B=Tensor("B", [γ=>upper],[x,θ,θbar])
         e1=PartialDerivative("∇",A, [x], [ν => lower])*PartialDerivative("∇",PartialDerivative("∂",B, [θ], [α => lower]), [x], [μ => lower])
         e2=PartialDerivative("∇",PartialDerivative("∂",B, [θ], [α => lower]), [x], [μ => lower])*PartialDerivative("∇",A, [x], [ν => lower])
-        @test e1==e2
+        @test e1≅e2
     
 end

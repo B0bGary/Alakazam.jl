@@ -260,13 +260,13 @@ function draw_ind_graph(g1)
 end
 
 
-function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm,debug=false)
-    eq,gr=same_tensorterm_mod_syms_grade(T1,T2,debug)
+function same_tensorterm_mod_syms(T1::TensorTerm, T2::TensorTerm, debug=false)
+    eq, gr = same_tensorterm_mod_syms_grade(T1, T2, debug)
     # @show T1
     # @show T2
     # println(eq)
     # println(gr)
-    return eq&&gr==1
+    return eq && gr == 1
 end
 
 
@@ -274,14 +274,14 @@ end
 """
 Grading is the sign flip to turn T2 into T1
 """
-function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=false)
+function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=false)
     # println("checking term iso")
     # println(T1)
     # println(T2)
     update_indices(T1)
     update_indices(T2)
     if get_free_indices(T1) != get_free_indices(T2)
-        return (false,0)
+        return (false, 0)
     end
 
     g1 = construct_tensorterm_graph(T1)
@@ -295,14 +295,14 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
     ISO = find_tensor_graph_iso(g1, g2)
 
     if !ISO.is_isomorphic()
-        return (false,0)
+        return (false, 0)
     end
 
     # println("found iso")
 
     if find_weighted_square(g2) && find_weighted_square(g1) #other cases.....
         #the term is equal to zero.
-        return (true,1)
+        return (true, 1)
 
     end
     #there should be an isomorphism with tensor rearrange. find the grading of remapping the tensors.
@@ -392,9 +392,11 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
                     #if contracted, its a dummy anyway and we can just rename
                     #has a dummy.
                     #get the index from T1 so the dummies match
-
+                    # println("Orig exp")
+                    # println(TT2)
                     #need operator logic!!!!
                     if typeof(TT2.terms[termid]) <: OperatorSuperType #dives into the operand to find the actual index needed to be updated
+
                         ind_id_counter = indid
                         nested = isTensor(TT2.terms[termid])
                         # println(typeof(nested))
@@ -402,7 +404,7 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
                             ind_id_counter -= length(nested.operator_indices) #find the nested operator who the index actually is
                             nested = nested.operand
                         end
-                        if typeof(isTensor(nested))  <: OperatorSuperType
+                        if typeof(isTensor(nested)) <: OperatorSuperType
                             # println(isTensor(nested))
                             # println(indid)
                             # println(ind_id_counter)
@@ -411,16 +413,20 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
                         else
                             isTensor(nested).indices[ind_id_counter] = T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)]
                         end
-                        update_indices(TT2)
+
                     else
                         TT2.terms[termid].indices[indid] = T1.indices[Integer((filtered_odd_undiv[2*(indid+counter)+1] - 1) / 2)] #if was a dummy index, set to whatever the dummy is in T1
                     end
+
                 else
                     continue
                 end
             end
             counter += length(ttensor.indices) #shift the counter
         end
+        # println("upd exp")
+        #                 println(TT2)
+        update_indices(TT2)
         # println("post dum rep:")
         # println(TT2)
 
@@ -535,14 +541,14 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
             continue #try a different iso
         end
 
-        oversign = totgrweight * ((-1)^tens_grad)*sign
+        oversign = totgrweight * ((-1)^tens_grad) * sign
         #    println("index perm weight:"*string(totgrweight))
         #    println("tens swap weight:"*string(tens_grad))
 
-        return (true,oversign) #same !!
+        return (true, oversign) #same !!
     end
 
-    return (false,0)
+    return (false, 0)
 
 end
 

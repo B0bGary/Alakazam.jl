@@ -2020,6 +2020,7 @@ function ==(a::TensorTerm, b::TensorSuperType)
 end
 
 function ==(a::TensorTerm, b::TensorTerm)#chanfed this
+    # return hard_equals(a,b)
     return a.terms == b.terms
 end
 
@@ -2086,6 +2087,22 @@ function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:Tens
     return true
 end
 
+
+function ≅(a::TensorTerm, b::TensorExpression)#change to use our tabelau code!
+    if !singleterm(b)
+        return false
+
+    else
+        (same, grweight) = same_tensorterm_mod_syms_grade(a, b.summands[1][2])
+        return (same && grweight ==  b.summands[1][1])
+        # if (a.name == b.name && a.indices == b.indices )
+        #     return true
+        # else
+        #     return false
+        # end
+    end
+end
+
 function ≅(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau code!
     (same, grweight) = same_tensor_mod_syms(a, b)
     return (same && grweight == 1)
@@ -2114,6 +2131,27 @@ end
 # function Base.hash(a::Pair{<:SymorNum,TensorTerm},h::UInt)
 #     return Base.hash(a.first, Base.hash(a.second, h))
 # end
+
+function ≅(a::TensorExpression, b::TensorExpression)
+    if length(a.summands) != length(b.summands)
+        return false
+    end
+    aa = a.summands
+    bb = b.summands
+    if same_summands(aa, bb)
+        return true
+    end
+
+    return false
+end
+
+function ≅(a::OperatorSuperType, b::TensorExpression)
+    ≅(TensorExpression(a), b)
+end
+
+
+
+
 
 function ==(a::TensorExpression, b::TensorExpression)
     if length(a.summands) != length(b.summands)
@@ -2207,6 +2245,7 @@ function update_indices(T::TensorTerm)
         for d in duplicates
             if d[1].index_set.name != "lightcone"
                 println(duplicates)
+                println(T)
                 throw(OverusedIndices())
             end
         end
@@ -2870,14 +2909,16 @@ function simplify(TEx::TensorExpression)
 
     exp = contract_metrics(TEx, EpsilonTensor)
     exp = pop_metric(exp)
-    exp=sort(exp)
+    exp = sort(exp)
     exp = eliminate_epsilon(exp)
     exp = rename_dummies(exp)
     # println("renamed:",exp)
     new_exp = simp_ops_n_sym(exp)
     new_exp = eliminate_kronecker(new_exp)
-    new_exp = rename_dummies(new_exp)
+    # new_exp = rename_dummies(new_exp)
     new_exp = contract_metrics(new_exp, Metric)
+    new_exp = sort(new_exp)
+    new_exp = rename_dummies(new_exp)
     return new_exp
 end
 
