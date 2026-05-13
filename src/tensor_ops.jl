@@ -1164,6 +1164,12 @@ function +(A::TensorSuperType, B::TensorExpression)
     elseif isempty(Set([x for x in setdiff(get_free_indices(A), get_free_indices(B)) if x[1].index_set.name != "lightcone"]))
         return TensorExpression(TensorExpression(A), B)
     else
+        println(A)
+        println(B)
+        println(get_free_indices(A))
+        println(get_dummies_positional(A))
+        println(get_free_indices(B))
+        println(get_dummies_positional(B))
         throw(FreeIndexMismatch())
     end
 end
@@ -2013,8 +2019,8 @@ function ==(a::TensorTerm, b::TensorSuperType)
     return same_tensorterm_mod_syms(a, TensorTerm(b))
 end
 
-function ==(a::TensorTerm, b::TensorTerm)
-    return same_tensorterm_mod_syms(a, b)
+function ==(a::TensorTerm, b::TensorTerm)#chanfed this
+    return a.terms == b.terms
 end
 
 function hard_equals(a::TensorTerm, b::TensorTerm)
@@ -2032,8 +2038,9 @@ end
 
 
 function same_summands(a, b)
-    eq(x, y) = ((is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) && !(typeof(singleterm(x.second))<:OperatorSuperType) && !(typeof(singleterm(y.second))<:OperatorSuperType) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] : same_tensorterm_mod_syms(TensorTerm(x.second),TensorTerm(y.second))))
-||is_equal(x.first, -y.first) && same_tensorterm_mod_syms_grade(TensorTerm(x.second),TensorTerm(y.second))==(true,-1))
+    eq(x, y) = ((is_equal(x.first, y.first) && (singleterm(x.second) && singleterm(y.second) && !(typeof(singleterm(x.second)) <: OperatorSuperType) && !(typeof(singleterm(y.second)) <: OperatorSuperType) ? same_tensor_mod_syms(x.second.terms[1], y.second.terms[1])[1] : same_tensorterm_mod_syms(TensorTerm(x.second), TensorTerm(y.second))))
+                ||
+                is_equal(x.first, -y.first) && same_tensorterm_mod_syms_grade(TensorTerm(x.second), TensorTerm(y.second)) == (true, -1))
     length(a) == length(b) || return false
 
     used = falses(length(b))
@@ -2176,12 +2183,18 @@ end
 function update_indices(T::TensorTerm)
     inds = []
     for t in T.terms
+        if typeof(t) <: OperatorSuperType
+            update_indices(t)
+        end
         for i in t.indices
             push!(inds, i)
         end
     end
     # println(inds)
     T.indices = inds
+    # println("updated T")
+    # println(T)
+    # println(T.indices)
     ordered_counts = OrderedDict((pair[1], 0) for pair in T.indices)
     ###println(ordered_counts)
     for pair in T.indices
@@ -2349,11 +2362,17 @@ end
 function get_dummies(T::Union{TensorSuperType,TensorTerm})
 
     temp = [ind[1] for ind in T.indices]
-    ###println(temp)
+    # if length(temp)>=3
+    # @show temp[1] == temp[3]
+    # @show hash(temp[1]) == hash(temp[3])
+    # end
+
+    # println(temp)
     ordered_counts = OrderedDict((pair, 0) for pair in temp)
     for pair in temp
         ordered_counts[pair] += 1
     end
+    # println(ordered_counts)
     duplicates = filter(kv -> kv[2] == 2, ordered_counts)
     poscheck = Dict()
     for ind in T.indices
@@ -2563,55 +2582,124 @@ function rename_dummies(T::TensorTerm)
     index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dummies]) #set of all the index_sets associated with the dummies
     for set in index_sets #for each type of dummie index
 
-        replacements::Vector{Pair} = [] #dummie replacements to make
-        inset = OrderedSet(filter(a -> a.index_set == set, all_indices)) # all indices on our tensor that are of the specified index type
+        replacements = Dict()  #dummie replacements to make
+        inset = OrderedSet(filter(a -> a.index_set == set, setdiff(all_indices, dummies))) # all indices on our tensor that are of the specified index type
+        # println("nondums used")
+        # println(inset)
+        ####     #setminus all_inds by get dummies...
         remain = OrderedSet(filter(x -> !(x in inset), OrderedSet(set.indices)))
+        # println("unused spares")
+        # println(remain)
+        # println("used inds")
+        # println(all_indices)
+        # println("dumms")
+        # println(dummies)
+        # println("setdiff")
+        # println(setdiff(all_indices, dummies))
         #remain=setdiff(OrderedSet(set.indices),inset) # possible indices to replace our dummies that aren't already used on the tensor
         dumset = filter(d -> d.index_set == set, dummies)  #dummie indices to replace of the appropriate type
+        # println("want to rename dums")
+        # println(dumset)
         for d in dumset #attempt to replace each dummie index
-            for r in remain #check candidates
-                if first_element(set.indices, d, r) != d # if the dummie doesn't come first lexographically (or in your specified order)
-                    push!(replacements, d => r)
-                    delete!(remain, r)
-                    break
-                end
+            if length(remain) == 0
+                throw(throw(OutOfIndices(set)))
             end
+            r = remain[1]
+            push!(replacements, d => r)
+            delete!(remain, r)
+            # for r in remain #check candidates
+            #     println(first_element(set.indices, d, r)) #problem: rename tries to get dummies from start of alpha. 
+            #     println("current rem")
+            #     println(r)
+            #     #what we also want is to rename dummies completely in alphabetical, even if they're used elsewhere in exprs....
+            #     if first_element(set.indices, d, r) != d # if the dummie doesn't come first lexographically (or in your specified order)
+            #         push!(replacements, d => r)
+            #         delete!(remain, r)
+            #         break
+            #     elseif first_element(set.indices, d, r) == d
+            #         delete!(remain, r)
+            #     end
+            # end
+
+
         end
-        ###println(replacements)
-        for p in replacements
-            for t in T.terms
-                ###println("got here")
-                if !isempty(t.indices)
-                    ###println("here")
+        # println("replcs are")
+        # println(T)
+        # println(replacements)
+        # for p in replacements
+        #     for t in T.terms
+        #         ###println("got here")
+        #         if !isempty(t.indices)
+        #             println("here")
 
-                    ###println(t)
-                    if typeof(t) <: OperatorSuperType
-                        ###println("doing op replacement")
-                        # println("oper is: ",T)
-                        t.operator_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.operator_indices]
-                        t.operand_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.operand_indices]
-                        # println("new oper is: ",T)
+        #             println(t)
+        #             if typeof(t) <: OperatorSuperType
+        #                 ###println("doing op replacement")
+        #                 # println("oper is: ",T)
+        #                 t.operator_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.operator_indices]
+        #                 t.operand_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.operand_indices]
+        #                 # println("new oper is: ",T)
 
-                        t.indices = vcat(t.operator_indices, t.operand_indices)
+        #                 t.indices = vcat(t.operator_indices, t.operand_indices)
 
-                        update_dummies(t.operand, p)
-                        # println("new oper is: ", t)
-                        # println("with indeix", t.indices)
+        #                 update_dummies(t.operand, p)
+        #                 # println("new oper is: ", t)
+        #                 # println("with indeix", t.indices)
 
-                    else
-                        t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices]
-                    end
-                end
-            end
-        end
-        #     for (x, y) in T.indices
-        #         (x,y)=(x == p[1] ? p[2] : x), y for p in replacements 
-        #    # T.indices = [Pair((x == p[1] ? p[2] : x), y) for p in replacements for (x, y) in T.indices ]
+        #             else
+        #                 t.indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in t.indices]
+        #             end
+        #         end
+        #     end
+        # end
+
+
+        ##alt logic
+        ##add operator version...
+        T = rename_recursive(T, replacements)
+        # println(T)
+        # update_indices(T)
+        #should deeply rename.
+
     end
-    update_indices(T)
+    # update_indices(T)
     # println(T)
     return T
 end
+
+function rename_recursive(T::TensorExpression, replacements)
+    new_exp = zero
+    for term in T.summands
+        new_exp += term[1] * rename_recursive(term[2], replacements)
+    end
+    return new_exp
+end
+
+function rename_recursive(T::TensorTerm, replacements)
+    for term in T.terms
+        rename_recursive(term, replacements)
+    end
+    update_ext_indices(T)
+    return T
+end
+
+function rename_recursive(t::TensorSuperType, replacements)
+    if typeof(t) <: OperatorSuperType
+        if !isempty(t.operator_indices)
+            t.operator_indices = [Pair((haskey(replacements, x) ? replacements[x] : x), y) for (x, y) in t.operator_indices]
+        end
+        oprd = t.operand
+        return rename_recursive(oprd, replacements)
+    else
+        # println(replacements)
+        # println(t.indices)
+        if !isempty(t.indices)
+            t.indices = [Pair((haskey(replacements, x) ? replacements[x] : x), y) for (x, y) in t.indices]
+        end
+        return t
+    end
+end
+
 
 function rename_dummies(T::TensorExpression)
     # T=copy(T)
@@ -2781,59 +2869,25 @@ end
 function simplify(TEx::TensorExpression)
 
     exp = contract_metrics(TEx, EpsilonTensor)
-
-    # for summand in exp.summands
-    #     println(summand[2])
-    #     for t in summand[2].terms
-    #         println(t)
-    #         println(t.indices)
-    #         if typeof(t) <: OperatorSuperType
-
-    #             println(t.operator_indices)
-    #             println(t.operand_indices)
-    #         end
-    #     end
-    # end
-    # println("eiminating delta")
     exp = pop_metric(exp)
-
-    # for summand in exp.summands
-    #     println(summand[2])
-    #     for t in summand[2].terms
-    #         println(t)
-    #         println(t.indices)
-    #         if typeof(t) <: OperatorSuperType
-
-    #             println(t.operator_indices)
-    #             println(t.operand_indices)
-    #         end
-    #     end
-    # end
-    sort(exp)
-
+    exp=sort(exp)
     exp = eliminate_epsilon(exp)
-
     exp = rename_dummies(exp)
-
     # println("renamed:",exp)
     new_exp = simp_ops_n_sym(exp)
-
     new_exp = eliminate_kronecker(new_exp)
-    # rename_dummies()
-    # ##println("renamed: ",new_exp)
-    # eliminate_epsilon(new_exp)
     new_exp = rename_dummies(new_exp)
     new_exp = contract_metrics(new_exp, Metric)
-    # hard_simplify(new_exp)
-    # new_exp=symmetrise_partials(new_exp)
-    # println("ouput symmetrised partials: ",new_exp)
-    outexp = hard_merge(new_exp)
-    # new_exp=symmetrise_partials(new_exp)
-    # println("ouput symmetrised partials: ",new_exp)
-
-    # println(new_exp)
-    return outexp
+    return new_exp
 end
+
+# println(rename_dummies(oo2))
+# println(merge_sum(rename_dummies(oo2)))
+# outexp = hard_merge(new_exp)
+# new_exp=symmetrise_partials(new_exp)
+# println("ouput symmetrised partials: ",new_exp)
+
+# println(new_exp)
 
 function simp_ops_n_sym(exp::TensorExpression)
     new_exp = zero
@@ -3073,15 +3127,23 @@ function Base.show(io::IO, T::TensorTerm)
 end
 
 function Base.show(io::IO, T::TensorExpression)
-    it = Iterators.Stateful(T.summands)
-    for tens in it
+    # it = Iterators.Stateful(T.summands)
+    summands = T.summands  # or copy if you want full snapshot safety
+    n = length(summands)
+    for (i, tens) in enumerate(T.summands)
         # @show (tens[1] == 1)
         print(io, !(typeof(tens[1]) <: Number) ? tens[1] : tens[1] == 1 ? "" : tens[1] == -1 ? "-" : !isreal(tens[1]) ? "(" * (!isZero(real(tens[1])) ? string(tens[1]) : !isZero(imag(tens[1])) ? string(imag(tens[1])) * "Im" : "") * ")" : string(real(tens[1])))
         print(io, tens[2])
-        next = peek(it)
-        if next !== nothing
-            # println(next[1])
-            if !isreal(next[1]) || real(next[1]) >= 0
+        # next = peek(it)
+        # if next !== nothing
+        #     # println(next[1])
+        #     if !isreal(next[1]) || real(next[1]) >= 0
+        #         print(io, "+")
+        #     end
+        # end
+        if i < n
+            next_coef = summands[i+1][1]
+            if !isreal(next_coef) || real(next_coef) >= 0
                 print(io, "+")
             end
         end
@@ -3116,7 +3178,8 @@ function Base.sort(TEx::TensorExpression)
         # println("orig coef",summand[1])
         # println("orgin term",summand[2])
         new_terms = copy(summand[2])
-        fac = bubble_sort_with_grading!(new_terms.terms)
+        # @show (new_terms === summand[2])
+        fac = bubble_sort_with_grading!(new_terms)
         new_term *= (fac * new_terms)
         # println(fac)
         # ###println(summand[2])
@@ -3139,12 +3202,38 @@ end
 
 function Base.sort(term::TensorTerm)
     new_terms = copy(term)
-    fac = bubble_sort_with_grading!(new_terms.terms)
+    fac = bubble_sort_with_grading!(new_terms)
     return fac * new_terms
 end
 
+function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
+    if dummies === nothing
+        return T1 < T2
+    else
+        # println("in dumms")
+        # println(dummies)
+        i1 = T1.indices
+        i2 = T2.indices
+        for i = eachindex(i1)
+            if i1[i][1] in dummies
+                if i2[i][1] in dummies
+                    continue
+                else
+                    return false
 
-function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType)
+                end
+            elseif i2[i][1] in dummies
+                return true
+            else
+                return i1[i] < i2[i]
+            end
+        end
+    end
+    return false
+end
+
+
+function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType, dummies=nothing)
     if haskey(sort_order, T1.name)
         if haskey(sort_order, T2.name)
             if sort_order[T1.name] < sort_order[T2.name]
@@ -3159,11 +3248,17 @@ function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType)
     elseif haskey(sort_order, T2.name)
         return false
     else
-        return T1.name < T2.name
+        if T1.name == T2.name
+            return is_less_mod_dummies(T1, T2, dummies) ###################finish fixing
+        else
+            return T1.name < T2.name
+        end
     end
 end
 
-function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
+function bubble_sort_with_grading!(T::TensorTerm)
+    dums = get_dummies(T)
+    v = T.terms
     n = length(v)
     swapped = true
     swaps = 0
@@ -3171,7 +3266,7 @@ function bubble_sort_with_grading!(v::Vector{T}) where {T<:TensorSuperType}
         swapped = false
         for i in 1:n-1
             if !isempty(sort_order)
-                if custom_order_isless(v[i+1], v[i])
+                if custom_order_isless(v[i+1], v[i], dums) #i want to add an ignore dummy names in sort order
                     v[i], v[i+1] = v[i+1], v[i]
                     swaps += grading(v[i]) * grading(v[i+1])
                     swapped = true
@@ -4255,7 +4350,7 @@ function copy(T::TensorTerm)
 end
 
 function copy(T::TensorSuperType)
-    return typeof(T)(T.name, copy(T.indices), T.function_of, T.weights, T.tableaux)
+    return typeof(T)(T.name, copy(T.indices), copy(T.function_of), deepcopy(T.weights), deepcopy(T.tableaux))
 end
 
 function copy(T::TensorExpression)

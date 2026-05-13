@@ -15,7 +15,7 @@
         αd = Index("̇α", spinor_conj_indices, 1)
         βd = Index("̇β", spinor_conj_indices, 1)
         γd = Index("̇γ", spinor_conj_indices, 1)
-        χd = Index("̇χ", spinor_indices, 1)
+        χd = Index("̇χ", spinor_conj_indices, 1)
         
 
         μ = Index("μ", spacetime_indices)
@@ -62,7 +62,11 @@
         @show a2ex
         alex2=apply_derivative(a2ex)
         @show alex2
-        @show Alakazam.hard_simplify(Alakazam.simplify(rename_dummies(sort(alex1+alex2))))
+        # @show Alakazam.hard_simplify(Alakazam.simplify(rename_dummies(sort(alex1+alex2))))
+        # @show alex1+alex2
+        @show (Alakazam.simplify(alex1+alex2))
+        # @show sort(Alakazam.simplify(alex1+alex2))
+        # @show rename_dummies(sort(Alakazam.simplify(alex1+alex2)))
 
         # acomm=Derivative("D",Derivative("̄D",Tensor("X", [x,θ,θbar]), [x,θbar], [γd=>lower]), [x,θ], [γ=>lower])+ Derivative("̄D",Derivative("D",Tensor("X", [x,θ,θbar]), [x,θ], [γ=>lower]), [x,θbar], [γd=>lower])
         # @show acomm

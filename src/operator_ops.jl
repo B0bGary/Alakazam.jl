@@ -156,3 +156,7 @@ function ==(a::OperatorSuperType, b::OperatorSuperType)
         return false
     end
 end
+
+function copy(T::OperatorSuperType)
+    return typeof(T)(T.name, copy(T.operand), copy(T.operator_indices), copy(T.function_of), deepcopy(T.weights), deepcopy(T.tableaux))
+end

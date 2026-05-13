@@ -97,6 +97,8 @@ function ==(a::Index, b::Index)
    return a.name==b.name && a.grading==b.grading # index set ....  would cause issues since index set is a vecot. would have to use name but good for now
 end
 
+Base.hash(a::Index, h::UInt) = hash((a.name, a.grading), h)
+
 function ==(a::DummyPatternIndex, b::DummyPatternIndex)
    return a.name==b.name && a.grading==b.grading # index set ....  would cause issues since index set is a vecot. would have to use name but good for now
 end

@@ -338,7 +338,7 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
             if haskey(treeswaps, perm_pair[1][1])
                 if treeswaps[perm_pair[1][1]] != perm_pair[2][1]
                     println("Nested operators are switching trees!")
-                    println("Inconsistent!")
+                    # println("Inconsistent!")
                     flag = true
                     break
                 end
@@ -522,7 +522,7 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm,debug=fal
             if !same
                 #this means the isomorphisms is wrong: ie we need to use a symmetry of the tensor that doesn't exists
                 # i think if we get here we should iterate over all the isomorphisms. just incase one is a bad one
-                println("Inconsistent!")
+                # println("Inconsistent!")
                 flag = true
                 break
             end
