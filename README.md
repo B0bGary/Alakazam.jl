@@ -1,6 +1,8 @@
 # Alakazam
 
-<center><img src="newlogo3.png" width="400" height="400"></center>
+<p align="center">
+  <img src="newlogo3.png" width="400" height="400">
+</p>
 
 Alakazam is a Julia-based solution to performing symbolic algebraic manipulations of tensors and tensor equations.
 It was designed primarily for studying field theories in physics.
@@ -24,17 +26,19 @@ spacetime_indices = IndexSet("spacetime", 4,lower)
 ```
 Then, we can create some index objects
 ```julia
-μ = Index(["μ","ν","ρ","τ"], spacetime_indices)
+μ,ν,ρ,τ = Index(["μ","ν","ρ","τ"], spacetime_indices)
 ```
 Now we can create more interesting tensor objects,
 ```julia
 T = Tensor("T", [μ => upper,  ν=> lower, τ=>upper])
+    # T^{μ∘τ}_{∘ν∘}
 ```
 We can now begin to perform some basic operations, for example raising and lowering indices with a metric,
 ```julia
 η_νρ = Metric([ν=>upper, ρ=>upper])
 expression = η_νρ*T
 contract_metrics(expression)
+    # T^{μρτ}
 ```
 More important functionality includes taking covariant derivatves, pattern matching and replacements in expressions, and simplifications using symmetries of tensors.
 There is also inbuilt support for Lie algebras, matrices, supersymmetric/fermionic objects, and some aspects of superspace.
