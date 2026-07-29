@@ -101,14 +101,14 @@ barθupij=Tensor("Θ",[i=>upper, μdot=>upper],θbar)*Tensor("Θ",
 
 # defining the derivative operators of our theory
 # each type of derivative should be given a different symbol
-# note that zero here is just the placeholder 0 tensor expression and will be replaced when
+# note that  zero() here is just the placeholder 0 tensor expression and will be replaced when
 # the derivative is evaluated later
 # the 3rd parameter is which coordinates the derivative is w/r to (it will annihilate tensors that are not
 # functions of these coordinates)
 # the 4th parameter are the indices associated with the derivative
-grassman_deriv_normalrep=Derivative("∂",Alakazam.zero, [θ], [j => upper, β => lower])
-grassman_deriv_conjrep=Derivative("𝛛",Alakazam.zero, [θbar], [j => lower, βdot => upper])
-spatial_deriv=Derivative("∇",Alakazam.zero, [x], [b => lower])
+grassman_deriv_normalrep=Derivative("∂",Alakazam. zero(), [θ], [j => upper, β => lower])
+grassman_deriv_conjrep=Derivative("𝛛",Alakazam. zero(), [θbar], [j => lower, βdot => upper])
+spatial_deriv=Derivative("∇",Alakazam. zero(), [x], [b => lower])
 
 #define the action of our derivatives on some tensors
 #note that the derivative isn't defined on literally "θiα", but on tensors, with the same name and index structure (mod index names)
@@ -150,7 +150,7 @@ SUPERFIELD=(Tensor("j", x)+θiα*Tensor("ψ",[i=>upper, α=>lower],x)+θij*Tenso
 # [3][4]
 
 
-custom_sort_order(["θ","Θ","ϵ"])
+custom_sort_order!(["θ","Θ","ϵ"])
 
 
 ######################################
@@ -159,10 +159,10 @@ custom_sort_order(["θ","Θ","ϵ"])
 ######################################
 
 # to make expressions simple, we can have a cov. derivative eg D, but then expand it out in terms of the full expression
-covar=Derivative("D",Alakazam.zero, [x,θ], [j => upper, β => lower])
+covar=Derivative("D",Alakazam. zero(), [x,θ], [j => upper, β => lower])
 covar_expansion=grassman_deriv_normalrep-im*Tensor("σ",[b =>upper, γdot=>upper, β =>lower])*Tensor("Θ",[j=>upper,γdot=>lower],θbar)*spatial_deriv
 
-covar_bar=Derivative("̄D",Alakazam.zero, [x,θbar], [j => lower, βdot => upper])
+covar_bar=Derivative("̄D",Alakazam. zero(), [x,θbar], [j => lower, βdot => upper])
 covar_expansion_bar=grassman_deriv_conjrep-im*Tensor("σ",[b =>upper,βdot=>upper, β =>lower])*Tensor("θ",[j=>lower,β=>upper],θ)*spatial_deriv
 
 println("our superfield expansions is: ", SUPERFIELD)
