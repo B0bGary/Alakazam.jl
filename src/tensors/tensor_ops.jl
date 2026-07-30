@@ -2256,22 +2256,39 @@ end
 
 #complicated logic to convert a youngtab to a projection operator of permuations, and apply to a tensor
 #this was quite sensitive to get working for generic tableaux
+function young_projection(TT::TensorTerm, proj::Union{Vector{String},Nothing}=nothing)
+    ts = terms(TT)
+    isempty(ts) && return TensorExpression(TT)
+
+    term_acc = nothing
+    for tens in ts
+        piece = if typeof(tens) <: OperatorSuperType
+            newop = _with_operand(tens, young_projection(operand(tens), proj))
+            young_projection(newop, proj)
+        elseif typeof(tens) <: TensorSuperType
+            young_projection(tens, proj)
+        else
+            continue
+        end
+        term_acc = term_acc === nothing ? piece : term_acc * piece
+    end
+
+    term_acc === nothing && return TensorExpression(TT)
+    return term_acc
+end
 
 function young_projection(TEx::TensorExpression, proj::Union{Vector{String},Nothing}=nothing)
-    tex = zero()
-    for summand in summands(TEx)
-        for tens in terms(summand[2])
-            if typeof(tens) <: OperatorSuperType
-                oprdproj = young_projection(operand(tens), proj)
-                set_operand!(tens, oprdproj)
-                tex += summand[1] * young_projection(tens, proj)
-            elseif typeof(tens) <: TensorSuperType
-                tex += summand[1] * young_projection(tens, proj)
-            end
-        end
+    s = summands(TEx)
+    out = CoeffPair[]
+    for (coef, tterm) in s
+        piece = coef * young_projection(tterm, proj)
+        # isZeroTens(piece) && continue
+        append!(out, summands(piece))
     end
-    return tex
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
+
 
 function factor_weight(factor::String)
     weight = 0
@@ -2305,9 +2322,7 @@ function young_projection(T::TensorSuperType, proj::Union{Vector{String},Nothing
     # println(tab for tab in T.tableaux)
     norms = proj === nothing ? [1 // compute_hook_product(tab) for tab in tableaux(T)] : [compute_normalization_from_factors(prr) for prr in projectors]
     tex = zero()
-    if isempty(projectors)
-        return T
-    end
+    isempty(projectors) && return TensorExpression(T)
     for (proj, norm) in zip(projectors, norms)
         tex += apply_young_projector(T, proj) * norm
     end

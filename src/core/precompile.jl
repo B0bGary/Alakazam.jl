@@ -91,7 +91,6 @@ for f in TEST_FILES
 end
 end
 
-clear_global!()
 
 let
     precompile(Base.deepcopy_internal, (IndexSet, IdDict))
@@ -328,3 +327,4 @@ let
     precompile(reduce_tableaux, (OrderedSet{YoungTableau},))
     precompile(Base.push!, (OrderedSet{YoungTableau}, YoungTableau))
 end
+clear_global!()
