@@ -9,7 +9,7 @@ mutable struct OperatorData <: TensorDataSuperType #?
 
     function_of::Set{Coordinate}
     weights::Dict{String,Number}
-    tableaux::OrderedSet{YoungTableau}
+    tableaux::Set{YoungTableau}
     labels::Vector{Pair{String,IndexPosition}}
 
     

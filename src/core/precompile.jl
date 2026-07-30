@@ -252,7 +252,7 @@ let
         Vector{Pair{DummyPatternIndex,IndexPosition}})
     NUMS = (Int, Rational{Int}, Rational{BigInt}, Float64, Complex{Int})
 
-    # ── TensorData ────────────────────────────────────
+    #TensorData ────────────────────────────────────
     precompile(TensorData, (String,))
     for V in IPV
         precompile(TensorData, (String, V))
@@ -262,16 +262,8 @@ let
         # precompile(_absorb!, (V, Vector{IndexPair}, OrderedSet{Coordinate},
         #                       Dict{String,Number}, OrderedSet{YoungTableau}, Vector{LabelPair}))
     end
-    # for I in IDX
-    #     precompile(_absorb!, (Pair{I,IndexPosition}, Vector{IndexPair}, OrderedSet{Coordinate},
-    #                           Dict{String,Number}, OrderedSet{YoungTableau}, Vector{LabelPair}))
-    # end
-    # precompile(_absorb!, (Coordinate, Vector{IndexPair}, OrderedSet{Coordinate},
-    #                       Dict{String,Number}, OrderedSet{YoungTableau}, Vector{LabelPair}))
-    # precompile(_absorb!, (String, Vector{IndexPair}, OrderedSet{Coordinate},
-    #                       Dict{String,Number}, OrderedSet{YoungTableau}, Vector{LabelPair}))
 
-    # ── leaf tensors ──────────────────────────────────
+    # leaf tensors ──────────────────────────────────
     for T in TENS
         precompile(T, (TensorData,))
         precompile(T, (String,))
@@ -324,7 +316,7 @@ let
     precompile(generate_symmetric_tableau, (Int,))
     precompile(generate_antisymmetric_tableau, (Int,))
     precompile(generate_riemann_tableau, ())
-    precompile(reduce_tableaux, (OrderedSet{YoungTableau},))
-    precompile(Base.push!, (OrderedSet{YoungTableau}, YoungTableau))
+    precompile(reduce_tableaux, (Set{YoungTableau},))
+    precompile(Base.push!, (Set{YoungTableau}, YoungTableau))
 end
 clear_global!()

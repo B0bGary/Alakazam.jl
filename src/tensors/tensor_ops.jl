@@ -456,34 +456,6 @@ function update_indices!(T::TensorExpression)
     return T
 end
 
-# function get_unused_indices(T::TensorSuperType, IS::IndexSet)
-#     return OrderedSet(ordered_setdiff(filter_wildcard_dummies(IS.indices), OrderedSet(i[1] for i in indices(T))))
-# end
-# function get_unused_indices(T::TensorTerm, IS::IndexSet)
-#     return OrderedSet(ordered_setdiff(filter_wildcard_dummies(IS.indices), OrderedSet(i[1] for i in indices(T))))
-# end
-# function get_unused_indices(T::TensorExpression, IS::IndexSet)
-#     temp = filter_wildcard_dummies(IS.indices)
-#     for summand in summands(T)
-#         temp = OrderedSet(ordered_setdiff(temp, OrderedSet(i[1] for i in indices(summand[2]))))
-#     end
-
-#     return temp
-# end
-
-# function get_unused_indices(T::Union{TensorSuperType,TensorTerm,TensorExpression},
-#     IS::IndexSet)
-
-#     used = OrderedSet{IndexSuperType}()
-#     collect_indices!(used, T)
-
-#     return OrderedSet(
-#         ordered_setdiff(
-#             filter_wildcard_dummies(IS.indices),
-#             used
-#         )
-#     )
-# end
 function get_unused_indices(T::Union{TensorSuperType,TensorTerm,TensorExpression}, IS::IndexSet)
     used = IndexSuperType[]
     collect_indices!(used, T)                  # needs a Vector-accepting collect_indices!
@@ -504,65 +476,11 @@ function get_index_index(T::TensorSuperType)
     return OrderedSet([indices(T)[i][1] => i for i in 1:size(indices(T))[1]])
 end
 
-# function get_index_index_rev(T::TensorSuperType)
-#     return Dict(i => indices(T)[i][1] for i in 1:size(indices(T))[1])
-# end
 
 function index_index_to_dict(s::OrderedSet)
     return Dict(p[2] => p[1] for p in s)
 end
 
-
-# function rename_dummies(T::TensorSuperType)
-#     T = copy(T)
-#     dummys = dummies(T) #returns all the dummies attached to the tensor
-#     # println(dummies)
-#     all_indices=IndexSuperType[i[1] for i in indices(T)] #set of all the indices attached to the tensor
-#     # index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dummys]) #set of all the index_sets associated with the dummies
-#     index_sets = IndexSet[]
-#     for d in dummys
-#         d.index_set in index_sets || push!(index_sets, d.index_set)
-#     end
-#     for set in index_sets #for each type of dummie index
-
-#         replacements=Pair{IndexSuperType,IndexSuperType}[] #dummie replacements to make
-#         inset = (filter(a -> a.index_set == set, all_indices)) # all indices on our tensor that are of the specified index type
-
-#         remain = OrderedSet(filter(x -> !(x in inset), OrderedSet(filter_wildcard_dummies(set.indices))))
-#         # remain=setdiff(OrderedSet(set.indices),inset) # possible indices to replace our dummies that aren't already used on the tensor
-#         dumset = filter(d -> d.index_set == set, dummys)  #dummie indices to replace of the appropriate type
-#         for d in dumset #attempt to replace each dummie index
-#             for r in remain #check candidates
-#                 if first_element(filter_wildcard_dummies(set.indices), d, r) != d # if the dummie doesn't come first lexographically (or in your specified order)
-#                     push!(replacements, d => r)
-#                     delete!(remain, r)
-#                     break
-#                 end
-#             end
-#         end
-#         ###println(replacements)
-#         for p in replacements
-
-#             ###println("here at least")
-#             if typeof(T) <: OperatorSuperType
-#                 ###println("doing op replacement")
-#                 # println("oper is: ",T)
-#                 T.operator_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in T.operator_indices]
-#                 T.operand_indices = [Pair((x == p[1] ? p[2] : x), y) for (x, y) in T.operand_indices]
-#                 # println("new oper is: ", T)
-#                 # println("with indeix", indices(T))
-#                 set_indices!(T, vcat(T.operator_indices, T.operand_indices))
-#                 update_dummies(T.operand, p)
-#             else
-#                 set_indices!(T, [Pair((x == p[1] ? p[2] : x), y) for (x, y) in indices(T)])
-#             end
-#         end
-#         #     for (x, y) in indices(T)
-#         #         (x,y)=(x == p[1] ? p[2] : x), y for p in replacements 
-#         #    # indices(T) = [Pair((x == p[1] ? p[2] : x), y) for p in replacements for (x, y) in indices(T) ]
-#     end
-#     return T
-# end
 function rename_dummies(T::TensorSuperType)
     T = copy(T)
     dumms = dummies(T)
@@ -682,32 +600,7 @@ end
 
 
 #rename dummies function
-"""Rename dummy summation indices to be more lexigraphically uniform across expressions."""
-# function rename_dummies(T::TensorTerm)
-#     T = copy(T)
-#     dumms = dummies(T) #returns all the dummies attached to the tensor
-#     all_indices::OrderedSet{IndexSuperType} = OrderedSet([i[1] for t in terms(T) for i in indices(t)]) #set of all the indices attached to the tensor
-#     index_sets::OrderedSet{IndexSet} = OrderedSet([d.index_set for d in dumms]) #set of all the index_sets associated with the dummies
-#     for set in index_sets #for each type of dummie index
-#         replacements = Dict()  #dummie replacements to make
-#         inset = OrderedSet(filter(a -> a.index_set == set, setdiff(all_indices, dumms))) # all indices on our tensor that are of the specified index type
-#         ####     #setminus all_inds by get dummies...
-#         remain = OrderedSet(filter(x -> !(x in inset), OrderedSet(filter_wildcard_dummies(set.indices))))
-#         dumset = filter(d -> d.index_set == set, dumms)  #dummie indices to replace of the appropriate type
-#         for d in dumset #attempt to replace each dummie index
-#             if length(remain) == 0
-#                 nid = generate_indices(set)
-#                 nid === nothing && throw(OutOfIndices(set))
-#                 push!(remain, nid)
-#             end
-#             r = remain[1]
-#             push!(replacements, d => r)
-#             delete!(remain, r)
-#         end
-#         T = rename_recursive!(T, replacements)#should deeply rename.
-#     end
-#     return T
-# end
+"""Rename dummy Einstein summation indices to be more lexigraphically uniform across expressions."""
 function rename_dummies(T::TensorTerm)
     T = copy(T)
     dumms = dummies(T)

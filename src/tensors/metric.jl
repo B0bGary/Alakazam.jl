@@ -16,7 +16,7 @@ mutable struct Metric <: SymMetricSuperType
         if indices(t)[1][2] != indices(t)[2][2]
             throw(ArgumentError("Metric indices must have the same level!"))
         end
-        push!(tableaux(t), generate_symmetric_tableau(indices(t)))
+        add_tableau!(t, generate_symmetric_tableau(indices(t)))
         return new(t)
     end
     # function Metric(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), signature=nothing) where {I<:IndexSuperType}
@@ -55,7 +55,7 @@ mutable struct EpsilonTensor <: EpsilonTensorSuperType
             @show i
             throw(InvalidEpsilonIndices())
         end
-        push!(tableaux(t), generate_antisymmetric_tableau(indices(t)))
+        add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
         return new(t)
     end
     function EpsilonTensor(d::TensorData)
@@ -75,7 +75,7 @@ mutable struct SymplecticForm <: EpsilonTensorSuperType
             @show i
             throw(InvalidEpsilonIndices())
         end
-        push!(tableaux(t), generate_antisymmetric_tableau(indices(t)))
+        add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
         return new(t)
     end
     function SymplecticForm(d::TensorData)
@@ -94,7 +94,7 @@ mutable struct KroneckerDelta <: KroneckerSuperType
         if i[1][2] == i[2][2] || i[1][1].index_set != i[2][1].index_set #should be one upper and one lower #should be from the same index set
             throw(InvalidKroneckerIndices(i))
         end
-        push!(tableaux(t), generate_symmetric_tableau(indices(t)))
+        add_tableau!(t, generate_symmetric_tableau(indices(t)))
 
         return new(t)
     end

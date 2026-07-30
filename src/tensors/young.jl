@@ -280,26 +280,55 @@ function is_subsumed(t1::YoungTableau, t2::YoungTableau)
 
     return false
 end
-"""Merge tableaux, if they are compatible"""
-function reduce_tableaux(tableaux::OrderedSet{YoungTableau})
-    ts = YoungTableau[]
-    for t in keys(tableaux.dict)
-        push!(ts, t)
+
+
+#custom push to stop redundant YT
+function Base.push!(tabs::Set{YoungTableau}, t::YoungTableau)
+    tabs.dict[t] = nothing
+    reduced = reduce_tableaux(tabs)
+    reduced === tabs && return tabs
+    empty!(tabs.dict)
+    for r in reduced
+        tabs.dict[r] = nothing
     end
-    keep = trues(length(ts))
-    for i in eachindex(ts)
+    return tabs
+end
+
+function add_tableau!(T::TensorDataSuperType, tab::YoungTableau)
+    tabs = tableaux(T)
+    if tabs === notableaux()
+        tabs = Set{YoungTableau}()
+        T.tableaux = tabs
+        tabs.dict[tab] = nothing
+        return tabs
+    end
+    push!(tabs, tab)
+    return T
+end
+
+"""Merge tableaux, if they are compatible"""
+function reduce_tableaux(tableaux::Set{YoungTableau})
+    n = length(tableaux)
+    n <= 1 && return tableaux
+    
+
+    ts = collect(keys(tableaux.dict))
+
+    keep = trues(n)
+    @inbounds for i in 1:n
         keep[i] || continue
-        for j in eachindex(ts)
-            i == j && continue
-            keep[j] || continue
+        for j in 1:n
+            (i == j || !keep[j]) && continue
             if is_subsumed(ts[i], ts[j])
                 keep[i] = false
                 break
             end
         end
     end
-    result = OrderedSet{YoungTableau}()
-    for i in eachindex(ts)
+
+    result = Set{YoungTableau}()
+    sizehint!(result.dict, count(keep))
+    @inbounds for i in 1:n
         keep[i] && (result.dict[ts[i]] = nothing)
     end
     return result
@@ -470,28 +499,11 @@ function permutation_orbit_pairs(gens, a, b)
 
     seen
 end
-# symcopy(s::OrderedSet{YoungTableau}) = deepcopy(s)      # tableaux — see below
 
-# deepcopy(s::OrderedSet{YoungTableau}) = s     # tableaux — see below
-# # symcopy(s::OrderedSet{YoungTableau}) = copy(s)
-# function Base.deepcopy_internal(t::YoungTableau, sd::IdDict)
-
-#     t
-# end
-# Base.deepcopy(t::YoungTableau)=t
-# ONE definition. Fresh set, shared (immutable-in-practice) tableaux.
-# symcopy(s::OrderedSet{YoungTableau}) = OrderedSet{YoungTableau}(t for t in s)
-function symcopy(s::OrderedSet{YoungTableau})
-    out = OrderedSet{YoungTableau}()
+function symcopy(s::Set{YoungTableau})
+    out = Set{YoungTableau}()
     for t in s
         out.dict[t] = nothing        # direct insert — skip push!/reduce_tableaux
     end
     return out
 end
-# function _copy_reduced_tableaux(s::OrderedSet{YoungTableau})
-#     out = OrderedSet{YoungTableau}()
-#     for t in s
-#         out.dict[t] = nothing   # direct insert, set is already reduced
-#     end
-#     out
-# end

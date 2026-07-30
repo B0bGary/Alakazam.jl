@@ -1,7 +1,12 @@
 const LabelPair = Pair{String,IndexPosition}
 const _EMPTY_FUNCTION_OF = Set{Coordinate}()
+const _EMPTY_TABLEAUX = Set{YoungTableau}()
+const _EMPTY_WEIGHTS = Dict{String,Number}()
+const _EMPTY_LABELS = LabelPair[]
 @inline coordfree() = _EMPTY_FUNCTION_OF
-
+@inline notableaux()::Set{YoungTableau} = _EMPTY_TABLEAUX
+@inline noweights()::Dict{String,Number} = _EMPTY_WEIGHTS
+@inline nolabels()::Vector{LabelPair} = _EMPTY_LABELS
 """
 Mutual tensor data that all tensors should have in common. This makes it easier to add new features to tensors.
 """
@@ -10,56 +15,69 @@ mutable struct TensorData <: TensorDataSuperType
     indices::Vector{IndexPair}
     function_of::Set{Coordinate} #set if ok
     weights::Dict{String,Number}
-    tableaux::OrderedSet{YoungTableau}
+    tableaux::Set{YoungTableau}
     labels::Vector{LabelPair}
     function TensorData(name::String, args...)
         indices = Vector{IndexPair}()
-        function_of = coordfree()
+        function_of = coordfree();
         has_coords = false
-        weights = Dict{String,Number}()
-        tableaux = OrderedSet{YoungTableau}()
-        labels = Vector{Pair{String,IndexPosition}}()
+        tableaux = notableaux();
+        has_tabs = false
+        labels = nolabels();
+        has_labels = false
+        weights = noweights()
+
         for arg in args
             if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
-                indices = append!(indices, arg)
+                append!(indices, arg)
             elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
                 push!(indices, arg)
             elseif arg isa Coordinate
                 has_coords || (function_of=Set{Coordinate}(); has_coords=true)
                 push!(function_of, arg)
             elseif arg isa AbstractVector{<:Coordinate}
+                isempty(arg) && continue
                 has_coords || (function_of=Set{Coordinate}(); has_coords=true)
                 union!(function_of, arg)
             elseif arg isa Dict{String,Number}
                 weights = arg
             elseif arg isa YoungTableau
+                has_tabs || (tableaux=Set{YoungTableau}(); has_tabs=true)
                 push!(tableaux, arg)
             elseif arg isa Vector{YoungTableau}
+                isempty(arg) && continue
+                has_tabs || (tableaux=Set{YoungTableau}(); has_tabs=true)
                 union!(tableaux, arg)
             elseif arg isa String
+                has_labels || (labels=LabelPair[]; has_labels=true)
                 push!(labels, arg => lower)
             elseif arg isa Pair{String,IndexPosition}
+                has_labels || (labels=LabelPair[]; has_labels=true)
                 push!(labels, arg)
             elseif arg isa Vector{Pair{String,IndexPosition}}
+                isempty(arg) && continue
+                has_labels || (labels=LabelPair[]; has_labels=true)
                 append!(labels, arg)
             end
         end
 
+        tabs = has_tabs ? reduce_tableaux(tableaux) : tableaux
+
         if !has_coords
-            return new(name, indices, coordfree(), weights, reduce_tableaux(tableaux), labels)
+            return new(name, indices, function_of, weights, tabs, labels)
         end
         w = Dict{String,Number}()
-        @inbounds for c in function_of
+        for c in function_of
             ;
             w[c.name] = 1;
         end
-        return new(name, indices, function_of, merge(w, weights), reduce_tableaux(tableaux), labels)
+        return new(name, indices, function_of, merge(w, weights), tabs, labels)
     end
     # raw constructor — stores fields directly, no processing. For copying.
     function TensorData(name::String, indices::Vector{IndexPair},
         function_of::Set{Coordinate},
         weights::Dict{String,Number},
-        tableaux::OrderedSet{YoungTableau},
+        tableaux::Set{YoungTableau},
         labels::Vector{LabelPair})
         return new(name, indices, function_of, weights, tableaux, labels)
     end
@@ -118,8 +136,8 @@ end
 function SymmetricTensor(name::String, args...)
     t = Tensor(name, args...)
     if length(indices(t))>1
-        push!(tableaux(t), generate_symmetric_tableau(indices(t)))
-        data(t).tableaux = reduce_tableaux(tableaux(t))
+        add_tableau!(data(t), generate_symmetric_tableau(indices(t)))
+        # data(t).tableaux = reduce_tableaux(tableaux(t))
     end
     return t
 end
@@ -127,7 +145,7 @@ end
 function AntisymmetricTensor(name::String, args...)
     t = Tensor(name, args...)
     if length(indices(t))>1
-        push!(tableaux(t), generate_antisymmetric_tableau(indices(t)))
+        add_tableau!(data(t), generate_antisymmetric_tableau(indices(t)))
     end
     return t
 end
@@ -141,19 +159,8 @@ function RiemannTensor(name::String, args...)
     if length(indices(t)) != 4 #perhaps at some point want to fix this incase people have some sort of multi-metric gravity etc
         throw(ArgumentError("Riemann tensor must have exactly 4 indices"))
     end
-    push!(tableaux(t), generate_riemann_tableau())
+    add_tableau!(data(t), generate_riemann_tableau())
     return t
-end
-
-#custom push to stop redundant YT
-function Base.push!(tableaux::OrderedSet{YoungTableau}, t::YoungTableau)
-    tableaux.dict[t] = nothing
-    reduced = reduce_tableaux(tableaux)
-    empty!(tableaux.dict)
-    for r in reduced
-        tableaux.dict[r] = nothing
-    end
-    return tableaux
 end
 
 
@@ -512,7 +519,7 @@ macro Tensor(expr::String)
     funof = false
     tabstart = 0
     tabaccum = Vector{Int64}()
-    tableaulist = OrderedSet{YoungTableau}()
+    tableaulist = Set{YoungTableau}()
     coordstring = ""
     comma_mode = false
     i = firstindex(expr)
