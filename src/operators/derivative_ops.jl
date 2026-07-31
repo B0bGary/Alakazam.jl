@@ -278,18 +278,10 @@ end
 Non-commuting derivatives.
 """
 function add_commutator!(grading::Integer, A::DerivativeSuperType, B::DerivativeSuperType, C::TensorExpression)
-    temp_term=A*B
-    if free_indices(temp_term)!=free_indices(C)
-        if !isZeroTens(C)
-            @show A, B, C
-            @show free_indices(A*B)
-            @show free_indices(C)
-            throw(InvalidCommutatorDefinition)#they gotta have same index pattern, unless commutes
-        end
+    if free_indices(A * B) != free_indices(C) && !isZeroTens(C)
+        throw(InvalidCommutatorDefinition(A, B, C))
     end
-    name_key=minmax(name(A), name(B))
-    #add the commutator
-    derivative_algebra[name_key]=CovariantCommutator(grading, A, B, C)
+    derivative_algebra[minmax(name(A), name(B))] = CovariantCommutator(grading, A, B, C)
 end
 add_commutator!(grading::Integer, A::DerivativeSuperType, B::DerivativeSuperType, C::Int64) = add_commutator!(grading, A, B, TensorExpression(C))
 function add_commutator!(va::CovariantCommutator)
@@ -460,22 +452,14 @@ end
 Define action of a derivative operator on some basis of tensors.
 """
 function add_derivative_action(D::T, exp::TensorTerm, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
-
-    if length(tersm(exp)) != 1
-        throw(InvalidDerivativeBasis())
-    else
-        add_derivative_action(D, terms(exp)[1], res)
-    end
-
+    length(terms(exp)) == 1 || throw(InvalidDerivativeBasis(D, exp))
+    return add_derivative_action(D, terms(exp)[1], res)
 end
+
 function add_derivative_action(D::T, exp::TensorExpression, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
-
-    if length(summands(exp)) != 1 || length(exp.summands[1][2].terms) != 1
-        throw(InvalidDerivativeBasis())
-    else
-        add_derivative_action(D, exp.summands[1][2].terms[1], res)
-    end
-
+    (length(summands(exp)) == 1 && length(terms(term(summands(exp)[1]))) == 1) ||
+        throw(InvalidDerivativeBasis(D, exp))
+    return add_derivative_action(D, terms(term(summands(exp)[1]))[1], res)
 end
 function add_derivative_action(D::T, exp::TensorSuperType, res::E) where {T<:DerivativeSuperType,E<:Union{TensorSuperType,TensorExpression,TensorTerm}}
     key = nothing

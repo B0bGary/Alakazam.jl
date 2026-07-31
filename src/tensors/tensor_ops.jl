@@ -1531,8 +1531,10 @@ function Base.show(io::IO, T::TensorTerm)
         print(io, tens)
     end
 end
+_unwrapnum(x) = SymbolicUtils.isconst(x) ? SymbolicUtils.unwrap_const(x) : x
 function coef_string(c, T::TensorExpression)
-    c=Symbolics.simplify(Symbolics.expand(c))
+    c = Symbolics.simplify(Symbolics.expand(c))
+    c = _unwrapnum(c)  
     isequal(c, 1) && !isconst(T) && return ""
     isequal(c, -1) && !isconst(T) && return "-"
     if c isa Number
@@ -1551,7 +1553,7 @@ function coef_string(c, T::TensorExpression)
     end
     # symbolic: check for complex numeric factor
     try
-        args = SymbolicUtils.arguments(c)
+        args = _unwrapnum.(SymbolicUtils.arguments(c))     # <- unwrap each argument
         op = SymbolicUtils.operation(c)
 
         if op === (+)
@@ -2010,16 +2012,10 @@ function to_latex(T::TensorSuperType)
 
     end
     if function_of_on
-        if !isempty(function_of(T))
-            out*="("
-            ncoords=length(function_of(T))
-            for coordin in eachindex(function_of(T))
-                out*=uni_to_TeX(function_of(T)[coordin].name)
-                if coordin<ncoords
-                    out*=","
-                end
-            end
-            out*=")"
+        fo = function_of(T)
+        if !isempty(fo)
+            names = sort!([c.name for c in fo], lt=_coord_lt)
+            out *= "(" * join(uni_to_TeX.(names), ",") * ")"
         end
     end
     return Base.replace(out * " ", "\$" => "")
@@ -2092,22 +2088,31 @@ function tens2str(T::TensorSuperType)
         end
     end
     if function_of_on
-        if !isempty(function_of(T))
-            out*="("
-            ncoords=length(function_of(T))
-            for coordin in eachindex(function_of(T))
-                out*=function_of(T)[coordin].name
-                if coordin<ncoords
-                    out*=","
-                end
-            end
-            out*=")"
+        fo = function_of(T)
+        if !isempty(fo)
+            names = sort!([c.name for c in fo], lt=_coord_lt)
+            out *= "(" * join(names, ",") * ")"
         end
     end
     return out
 end
 
+"""
+Order coordinate names: Latin before Greek, lowercase before uppercase,
+alphabetical within each group.
+"""
+function _coord_lt(a::AbstractString, b::AbstractString)
+    ka, kb = _coord_key(a), _coord_key(b)
+    ka != kb && return ka < kb
+    return a < b
+end
 
+function _coord_key(s::AbstractString)
+    c = first(s)
+    greek = c >= '\u0370'          # Greek block starts at U+0370
+    upper = isuppercase(c)
+    return (greek ? 1 : 0, upper ? 1 : 0)
+end
 
 
 function replace(T::TensorTerm, old_T::TensorSuperType, new_T::TensorSuperType, repeat::Bool=true)

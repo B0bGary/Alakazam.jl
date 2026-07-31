@@ -51,9 +51,14 @@ mutable struct EpsilonTensor <: EpsilonTensorSuperType
         #     throw(InvalidEpsilonIndices()) #should be both upper or both lower
         # end
         #any length of indices
-        if length(unique(idx.index_set for (idx, pos) in i)) != 1 || length(unique(pos for (idx, pos) in i)) != 1 || length(i)!=i[1][1].index_set.range
-            @show i
-            throw(InvalidEpsilonIndices())
+        if length(unique(idx.index_set for (idx, pos) in i)) != 1
+            throw(InvalidEpsilonIndices(i, "all indices must belong to the same index set"))
+        elseif length(unique(pos for (idx, pos) in i)) != 1
+            throw(InvalidEpsilonIndices(i, "all indices must be in the same position (all raised or all lowered)"))
+        elseif length(i) != i[1][1].index_set.range
+            throw(InvalidEpsilonIndices(i,
+                "an epsilon tensor on index set '$(i[1][1].index_set.name)' requires " *
+                "$(i[1][1].index_set.range) indices (the dimension of the set) in order to be a top (volume) form - got $(length(i)) indices."))
         end
         add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
         return new(t)
@@ -71,9 +76,12 @@ mutable struct SymplecticForm <: EpsilonTensorSuperType
         t = TensorData(name, args...)
         i = indices(t)
         #ensure all indices are from same index set, all upper, and that even number of indices
-        if length(unique(idx.index_set for (idx, pos) in i)) != 1 || length(unique(pos for (idx, pos) in i)) != 1 || length(i)%2!=0
-            @show i
-            throw(InvalidEpsilonIndices())
+        if length(unique(idx.index_set for (idx, pos) in i)) != 1
+            throw(InvalidEpsilonIndices(i, "all indices must belong to the same index set."))
+        elseif length(unique(pos for (idx, pos) in i)) != 1
+            throw(InvalidEpsilonIndices(i, "all indices must be in the same position (all raised or all lowered)."))
+        elseif length(i) % 2 != 0
+            throw(InvalidEpsilonIndices(i, "a sympletic form requires an even number of indices, got $(length(i))."))
         end
         add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
         return new(t)

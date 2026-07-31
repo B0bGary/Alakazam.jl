@@ -52,17 +52,13 @@ end
 """
 Non-commuting tensor must be defined as matrixes for detection purposes.
 """
-function add_commutator!(grading::Integer, A::MatrixSuperType,B::MatrixSuperType,C::TensorExpression )
-    temp_term=A*B
-    if free_indices(temp_term)!=free_indices(C)
-        if !isZeroTens(C)
-            throw(InvalidCommutatorDefinition)#they gotta have same index pattern, unless commutes
-        end
+function add_commutator!(grading::Integer, A::MatrixSuperType, B::MatrixSuperType, C::TensorExpression)
+    if free_indices(A * B) != free_indices(C) && !isZeroTens(C)
+        throw(InvalidCommutatorDefinition(A, B, C))
     end
-    name_key=minmax(name(A),name(B))
-    #add the commutator
-    commutators[name_key]=Commutator(grading,A,B,C)
+    commutators[minmax(name(A), name(B))] = Commutator(grading, A, B, C)
 end
+
 add_commutator!(grading::Integer, A::MatrixSuperType,B::MatrixSuperType,C::Int64 )=add_commutator!(grading, A,B,TensorExpression(C) )
 add_commutator!(k::Tuple{String,String},va::Commutator)=commutators[k]=va
 function add_commutator!(va::Commutator)

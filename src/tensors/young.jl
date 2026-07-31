@@ -31,7 +31,7 @@ function YoungTableau(row_lengths::Vector{Int64}, index_assignment::Vector{Int64
 end
 
 
-function ==(a::YoungTableau,b::YoungTableau)
+function ==(a::YoungTableau, b::YoungTableau)
     return a.row_lengths==b.row_lengths && a.index_assignment == b.index_assignment
 end
 function Base.hash(a::YoungTableau, h::UInt)
@@ -310,7 +310,7 @@ end
 function reduce_tableaux(tableaux::Set{YoungTableau})
     n = length(tableaux)
     n <= 1 && return tableaux
-    
+
 
     ts = collect(keys(tableaux.dict))
 
@@ -506,4 +506,64 @@ function symcopy(s::Set{YoungTableau})
         out.dict[t] = nothing        # direct insert — skip push!/reduce_tableaux
     end
     return out
+end
+
+
+function Base.show(io::IO, t::YoungTableau)
+    rows = t.row_lengths
+    isempty(rows) && return print(io, "∅")
+    println(io)
+    entries = t.index_assignment
+    k = 1
+    cells = Vector{Vector{Int}}()
+    for r in rows
+        push!(cells, entries[k:(k+r-1)])
+        k += r
+    end
+
+    w = maximum(length(string(e)) for e in entries)
+    seg = "─"^(w + 2)
+
+    # border between a row of width `above` and one of width `below`
+    function border(io, above::Int, below::Int; top::Bool=false, bottom::Bool=false)
+        n = max(above, below)
+        for j in 0:n
+            left = j > 0
+            right = j < n
+            up = j <= above && !top
+            down = j <= below && !bottom
+            # choose the junction character
+            c = if top
+                j == 0 ? "┌" : (j == n ? "┐" : "┬")
+            elseif bottom
+                j == 0 ? "└" : (j == n ? "┘" : "┴")
+            else
+                ua = j <= above       # a cell edge exists above at column j
+                ub = j <= below
+                if j == 0
+                    "├"
+                elseif j == n
+                    ua && ub ? "┤" : (ua ? "┘" : "┐")
+                else
+                    ua && ub ? "┼" : (ua ? "┴" : "┬")
+                end
+            end
+            print(io, c)
+            j < n && print(io, seg)
+        end
+        println(io)
+    end
+
+    border(io, 0, length(cells[1]); top=true)
+    for (i, row) in enumerate(cells)
+        print(io, "│")
+        for e in row
+            print(io, " ", lpad(string(e), w), " │")
+        end
+        println(io)
+        if i < length(cells)
+            border(io, length(row), length(cells[i+1]))
+        end
+    end
+    border(io, length(cells[end]), 0; bottom=true)
 end

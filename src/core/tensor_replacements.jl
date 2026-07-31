@@ -14,14 +14,14 @@ function replace_pattern(exp::TensorSuperType, pattern::String, replace::TensorS
     return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
 end
 function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorTerm, repeat::Bool=true)
-    new_exp =  zero()
+    new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
     end
     return new_exp
 end
 function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorSuperType, repeat::Bool=true)
-    new_exp =  zero()
+    new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
     end
@@ -35,7 +35,7 @@ function replace_pattern(exp::TensorSuperType, pattern::String, replace::String,
     return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat)
 end
 function replace_pattern(exp::TensorExpression, pattern::String, replace::String, repeat::Bool=true, excluded=nothing)
-    new_exp =  zero()
+    new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat, excluded)
     end
@@ -44,7 +44,7 @@ end
 
 
 function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorExpression, repeat::Bool=true)
-    new_exp =  zero()
+    new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), replace, repeat)
     end
@@ -52,7 +52,7 @@ function replace_pattern(exp::TensorExpression, pattern::String, replace::Tensor
 end
 
 function replace_pattern(exp::TensorExpression, pattern::TensorTerm, replace::TensorExpression, repeat::Bool=true, excluded=nothing)
-    new_exp =  zero()
+    new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), pattern, replace, repeat, excluded)
     end
@@ -140,7 +140,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
     out = patt_match(pat_hist, exp_hist, pattern, exp, Dict{String,String}(), Dict{String,IndexSuperType}(), excluded, repeat)
 
     if out.matched
-        new_exp =  zero()
+        new_exp = zero()
 
         for match in out.all_matches
             grade = 0
@@ -213,9 +213,9 @@ function operator_index_subs!(out, rep)
         for index in eachindex(ri)
             if ri[index][1] isa DummyPatternIndex
                 if get(out, ri[index][1].name, nothing) === nothing #problem with checking equality since technically different objects #use names instead
-                    println(out)
-                    println(ri[index][1].name)
-                    throw(InvalidReplacementPattern())
+                    throw(InvalidReplacementPattern(
+                        "pattern index '?$(ri[index][1].name)' has no match in the replacement",
+                        "available: " * join(sort!(collect(keys(out))), ", ")))
                 else
                     ri[index] = out[name(ri[index][1])] => ri[index][2] # maps index from original expression to replacement
                 end #need a deep version etc to handle operators...
@@ -228,9 +228,9 @@ function operator_index_subs!(out, rep)
         for index in eachindex(ri)
             if ri[index][1] isa DummyPatternIndex
                 if get(out, ri[index][1].name, nothing) === nothing #problem with checking equality since technically different objects #use names instead
-                    println(out)
-                    println(ri[index][1].name)
-                    throw(InvalidReplacementPattern())
+                    throw(InvalidReplacementPattern(
+                        "pattern index '?$(ri[index][1].name)' has no match in the replacement",
+                        "available: " * join(sort!(collect(keys(out))), ", ")))
                 else
                     ri[index] = out[name(ri[index][1])] => ri[index][2] # maps index from original expression to replacement
                 end #need a deep version etc to handle operators...
@@ -238,7 +238,7 @@ function operator_index_subs!(out, rep)
         end
         #recursively do the operand.
         set_op_indices!(rep, ri)                # was missing entirely
-        operator_index_subs!(out,  operand(rep))
+        operator_index_subs!(out, operand(rep))
     end
 end
 
@@ -405,7 +405,16 @@ function construct_index_rep_map(tenpat::OperatorSuperType, tenact::OperatorSupe
     map = Dict{String,Index}()
     for pos in eachindex(op_indices(tenpat))
         if op_indices(tenpat)[pos][2] != op_indices(tenact)[pos][2] || op_indices(tenpat)[pos][1].index_set != op_indices(tenact)[pos][1].index_set #if wrong positions or wrong index set
-            throw(InvalidReplacementPattern())
+            pi_, ai = op_indices(tenpat)[pos], op_indices(tenact)[pos]
+            if pi_[2] != ai[2]
+                throw(InvalidReplacementPattern(
+                    "index position mismatch at slot $pos: pattern has $(pi_[1]) $(pi_[2] == upper ? "upper" : "lower"), " *
+                    "target has $(ai[1]) $(ai[2] == upper ? "upper" : "lower")"))
+            elseif pi_[1].index_set != ai[1].index_set
+                throw(InvalidReplacementPattern(
+                    "index set mismatch at slot $pos: pattern index $(pi_[1]) is from '$(pi_[1].index_set.name)', " *
+                    "target index $(ai[1]) is from '$(ai[1].index_set.name)'"))
+            end
         end
         map[indices(tenpat)[pos][1].name] = op_indices(tenact)[pos][1]
     end
