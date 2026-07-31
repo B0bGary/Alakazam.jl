@@ -1066,8 +1066,9 @@ function simplify(TEx::TensorExpression)
     return new_exp
 end
 
-canonicalise(T::Tensorial) = canonicalise(TensorExpression(T))
-function canonicalise(TEx::TensorExpression)
+canonicalise(T::Tensorial) = canonicalise(TensorExpression(T),true)
+function canonicalise(TEx::TensorExpression,cp=false)
+    cp==false && (TEx=copy(TEx))
     TEx=merge_sum_syms(TEx)
     return sort(TEx)
 end
@@ -2613,9 +2614,7 @@ function copy(T::TensorTerm)
     end
     return TensorTerm([copy(t) for t in terms(T)])
 end
-function copy(T::TensorSuperType)
-    return typeof(T)((symcopy(getfield(T, f)) for f in fieldnames(typeof(T)))...)
-end
+copy(T::TensorSuperType) = typeof(T)(symcopy(data(T)))
 function copy(T::TensorExpression)
     out = TensorExpression()
     if length(terms(T)) == 1 && isZero(first_coef(T))

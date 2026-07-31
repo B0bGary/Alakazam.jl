@@ -75,6 +75,26 @@ mutable struct Gamma5 <: Gamma5SuperType
 
 end
 
+
+"""
+    @matrix MatrixType
+
+Macro to define a  new MatrixType<:MatrixSuperType, with basic constructors.
+For example,
+    @matrix GMMatrix
+    A = GMMatrix("A", [μ => lower])
+"""
+macro matrix(name)
+    name isa Symbol || error("@matrix expects a type name symbol, got $name")
+    esc(quote
+        mutable struct $name <: MatrixSuperType
+            data::TensorData
+            $name(args...) = new(TensorData(args...))
+            $name(d::TensorData) = new(d)
+        end
+    end)
+end
+
 ####
 #reduce special objects
 #####
@@ -535,7 +555,7 @@ end
 """
 Generate a function reduce_matrix that reduces a product of matrices.
 """
-macro rule(expr)
+macro mrule(expr)
     @assert expr.head == :(=)
 
     lhs = expr.args[1]

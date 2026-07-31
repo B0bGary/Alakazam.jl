@@ -58,18 +58,15 @@ end
 
 
 """Return the name String of a tensor."""
-function name(T::TensorDataSuperType)
-    return T.name
-end
+name(T::TensorDataSuperType)= T.name
 """Return the name String of a tensor."""
-function name(T::TensorSuperType)
-    return name(data(T))
-end
+name(T::TensorSuperType)=name(data(T))
+
 function set_name!(T::TensorSuperType, newname::String)
     return T.data.name = newname
 end
 
-indices(::Number) = Vector{<:Pair{<:IndexSuperType,IndexPosition}}()
+indices(::SymorNum) = Vector{<:Pair{<:IndexSuperType,IndexPosition}}()
 indices(T::TensorDataSuperType) = T.indices
 indices(T::TensorSuperType) = indices(data(T))
 indices(T::TensorTerm) = T.indices

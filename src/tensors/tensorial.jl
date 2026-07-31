@@ -81,6 +81,9 @@ mutable struct TensorData <: TensorDataSuperType
         labels::Vector{LabelPair})
         return new(name, indices, function_of, weights, tableaux, labels)
     end
+    function TensorData(td::TensorData)
+        return td
+    end
 end
 
 #pattern matching struct... don't touch

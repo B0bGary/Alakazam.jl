@@ -102,7 +102,7 @@ export YoungTableau,generate_symmetric_tableau,generate_antisymmetric_tableau,ge
 export Metric, KroneckerDelta,EpsilonTensor,Delta
 export is_riemann_metric
 export Matrix,Pauli,Gamma,Gamma5
-export reduce_matrix,contract_sigma,@rule
+export reduce_matrix,contract_sigma,@mrule,@matrix
 export contract_adjacent#needed for macro
 
 export SymplecticForm
