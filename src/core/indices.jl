@@ -582,32 +582,43 @@ const ORDERED_POOLS = [
    DOUBLESTRUCK_TILDE_LOWER, DOUBLESTRUCK_TILDE_UPPER,
 ]
 
+"""First unused name in `pool` as a new index, or nothing if the pool is full."""
+function _first_unused_in(pool, used::Set{String}, template, I::IndexSet)
+   for name in pool
+      if name ∉ used
+         #dont need push because index constructor creates
+         return typeof(template)(name, I)
+      end
+   end
+   nothing
+end
+
+"""
+Gets a new index for a set, or nothing when every pool is used up.
+"""
 function generate_indices(I::IndexSet)
    isempty(I.indices) && error("IndexSet has no indices to infer character set from")
    # @show objectid(I)
    template = I.indices[1]#get the type of character
-   template_name = template.name
-
-   # find which pool the template belongs to
-   template_pool = nothing
-   for pool in ORDERED_POOLS
-      if template_name in pool
-         template_pool = pool
-         break
-      end
-   end
-
-   template_pool === nothing && error("Could not find pool for index name: $template_name")
-
    used = Set(idx.name for idx in I.indices)
 
-   for name in template_pool
-      if name ∉ used
-         new_idx = typeof(template)(name, I)
-         #dont need push because index constructor creates
-         return new_idx
-      end
+   #which pool the template is from, if any. a freely chosen name like "i1" is in
+   #none of them and the Index constructor allows it, so this can come back empty
+   template_index = findfirst(pool -> template.name in pool, ORDERED_POOLS)
+
+   #own pool first, so the names are unchanged when one alphabet is enough
+   if template_index !== nothing
+      idx = _first_unused_in(ORDERED_POOLS[template_index], used, template, I)
+      idx === nothing || return idx
    end
 
-   error("No unused indices available in pool for index set: $(I.name)")
+   #then the rest, else a set caps at one alphabet with the other pools untouched
+   for (p, pool) in enumerate(ORDERED_POOLS)
+      p == template_index && continue
+      idx = _first_unused_in(pool, used, template, I)
+      idx === nothing || return idx
+   end
+
+   #every caller does `nid === nothing && throw(OutOfIndices(...))`
+   nothing
 end
