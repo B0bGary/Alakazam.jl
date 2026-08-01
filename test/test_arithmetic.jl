@@ -44,7 +44,7 @@
     @test (T1 / α; true)
 
     #multiplication
-    @test_throws Alakazam.SameLevelDummieError T1 * T3 # indices a and c are on same level, incorrect Einstein notation error.
+    @test_throws Alakazam.SameLevelDummyError T1 * T3 # indices a and c are on same level, incorrect Einstein notation error.
     T4 = Tensor("T", [a => upper, b => upper, c => upper], x)
     @test (T4 * T1; true) #einstein summation is correct
     T5 = Tensor("T", [a => upper, b => upper, b => lower], x)
@@ -60,7 +60,7 @@
     T1 = Tensor("T", [a => lower, b => lower, c => lower], x)
     T2 = Tensor("T", [d => lower, e => lower, f => lower], x)
     T3 = Tensor("T", [d => lower, a => lower, k => lower], x)
-    @test_throws Alakazam.SameLevelDummieError ((T1 * T2) * T3)#adding last term gives incorrect einstein not
+    @test_throws Alakazam.SameLevelDummyError ((T1 * T2) * T3)#adding last term gives incorrect einstein not
     T1 = Tensor("T", [a => lower, b => lower, c => lower], x)
     T2 = Tensor("T", [d => lower, a => upper, f => lower], x)
     T3 = Tensor("T", [e => lower, a => lower, k => lower], x)
@@ -92,7 +92,7 @@
     T2 = Tensor("T", [d => lower, a => upper, f => lower], x)
     T3 = Tensor("T", [b => lower, j => lower, k => lower], x)
     T4 = Tensor("T", [s => lower, b => upper, c => lower], x)
-    @test_throws Alakazam.SameLevelDummieError ((T1 * T2) * (T3 * T4)) #the c is on wrong level for einstein not
+    @test_throws Alakazam.SameLevelDummyError ((T1 * T2) * (T3 * T4)) #the c is on wrong level for einstein not
 
     @test (-(T1 * T2); true) #test negation of TT
 
@@ -113,7 +113,7 @@
     T4 = Tensor("T", [c => lower, t => upper, u => lower], x)
     T5 = Tensor("T", [d => lower, e => upper, t => lower], x)
     T45 = T4 * T5
-    @test_throws Alakazam.SameLevelDummieError ((T1 + R1) * T45) #c is repeated
+    @test_throws Alakazam.SameLevelDummyError ((T1 + R1) * T45) #c is repeated
     T1 = Tensor("T", [a => lower, b => lower, t => lower], x)
     R1 = Tensor("R", [a => lower, b => lower, t => lower], x)
     T4 = Tensor("T", [e => lower, t => upper, u => lower], x)

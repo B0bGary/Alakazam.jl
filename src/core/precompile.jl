@@ -86,6 +86,9 @@ const TEST_FILES = [
     "test_lightcone.jl",
 ]
 
+_TESTDIR = mktempdir(cleanup=false)
+_TESTFILE1 = joinpath(_TESTDIR, "test_expression")
+_TESTFILE2 = joinpath(_TESTDIR, "test_expression_headers")
 for f in TEST_FILES
     include(joinpath(_DIR, f))
 end

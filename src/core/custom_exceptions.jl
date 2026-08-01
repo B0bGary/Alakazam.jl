@@ -75,14 +75,14 @@ end
 struct MixedWeightOperandTerms <: Exception
 end
 
-struct SameLevelDummieError <: Exception
+struct SameLevelDummyError <: Exception
     T1::Union{Tensorial,Vector{IndexPair}}
     T2::Union{Tensorial,Nothing}
-    SameLevelDummieError(T1)=new(T1,nothing)
-    SameLevelDummieError(T1,T2)=new(T1,T2)
+    SameLevelDummyError(T1)=new(T1,nothing)
+    SameLevelDummyError(T1,T2)=new(T1,T2)
 end
-Base.showerror(io::IO, e::SameLevelDummieError) = begin
-    print(io, "SameLevelDummieError: a repeated index appears at the same position (both raised or both lowered);",
+Base.showerror(io::IO, e::SameLevelDummyError) = begin
+    print(io, "SameLevelDummyError: a repeated index appears at the same position (both raised or both lowered);",
               " a dummy pair must have one raised and one lowered index to obey Einstein summation convention.")
     print(io, "\n  ", e.T1)
     e.T2 === nothing || print(io, "\n  ", e.T2)

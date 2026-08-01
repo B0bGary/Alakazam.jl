@@ -331,7 +331,7 @@ function _dummies_raw(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) w
             println(T)
             println(idx => pos)
             @show indices(T)
-            throw(SameLevelDummieError(T))
+            throw(SameLevelDummyError(T))
         elseif (idx => op_pos(pos)) in seen
             if positional
                 push!(dummies, idx => op_pos(pos))
@@ -394,7 +394,7 @@ function valid_index_placement(T1, T2)
 
     # same index at same position in both, and not lightcone
     if (((up1 & up2) | (dn1 & dn2)) & nl1) != 0
-        _ccl_exact(T1, T2) || throw(SameLevelDummieError(T1, T2))
+        _ccl_exact(T1, T2) || throw(SameLevelDummyError(T1, T2))
     end
 
     return true
@@ -453,7 +453,7 @@ function _dummies(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) where
         isfirst || continue
         for j in (i+1):n
             inds[j][1] === idx || continue
-            inds[j][2] === pos && throw(SameLevelDummieError(T))
+            inds[j][2] === pos && throw(SameLevelDummyError(T))
             if positional
                 push!(out, inds[i]);
                 push!(out, inds[j])

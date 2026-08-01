@@ -65,7 +65,7 @@
 # for t in sort(trees, by=SnoopCompile.countchildren)[max(1, end-10):end]
 #     println(SnoopCompile.countchildren(t), "  ", t.method.module, ".", t.method.name)
 # end
-using #=Symbolics,=# Test, Alakazam, Alakazam.Lightcone
+using #=Symbolics,=#Test, Alakazam, Alakazam.Lightcone
 if true
     const TEST_FILES = [
         "test_arithmetic.jl",
@@ -88,7 +88,9 @@ if true
         "test_superspace_adv.jl",
         "test_lightcone.jl",
     ]
-
+    _TESTDIR = mktempdir(cleanup=false)
+    _TESTFILE1 = joinpath(_TESTDIR, "test_expression")
+    _TESTFILE2 = joinpath(_TESTDIR, "test_expression_headers")
     @testset verbose=true "Alakazam Tests" begin
         for f in TEST_FILES
             print(rpad(f, 32))

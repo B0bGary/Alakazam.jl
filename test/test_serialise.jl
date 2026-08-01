@@ -38,8 +38,8 @@
 
     @syms ħ
     expr=(2*ħ)*d*d2
-
-    save!(expr, "test_expression")
+    _TESTFILE1 = joinpath(tempdir(), "test_expression")
+    save(expr, _TESTFILE1)
 
     # println(to_JSON(expr))
     #version with headers
@@ -56,7 +56,8 @@
 
     add_commutator!(1, X, P, result)
 
+    _TESTFILE2 = joinpath(tempdir(), "test_expression_headers")
 
-    save!(expr, "test_expression_headers", true)
+    save(expr, _TESTFILE2, true)
 
 end

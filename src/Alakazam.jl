@@ -77,7 +77,7 @@ export zero
 export coef_string
 
 #serialisation
-export to_JSON,from_JSON,save_header!,save!,load,load_header,@load
+export to_JSON,from_JSON,save_header,save,load,load_header,@load
 
 ##########################
 #operators
@@ -88,7 +88,7 @@ export set_operand!,set_op_indices!
 
 #exceptions
 export FreeIndexMismatch, OverusedIndices, InvalidKroneckerIndices, InvalidEpsilonIndices, OperatorPrecedenceError, OutOfIndices, InvalidReplacementPattern
-export MixedWeightOperandTerms, SameLevelDummieError, InvalidDerivativeBasis, InvalidDifferentialForm, InvalidCommutatorDefinition
+export MixedWeightOperandTerms, SameLevelDummyError, InvalidDerivativeBasis, InvalidDifferentialForm, InvalidCommutatorDefinition
 
 
 ##########################

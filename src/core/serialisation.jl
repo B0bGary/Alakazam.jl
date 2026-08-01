@@ -125,7 +125,7 @@ end
 """
 Save an Alakazam object to "filename".json. Converted to canonical json form.
 Overwrite the specified file."""
-function save!(obj, filename::String, save_headers::Bool=false)
+function save(obj, filename::String, save_headers::Bool=false)
     write(filename*".json", to_JSON(obj, save_headers))
 end
 
@@ -139,7 +139,7 @@ Includes coordinates, IndexSets, sort_order, and anything else defined by the us
 """
 get_header() = to_dict(global_values)
 get_header_json() = JSON.json(Dict("header"=>get_header()))
-save_header!(filename::String) = write(filename*".json", get_header_json)
+save_header(filename::String) = write(filename*".json", get_header_json)
 
 
 ##########################################

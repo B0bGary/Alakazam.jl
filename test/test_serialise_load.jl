@@ -14,8 +14,8 @@
         @test !isempty(v)
     end
     # expr2=load("test_expression_headers")
-    expr2 = @load "test_expression_headers"
-
+    _TESTFILE2 = joinpath(tempdir(), "test_expression_headers")
+    expr2 = @load _TESTFILE2
     @test !isempty(get_global_values())
     #matches previous load
     @test aa==get_global_values()
