@@ -2,7 +2,7 @@ struct RegisteredExpansion
     canonical_deriv::CovDerivSuperType
     expansion::TensorExpression
 end
-
+const _NO_MATCH = Dict{Index,Index}()
 const DERIVATIVE_EXPANSIONS = Dict{String,RegisteredExpansion}()
 
 Base.:(==)(a::RegisteredExpansion, b::RegisteredExpansion) =
@@ -323,7 +323,7 @@ end
 
 function commute(D::DerivativeSuperType)
     oprd=isTensor(operand(D))
-    if #=oprd!==nothing &&=# oprd isa DerivativeSuperType
+    if #=oprd!==nothing &&=#oprd isa DerivativeSuperType
         # keyy=minmax(name(D),name(oprd))
         (sign, swout)=get_commutator(D, oprd)
         if sign!=0
@@ -345,7 +345,7 @@ function commute_right(D::DerivativeSuperType, N)
         D=isTensor(D)
         if D isa DerivativeSuperType
             oprd=isTensor(operand(D))
-            if #=oprd!=false &&=# oprd isa DerivativeSuperType
+            if #=oprd!=false &&=#oprd isa DerivativeSuperType
                 # keyy=minmax(name(D),name(oprd))
                 (sign, swout)=get_commutator(D, oprd)
                 if sign!=0
@@ -410,37 +410,26 @@ function operators_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
     end
 end
 
-function same_operator(D1::T, D2::T2) where {T<:DerivativeSuperType,T2<:DerivativeSuperType}
-    ind1 = op_indices(D1)
-    ind2 = op_indices(D2)
+function same_operator(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    name(D1) == name(D2) || return (false => _NO_MATCH)
+    ind1 = op_indices(D1); ind2 = op_indices(D2)
+    length(ind1) == length(ind2) || return (false => _NO_MATCH)
+
+    # cheap structural pass: positions and index sets must agree
+    @inbounds for i in eachindex(ind1)
+        (ind1[i][2].position == ind2[i][2].position &&
+         ind1[i][1].index_set === ind2[i][1].index_set) || return (false => _NO_MATCH)
+    end
+
+    # only now build the map
     doubles = Dict{Index,Index}()
-
-    if name(D1) != name(D2)
-        return (false => doubles)
-    end
-
-    #quick check for inequality
-    if length(ind1) != length(ind2)
-        return (false => doubles)
-    end
-
-    # check if indices are the same in each position, modulo names of pairs of dummies
-    for ind in eachindex(ind1)
-        if ind1[ind][1].index_set == ind2[ind][1].index_set && ind1[ind][2].position == ind2[ind][2].position
-            if haskey(doubles, ind1[ind][1])
-                val = doubles[ind1[ind][1]]
-                if val != ind2[ind][1]
-                    #if the patterns don't match ie repeated indices etc
-                    return (false => doubles)
-                end
-            else
-                doubles[ind1[ind][1]] = ind2[ind][1]
-            end
+    @inbounds for i in eachindex(ind1)
+        a, b = ind1[i][1], ind2[i][1]
+        if haskey(doubles, a)
+            doubles[a] == b || return (false => _NO_MATCH)
         else
-            #mistmatch
-            return (false => doubles)
+            doubles[a] = b
         end
-
     end
     return (true => doubles)
 end
@@ -533,41 +522,35 @@ end
 
 # checks if tensors are the same in terms of structure of indices, ignoring the specfic name
 # eg differentiating between contracted and non contracted
-
 function same_tensor_mod_pattern(T1::T, T2::T_2, index_dict::Dict{Index,Index}) where {T<:TensorSuperType,T_2<:TensorSuperType}
-    name(T1)!=name(T2) && return (false, Dict())
+    name(T1) == name(T2) || return (false, _NO_MATCH)
 
     ind1 = indices(T1)
     ind2 = indices(T2)
-    if length(ind1) != length(ind2)
-        return (false, Dict())
+    n = length(ind1)
+    n == length(ind2) || return (false, _NO_MATCH)
+
+    # cheap pass: positions and index sets must agree, no allocation
+    @inbounds for i in 1:n
+        ind1[i][2] == ind2[i][2]                       || return (false, _NO_MATCH)
+        ind1[i][1].index_set === ind2[i][1].index_set  || return (false, _NO_MATCH)
     end
-    temp_dict = Dict{Index,Index}()#stores non-dummies
-    for ind in eachindex(ind1)
-        if ind1[ind][2] != ind2[ind][2]
-            return (false, Dict()) #wrong positions
-        end
-        if ind1[ind][1].index_set != ind2[ind][1].index_set
-            return (false, Dict()) #wrong index set
-        end
-        if haskey(index_dict, ind1[ind][1])#check if already in pattern
-            temp = index_dict[ind1[ind][1]]
-            if temp != ind2[ind][1]
-                return (false, Dict())  #after subbing appropritate pattern, the index has a different name
-            end
-            #not a dummy index
-        elseif haskey(temp_dict, ind1[ind][1])
-            temp = temp_dict[ind1[ind][1]]
-            if temp != ind2[ind][1]
-                return (false, Dict()) #after subbing appropritate pattern, the index has a different name
-            end
+
+    # second pass: build the free-index correspondence
+    temp_dict = Dict{Index,Index}()
+    sizehint!(temp_dict, n)
+    @inbounds for i in 1:n
+        a, b = ind1[i][1], ind2[i][1]
+        if haskey(index_dict, a)
+            index_dict[a] == b || return (false, _NO_MATCH)
+        elseif haskey(temp_dict, a)
+            temp_dict[a] == b  || return (false, _NO_MATCH)
         else
-            temp_dict[ind1[ind][1]] = ind2[ind][1] #matches "free" (non derivative) indices up, this ensures same pattern
+            temp_dict[a] = b
         end
     end
     return (true, temp_dict)
 end
-
 
 
 ##############################################################################################################################
@@ -578,58 +561,70 @@ end
 #leibniz out the operands of all derivatives in an expression
 
 function apply_derivative(TEX::TensorExpression)
-    out = zero()
-    for summand in summands(TEX)
-        nt = summand[1]
-        for term in terms(summand[2])
-            if typeof(term) <: DerivativeSuperType
-                term=copy(term)
-                appoprd=apply_derivative(operand(term))
-                set_operand!(term, appoprd)
-                nt *= apply_derivative(term)
+    s = summands(TEX)
+    isempty(s) && return TEX
+
+    found = false
+    for (_, tt) in s, t in terms(tt)
+        if t isa DerivativeSuperType
+            found = true; break
+        end
+    end
+    found || return TEX
+
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    for (coef, tt) in s
+        nt = coef
+        for t in terms(tt)
+            if t isa DerivativeSuperType
+                d = copy(t)
+                set_operand!(d, apply_derivative(operand(d)))
+                nt *= apply_derivative(d)
             else
-                nt *= term
+                nt *= t
             end
         end
-        out = TensorExpression(out)
-        out += TensorExpression(nt)
+        isZeroTens(nt) && continue
+        append!(out, summands(TensorExpression(nt)))
     end
+    isempty(out) && return zero()
     return TensorExpression(out)
 end
 #apply the derivative and cancel terms that are annihilated
 function apply_derivative(D::DerivativeSuperType)
-    D = product_rule(D)
-    out = zero()
-    for summandind in eachindex(summands(D)) # for each summand (coefficient, tensorterm)
-        summand = summands(D)[summandind]
-        term = summand[1]
-        for tensor in summand[2].terms # for each individual tensor in tensorterm
-            if typeof(tensor) <: DerivativeSuperType # if the tensor is an operator
-                operands = operand(tensor) #get the operand (should only be one thanks to prod rule)
-                tens = summands(operands)[1][2].terms[1] #get the only item in the operand
-                funcof = function_of(tens)#might be careful in case nested?
-                if isempty(intersect(funcof, coord(tensor))) #see if tensor is a function of the derivative coords 
-                    term *= zero() #annihilate the term   
-                else
-                    out1 = perform_derivative_action(tensor)
-                    term *= out1
+    Dx = product_rule(D)
+    s = summands(Dx)
+    isempty(s) && return zero()
+
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    for (coef, tt) in s
+        oterm = coef
+        annihilated = false
+        for tensor in terms(tt)
+            if tensor isa DerivativeSuperType
+                tens = terms(term(summands(operand(tensor))[1]))[1]
+                fo = function_of(tens)
+                hit = false
+                for c in coord(tensor)
+                    if c in fo; hit = true; break; end
                 end
+                if !hit
+                    annihilated = true
+                    break                      # whole summand vanishes
+                end
+                oterm *= perform_derivative_action(tensor)
             else
-                term *= tensor
+                oterm *= tensor
             end
         end
-
-        if isZeroTens(term)
-            term = zero()
-        end
-        if isZeroTens(out)
-            out = zero()
-        end
-        out = out ⨥ term
-
+        annihilated && continue
+        isZeroTens(oterm) && continue
+        append!(out, summands(oterm))
     end
-    out = TensorExpression(out)
-    return merge_sum(out)
+    isempty(out) && return zero()
+    return TensorExpression(_RAW,out)
 end
 
 """
@@ -638,33 +633,28 @@ Assumes already has used product rule.
 If there are rules (as defined by add_derivative_action), then the derivative will be performed, else expressions will be left alone eg ∇B
 """
 function perform_derivative_action(D::DerivativeSuperType)
-    oprd = operand(D).summands[1][2].terms[1] #get the operand
-    for ky in keys(derivative_actions)
-        A = same_operator(D, ky)
-        B = A[1]
-        o = A[2]
-        if B
-            action_dict = derivative_actions[ky] # dict of tensors we've defined deriv on
-            for k in keys(action_dict)#looks through all tensors
-                op = same_tensor_mod_pattern(oprd, k, o)
-                if op[1]
-                    #do derivative:
-                    replacement = action_dict[k] # need to go through and replace this with correct pattern
-                    inverted_dict = Dict(v => k for (k, v) in o)
-                    inverted_dict2 = Dict(v => k for (k, v) in op[2])
+    oprd = terms(summands(operand(D))[1][2])[1]
+    dname = name(D)
+    oname = name(oprd)
 
-                    all_invs = merge(inverted_dict, inverted_dict2)
-                    # pat_rep = index_to_pattern(replacement, inverted_dict)
-                    # pat_rep = index_to_pattern(pat_rep, inverted_dict2)
-                    pat_rep = index_to_pattern(replacement, all_invs)
-                    return pat_rep
-                end
-            end
+    for (ky, action_dict) in derivative_actions
+        name(ky) == dname || continue                 # cheap reject before same_operator
+        matched, o = same_operator(D, ky)
+        matched || continue
+        for (k, replacement) in action_dict
+            name(k) == oname || continue              # cheap reject before the full comparison
+            ok, om = same_tensor_mod_pattern(oprd, k, o)
+            ok || continue
+            # build the inverse map once, in place
+            all_invs = Dict{Index,Index}()
+            sizehint!(all_invs, length(o) + length(om))
+            for (a, b) in o;  all_invs[b] = a; end
+            for (a, b) in om; all_invs[b] = a; end     # om entries win, matching merge(inv_o, inv_om)
+            return index_to_pattern(replacement, all_invs)
         end
     end
     return D
 end
-
 
 """
 expand_derivative(TEX,D,DExpansion)
@@ -818,73 +808,47 @@ end
 Perform the graded Leibniz product rule for all derivatives in the expression.
 """
 function product_rule(TEX::TensorExpression)
-    new_summand = zero()
-    for summand in summands(TEX)
-        nterm = summand[1]
-        for term in summand[2].terms
-            if typeof(term) <: LeibnizOperatorSuperType
-                nterm *= product_rule(term)
+    s = summands(TEX)
+    isempty(s) && return TEX
 
-            else
-                nterm *= term
-            end
+    # nothing to expand → return unchanged
+    found = false
+    for (_, tt) in s, t in terms(tt)
+        if t isa LeibnizOperatorSuperType
+            found = true; break
         end
-        new_summand += nterm
     end
-    return new_summand
+    found || return TEX
+
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    for (coef, tt) in s
+        nterm = coef
+        for t in terms(tt)
+            nterm *= (t isa LeibnizOperatorSuperType ? product_rule(t) : t)
+        end
+        isZeroTens(nterm) && continue
+        append!(out, summands(TensorExpression(nterm)))
+    end
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
-# function product_rule(O::LeibnizOperatorSuperType)
-#     new_summand =  zero()
-#     set_operand!(O, product_rule(operand(O)))
-#     for summandind = eachindex(operand(O).summands) #for each sum term in the expression
-#         summand = operand(O).summands[summandind] #get the summand (tensor term)
-
-#         grad = 0 #initialise grading
-#         for tensorind in eachindex(summand[2].terms)# for each tensor in the summand (tensorterm)
-#             grd = (-1)^(grad)
-#             operator_on_tensor = copy(O) #operator on nth term
-#             # @show operator_on_tensor
-#             if O isa DerivativeSuperType && isempty(intersect(coord(O), function_of(TensorExpression(summand[2].terms[tensorind]))))
-#                 operator_on_tensor= zero()
-#             else
-#                 set_operand!(operator_on_tensor, TensorExpression(summand[2].terms[tensorind])) ######make sure updates inds
-#             end
-#             # @show operator_on_tensor
-#             new_prod = 1
-#             for indsss in eachindex(summand[2].terms)
-#                 if indsss != tensorind
-#                     new_prod = new_prod * summand[2].terms[indsss]
-#                 else
-#                     new_prod = new_prod * operator_on_tensor
-#                 end
-#             end
-#             # new_prod.terms[tensorind]=operator_on_tensor
-#             if new_summand == Nothing
-#                 new_summand =  zero() ⨥ grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
-#             else
-#                 new_summand = new_summand ⨥ grd * summand[1] * new_prod #adding the new term to the leibniz expanded version of the summand
-#             end
-
-#             grad = (grad + grading(summand[2].terms[tensorind]) * op_grading(O)) % 2
-#         end
-
-#     end
-#     return new_summand
-# end
 function product_rule(O::LeibnizOperatorSuperType)
-    new_summand = zero()
     set_operand!(O, product_rule(operand(O)))
     isderiv = O isa DerivativeSuperType
     cO = coord(O)
-    for summandind in eachindex(operand(O).summands)
-        summand = operand(O).summands[summandind]
-        ts = summand[2].terms
+    s = summands(operand(O))
+
+    # out = CoeffPair[]
+    out = CoeffPair[]
+    sizehint!(out, sum(length(terms(t)) for (_, t) in s))
+    for (coef, tterm) in s
+        ts = terms(tterm)
         grad = 0
         for tensorind in eachindex(ts)
-            grd = (-1)^grad
             t = ts[tensorind]
-            # does the operator annihilate this factor?
+
             annihilates = false
             if isderiv
                 fo = function_of(t)
@@ -896,23 +860,18 @@ function product_rule(O::LeibnizOperatorSuperType)
                     end
                 end
             end
-            if annihilates
-                operator_on_tensor = zero()
-            else
-                # new build directly to save on copying
-                # operator_on_tensor = typeof(O)(OperatorData(symcopy(op_data(O)), TensorExpression(t)), cO)
-                operator_on_tensor = _with_operand(O, TensorExpression(t))
+            if !annihilates
+                grd = (-1)^grad
+                new_terms = copy(ts)
+                new_terms[tensorind] = _with_operand(O, TensorExpression(t))
+                contribution = (grd * coef) * TensorTerm(new_terms)
+                isempty(summands(contribution)) || append!(out, summands(contribution))
             end
-            new_prod = 1
-            for indsss in eachindex(ts)
-                new_prod = new_prod * (indsss == tensorind ? operator_on_tensor : ts[indsss])
-            end
-            new_summand = new_summand ⨥ grd * summand[1] * new_prod
             grad = (grad + grading(t) * op_grading(O)) % 2
         end
     end
-
-    return new_summand
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 # fast: construct with the new operand directly with no copy
@@ -926,7 +885,7 @@ _with_operand(O::LieBracketSuperType, newop::TensorExpression) =
     typeof(O)(O.A, O.grading, OperatorData(symcopy(op_data(O)), newop))
 
 _with_operand(O::VariationalSuperType, newop::TensorExpression) =
-    typeof(O)(OperatorData(symcopy(op_data(O)), newop),O.var)
+    typeof(O)(OperatorData(symcopy(op_data(O)), newop), O.var)
 
 # # generic fallback 
 # function _with_operand(O::OperatorSuperType, newop::TensorExpression)
@@ -992,7 +951,8 @@ function symmetrise_partials(TEX::TensorExpression)
     @inbounds for k in eachindex(s)
         for t in terms(s[k][2])
             if t isa PartialSuperType
-                found = true; break
+                found = true;
+                break
             end
         end
         found && break

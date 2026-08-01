@@ -8,31 +8,16 @@ Generic derivative object. Behaves covariant, i.e. non-commuting.
 """
 mutable struct Derivative <: CovDerivSuperType
     data::OperatorData
-    coord::Set{Coordinate}#w/r to
-    function Derivative(name::String, operand::Tensorial, coord::Coordinate, args...)
-        new(OperatorData(name, operand, args...), Set{Coordinate}((coord,)))
-    end
-    function Derivative(name::String, operand::Tensorial, coord::Set{Coordinate}, args...)
-        new(OperatorData(name, operand, args...), coord)
-    end
-    function Derivative(name::String, coord::Set{Coordinate}, args...)
-        new(OperatorData(name,  zero(), args...), coord)
-    end
-    function Derivative(name::String, coord::Coordinate, args...)
-        new(OperatorData(name,  zero(), args...), Set((coord,)))
-    end
-    function Derivative(name::String, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name,  zero(), args...), Set(coord))
-    end
-    function Derivative(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name, operand, args...), Set(coord))
-    end
-    function Derivative(d::OperatorData, coord::Set{Coordinate})
-        new(d, coord)
-    end
-    function Derivative(d::OperatorData, coord::Vector{Coordinate})
-        new(d, Set(coord))
-    end
+    coord::Vector{Coordinate}
+    Derivative(name::String, operand::Tensorial, coord::Coordinate, args...) =
+        new(OperatorData(name, operand, args...), Coordinate[coord])
+    Derivative(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...) =
+        new(OperatorData(name, operand, args...), (coord))
+    Derivative(name::String, coord::Vector{Coordinate}, args...) =
+        new(OperatorData(name, zero(), args...), (coord))
+    Derivative(name::String, coord::Coordinate, args...) =
+        new(OperatorData(name, zero(), args...), Coordinate[coord])
+    Derivative(d::OperatorData, coord::Vector{Coordinate}) = new(d, coord)
 end
 
 """
@@ -40,31 +25,21 @@ Generic (anti)commuting partial derivatives.
 """
 mutable struct PartialDerivative <: PartialSuperType
     data::OperatorData
-    coord::Set{Coordinate}#w/r to
-    function PartialDerivative(name::String, operand::Tensorial, coord::Coordinate, args...)
-        new(OperatorData(name, TensorExpression(operand), args...), Set{Coordinate}((coord,)))
-    end
-    function PartialDerivative(name::String, operand::Tensorial, coord::Set{Coordinate}, args...)
+    coord::Vector{Coordinate}   # with respect to; shared between copies, never mutated in place
+
+    PartialDerivative(name::String, operand::Tensorial, coord::Coordinate, args...) =
+        new(OperatorData(name, TensorExpression(operand), args...), Coordinate[coord])
+
+    PartialDerivative(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...) =
         new(OperatorData(name, operand, args...), coord)
-    end
-    function PartialDerivative(name::String, coord::Set{Coordinate}, args...)
-        new(OperatorData(name,  zero(), args...), coord)
-    end
-    function PartialDerivative(name::String, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name,  zero(), args...), Set(coord))
-    end
-    function PartialDerivative(name::String, coord::Coordinate, args...)
-        new(OperatorData(name,  zero(), args...), Set((coord,)))
-    end
-    function PartialDerivative(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name, operand, args...), Set(coord))
-    end
-    function PartialDerivative(d::OperatorData, coord::Set{Coordinate})
-        new(d, coord)
-    end
-    function PartialDerivative(d::OperatorData, coord::Vector{Coordinate})
-        new(d, Set(coord))
-    end
+
+    PartialDerivative(name::String, coord::Coordinate, args...) =
+        new(OperatorData(name, zero(), args...), Coordinate[coord])
+
+    PartialDerivative(name::String, coord::Vector{Coordinate}, args...) =
+        new(OperatorData(name, zero(), args...), coord)
+
+    PartialDerivative(d::OperatorData, coord::Vector{Coordinate}) = new(d, coord)
 end
 
 #shorthand

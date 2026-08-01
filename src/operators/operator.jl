@@ -3,26 +3,12 @@ mutable struct OperatorData <: TensorDataSuperType #?
     name::String
     operand::TensorExpression
     operator_data::TensorData
-
     #these are the combined properties of op and oprnd
     indices::Vector{Pair{IndexSuperType,IndexPosition}}
-
-    function_of::Set{Coordinate}
+    function_of::Vector{Coordinate}
     weights::Dict{String,Number}
     tableaux::Set{YoungTableau}
     labels::Vector{Pair{String,IndexPosition}}
-
-    
-function hash(d::OperatorSuperType, h::UInt)
-    return hash(
-        (
-            name(d),
-            op_indices(d),
-            # operand(d)
-        ),
-        h
-    )
-end
 
     function OperatorData(name::String, operand::TensorExpression, args...)
         given_data=false
@@ -46,21 +32,21 @@ end
         # @show indices(operand)
         return new(name, operand, op_data,
             vcat(indices(op_data), indices(operand)),
-            union(function_of(op_data), function_of(operand)),
+            vcat(function_of(op_data), function_of(operand)),
             weights(operand),#merge(weights(operand),weights(op_data)), ### need to add weights... need to think about best way, since not homo across summands in texp. see operator_weight func
             tableaux(op_data),###### actually.... not right... need to shift....  vcat(tableaux(op_data),tableaux(operand)). complicated, would need checks to see if all terms have tabs
             labels(op_data)#vcat(labels(op_data),labels(operand))
         )
     end
     #special case for copy
-    function OperatorData(::Symbol,args...)
+    function OperatorData(::Symbol, args...)
         return new(args...)
     end
     #special case for copy
-    function OperatorData(op_data::TensorData,operand::TensorExpression)
-            return new(name(op_data), operand, op_data,
+    function OperatorData(op_data::TensorData, operand::TensorExpression)
+        return new(name(op_data), operand, op_data,
             vcat(indices(op_data), indices(operand)),
-            union(function_of(op_data), function_of(operand)),
+            vcat(function_of(op_data), function_of(operand)),
             weights(operand),#merge(weights(operand),weights(op_data)), ### need to add weights... need to think about best way, since not homo across summands in texp. see operator_weight func
             tableaux(op_data),###### actually.... not right... need to shift....  vcat(tableaux(op_data),tableaux(operand)). complicated, would need checks to see if all terms have tabs
             labels(op_data)#vcat(labels(op_data),labels(operand))
@@ -79,6 +65,16 @@ mutable struct Operator <: OperatorSuperType
         new(dt)
     end
     function Operator(operd::OperatorData)
-       new(operd)
+        new(operd)
     end
+end
+
+Base.hash(d::OperatorSuperType, h::UInt) = begin
+    return hash(
+        (
+            name(d),
+            op_indices(d),
+        ),
+        h
+    )
 end

@@ -32,9 +32,9 @@
 
     #multiple coords
     B=@Tensor "B_ab{x,θ,θbar}"
-    @test function_of(B)==Set([x, θbar, θ])
+    @test function_of(B)==[x, θbar, θ]
     B2=Tensor("B", [a => lower, b => lower], [θbar])
-    @test function_of(B2) == Set([θbar])
+    @test function_of(B2) == [θbar]
     @test !(Tensor("B", [a => lower, b => lower], x) ≅ B)
 
     @test (A=T"A_a,b,c,d,e,f"; true)

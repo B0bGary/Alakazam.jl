@@ -141,21 +141,27 @@ function function_of(T::TensorTerm)
     for t in terms(T)
         f = function_of(t)
         isempty(f) && continue
-        fnc === _EMPTY_FUNCTION_OF && (fnc = Set{Coordinate}())
-        union!(fnc, f)
+        fnc === _EMPTY_FUNCTION_OF && (fnc = Coordinate[])
+        for c in f
+            _insert_coord!(fnc, c)
+        end
     end
     return fnc
 end
+
 function function_of(T::TensorExpression)
     fnc = coordfree()
     for s in summands(T)
         f = function_of(term(s))
         isempty(f) && continue
-        fnc === _EMPTY_FUNCTION_OF && (fnc = Set{Coordinate}())
-        union!(fnc, f)
+        fnc === _EMPTY_FUNCTION_OF && (fnc = Coordinate[])
+        for c in f
+            _insert_coord!(fnc, c)
+        end
     end
     return fnc
 end
+
 
 function weights(T::TensorDataSuperType)
     return T.weights
@@ -681,4 +687,12 @@ function isZero(x)
     x isa SymorNum || return false
     SymbolicUtils.isconst(x) && return iszero(SymbolicUtils.unwrap_const(x))
     return false
+end
+
+function _same_coords(a::Vector{Coordinate}, b::Vector{Coordinate})
+    length(a) == length(b) || return false
+    for x in a
+        x in b || return false
+    end
+    return true
 end

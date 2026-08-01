@@ -1,31 +1,20 @@
-
-mutable struct LieGenerator <:GeneratorDerivSuperType
+mutable struct LieGenerator <: GeneratorDerivSuperType
     data::OperatorData
-    coord::Set{Coordinate}#w/r to
-    function LieGenerator(name::String, operand::Tensorial, coord::Coordinate, args...)
-        new(OperatorData(name, operand, args...), Set{Coordinate}((coord,)))
-    end
-    function LieGenerator(name::String, operand::Tensorial, coord::Set{Coordinate}, args...)
-        new(OperatorData(name, operand, args...), coord)
-    end
-    function LieGenerator(name::String, coord::Set{Coordinate}, args...)
-        new(OperatorData(name, zero(), args...), coord)
-    end
-    function LieGenerator(name::String, coord::Coordinate, args...)
-        new(OperatorData(name, zero(), args...), Set((coord,)))
-    end
-    function LieGenerator(name::String, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name, zero(), args...), Set(coord))
-    end
-    function LieGenerator(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...)
-        new(OperatorData(name, operand, args...), Set(coord))
-    end
-    function LieGenerator(d::OperatorData, coord::Set{Coordinate})
-        new(d, coord)
-    end
-    function LieGenerator(d::OperatorData, coord::Vector{Coordinate})
-        new(d, Set(coord))
-    end
+    coord::Vector{Coordinate}   # with respect to; shared between copies, never mutated in place
+
+    LieGenerator(name::String, operand::Tensorial, coord::Coordinate, args...) =
+        new(OperatorData(name, operand, args...), Coordinate[coord])
+
+    LieGenerator(name::String, operand::Tensorial, coord::Vector{Coordinate}, args...) =
+        new(OperatorData(name, operand, args...), _uniq(coord))
+
+    LieGenerator(name::String, coord::Coordinate, args...) =
+        new(OperatorData(name, zero(), args...), Coordinate[coord])
+
+    LieGenerator(name::String, coord::Vector{Coordinate}, args...) =
+        new(OperatorData(name, zero(), args...), _uniq(coord))
+
+    LieGenerator(d::OperatorData, coord::Vector{Coordinate}) = new(d, coord)
 end
 
 

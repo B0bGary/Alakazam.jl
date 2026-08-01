@@ -1,5 +1,5 @@
 const LabelPair = Pair{String,IndexPosition}
-const _EMPTY_FUNCTION_OF = Set{Coordinate}()
+const _EMPTY_FUNCTION_OF =  Coordinate[]
 const _EMPTY_TABLEAUX = Set{YoungTableau}()
 const _EMPTY_WEIGHTS = Dict{String,Number}()
 const _EMPTY_LABELS = LabelPair[]
@@ -13,7 +13,7 @@ Mutual tensor data that all tensors should have in common. This makes it easier 
 mutable struct TensorData <: TensorDataSuperType
     name::String
     indices::Vector{IndexPair}
-    function_of::Set{Coordinate} #set if ok
+    function_of::Vector{Coordinate} #set if ok
     weights::Dict{String,Number}
     tableaux::Set{YoungTableau}
     labels::Vector{LabelPair}
@@ -33,12 +33,14 @@ mutable struct TensorData <: TensorDataSuperType
             elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
                 push!(indices, arg)
             elseif arg isa Coordinate
-                has_coords || (function_of=Set{Coordinate}(); has_coords=true)
-                push!(function_of, arg)
+                has_coords || (function_of=Coordinate[]; has_coords=true)
+                _insert_coord!(function_of, arg)
             elseif arg isa AbstractVector{<:Coordinate}
                 isempty(arg) && continue
-                has_coords || (function_of=Set{Coordinate}(); has_coords=true)
-                union!(function_of, arg)
+                has_coords || (function_of=Coordinate[]; has_coords=true)
+                for c in arg
+                    _insert_coord!(function_of, c)
+                end
             elseif arg isa Dict{String,Number}
                 weights = arg
             elseif arg isa YoungTableau
@@ -75,7 +77,7 @@ mutable struct TensorData <: TensorDataSuperType
     end
     # raw constructor — stores fields directly, no processing. For copying.
     function TensorData(name::String, indices::Vector{IndexPair},
-        function_of::Set{Coordinate},
+        function_of::Vector{Coordinate},
         weights::Dict{String,Number},
         tableaux::Set{YoungTableau},
         labels::Vector{LabelPair})
@@ -86,6 +88,18 @@ mutable struct TensorData <: TensorDataSuperType
     end
 end
 
+
+function _insert_coord!(v::Vector{Coordinate}, c::Coordinate)
+    for (i, x) in enumerate(v)
+        x == c && return v                    # already present
+        if isless(c.name, x.name)
+            insert!(v, i, c)
+            return v
+        end
+    end
+    push!(v, c)
+    return v
+end
 #pattern matching struct... don't touch
 mutable struct DummyPatternTensor <: TensorSuperType
     data::TensorData

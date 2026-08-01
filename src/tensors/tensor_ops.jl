@@ -20,7 +20,7 @@ transform(f, t::Tensorial) = f(t)
 
 #change to use our tabelau code!
 function ==(a::TensorSuperType, b::TensorSuperType)
-    if (name(a) == name(b) && indices(a) == indices(b) && function_of(a)==function_of(b) && tableaux(a)==tableaux(b))
+    if (name(a) == name(b) && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b))
         # println("apparnetly equl inds")
         return true
     else
@@ -423,28 +423,39 @@ update_indices!(T::TensorSuperType) = T
 Updates external indices of a tensor term, expression, or operator, by looking at the indices of all the terms it contains.
 """
 function update_indices!(T::TensorTerm, n::Int=-1)
-    n==-1 && (n=length(indices(T)))
+    n == -1 && (n = length(indices(T)))
     inds = Vector{Pair{IndexTypes,IndexPosition}}(undef, n)
-    k=1
+    k = 1
     for t in terms(T)
         typeof(t) <: OperatorSuperType && update_indices!(t)
-        k=_copy_inds!(inds, k, t)
+        k = _copy_inds!(inds, k, t)
     end
-    # @assert k==n+1
-    #new checker 
-    @inbounds for i in eachindex(inds)
-        idx = inds[i][1]
-        isLightcone(idx) && continue
-        c = 1
-        for j in (i+1):length(inds)
-            inds[j][1] == idx && (c += 1)
+
+    # cheap prefilter: does any non-lightcone index appear more than once?
+    mask = UInt64(0)
+    nnl = 0
+    @inbounds for p in inds
+        isLightcone(p[1]) && continue
+        nnl += 1
+        mask |= _bit(p[1])
+    end
+
+    # count_ones(mask) < nnl means a repeat, or a hash collision — check exactly
+    if count_ones(mask) != nnl
+        @inbounds for i in eachindex(inds)
+            idx = inds[i][1]
+            isLightcone(idx) && continue
+            c = 1
+            for j in (i+1):length(inds)
+                inds[j][1] == idx && (c += 1)
+            end
+            c > 2 && throw(OverusedIndices(T))
         end
-        c > 2 && (println(T); throw(OverusedIndices(T)))
     end
+
     set_indices!(T, inds)
     return T
 end
-
 
 function update_indices!(T::SymorNum)
     return T
@@ -650,13 +661,26 @@ function rename_dummies(T::TensorTerm)
     end
     return T
 end
-function rename_recursive!(T::TensorExpression, replacements)
-    new_exp = zero()
-    for term in summands(T)
-        new_exp += term[1] * rename_recursive!(term[2], replacements)
+
+function rename_recursive!(T::TensorExpression,replacements)
+    s = summands(T)
+    isempty(s) && return T
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    for (coef, tt) in s
+        renamed = rename_recursive!(tt, replacements)
+        append!(out, summands(coef * renamed))
     end
-    return new_exp
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
+# function rename_recursive!(T::TensorExpression,replacements)
+#     for summand in summands(T)
+#         rename_recursive!(summand[2], replacements)
+#     end
+#     return T
+# end
+
 
 function rename_recursive!(T::TensorTerm, replacements)
     for term in terms(T)
@@ -667,30 +691,47 @@ function rename_recursive!(T::TensorTerm, replacements)
 end
 
 function rename_recursive!(t::TensorSuperType, replacements)
-    if typeof(t) <: OperatorSuperType
-        if !isempty(op_indices(t))
-            set_op_indices!(t, [Pair((haskey(replacements, x) ? replacements[x] : x), y) for (x, y) in op_indices(t)])
+    if t isa OperatorSuperType
+        oi = op_indices(t)
+        if any(p -> haskey(replacements, p[1]), oi)
+            set_op_indices!(t, IndexPair[Pair(get(replacements, x, x), y) for (x, y) in oi])
         end
-        oprd = operand(t)
-        rename_recursive!(oprd, replacements)
-        return t
+        rename_recursive!(operand(t), replacements)
     else
-        if !isempty(indices(t))
-            set_indices!(t, [Pair((haskey(replacements, x) ? replacements[x] : x), y) for (x, y) in indices(t)])
+        ti = indices(t)
+        if any(p -> haskey(replacements, p[1]), ti)
+            set_indices!(t, IndexPair[Pair(get(replacements, x, x), y) for (x, y) in ti])
         end
-        return t
     end
+    return t
 end
 
 
 function rename_dummies(T::TensorExpression)
-    new_exp = zero()
-    for term in summands(T)
-        new_exp += term[1] * rename_dummies(term[2])
+    s = summands(T)
+    isempty(s) && return T
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    for (coef, tt) in s
+        renamed = rename_dummies(tt)
+        append!(out, summands(coef * renamed))
     end
-    return new_exp
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
-
+function rename_dummies!(T::TensorExpression)
+    s = summands(T)
+    for i in eachindex(s)
+        s[i] = CoeffPair(s[i][1], rename_dummies(s[i][2]))
+    end
+    return T
+end
+# function rename_dummies(T::TensorExpression)
+#     for summand in summands(T)
+#         rename_dummies(summand[2])
+#     end
+#     return T
+# end
 
 function update_dummies(T::TensorSuperType, reps::Pair{I,I}) where {I<:IndexSuperType}
     if typeof(T) <: OperatorSuperType
@@ -1061,7 +1102,7 @@ function simplify(TEx::TensorExpression)
     new_exp = contract_metrics(new_exp, Metric)
     new_exp = eliminate_kronecker(new_exp)
     # new_exp = sort(new_exp)
-    new_exp = rename_dummies(new_exp)
+    new_exp = rename_dummies!(new_exp)
     new_exp = sort(new_exp)
     return new_exp
 end
@@ -2578,7 +2619,7 @@ symcopy(t::TensorSuperType) = typeof(t)(symcopy(data(t)))
 symcopy(v::Vector{<:Pair}) = copy(v)                    # indices, labels — Pairs are immutable
 symcopy(d::Dict) = copy(d)                              # weights
 # symcopy(s::OrderedSet{Coordinate}) = copy(s)            # function_of — Coordinates shared via registry
-symcopy(s::Set{Coordinate}) = s
+symcopy(s::Vector{Coordinate}) = s
 function symcopy(d::TensorData)
     return TensorData(
         d.name,

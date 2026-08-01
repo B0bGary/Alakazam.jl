@@ -201,8 +201,8 @@ treat_field(x, f::Set{YoungTableau}) = [to_dict(t) for t in tableaux(x)]
 treat_field(x, f::Vector{Pair{I,IndexPosition}}) where I<:IndexSuperType = [to_dict(t) for t in indices(x)]
 treat_field(x, f::TensorExpression) = to_dict(f)
 treat_field(x, f::TensorDataSuperType) = x isa OperatorSuperType ? to_dict_op(f) : to_dict(f)
-treat_field(x, f::Set{Coordinate}) = [to_dict(c) for c in f]
-
+# treat_field(x, f::Set{Coordinate}) = [to_dict(c) for c in f]
+treat_field(x, f::Vector{Coordinate}) = [to_dict(c) for c in f]
 
 function to_dict(x::TensorDataSuperType)
     out = Dict(

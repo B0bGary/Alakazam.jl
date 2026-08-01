@@ -56,9 +56,9 @@ function set_operand_deep!(O::TensorExpression, oprd::Tensorial)
                         set_operand_deep!(term, oprd)
                     end
                 end
-                 n += length(indices(term))
+                n += length(indices(term))
             end
-            update_indices!(tterm,n)
+            update_indices!(tterm, n)
         end
 
     end
@@ -72,16 +72,26 @@ end
 function update_functionof!(O::OperatorSuperType)
     a = op_function_of(O)
     b = function_of(operand(O))
-    isempty(b) && (data(O).function_of = a; return O)   # nothing to add
-    isempty(a) && (data(O).function_of = b; return O)
-    if b ⊆ a
-        data(O).function_of = a                          # union == a, no new set
-        return O
+    isempty(b) && (data(O).function_of=a; return O)
+    isempty(a) && (data(O).function_of=b; return O)
+
+    contained = true
+    for x in b
+        if !(x in a)
+            ;
+            contained = false;
+            break;
+        end
     end
-    data(O).function_of = union(a, b)
+    contained && (data(O).function_of=a; return O)
+
+    out = copy(a)
+    for x in b
+        _insert_coord!(out, x)
+    end
+    data(O).function_of = out
     return O
 end
-
 function update_functionof!(Tex::TensorExpression)
     for summand in summands(Tex)
         for term in terms(summand)
