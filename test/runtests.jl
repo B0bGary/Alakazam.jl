@@ -70,6 +70,7 @@ if true
     const TEST_FILES = [
         "test_arithmetic.jl",
         "test_basic.jl",
+        "test_indices.jl",
         "test_replacements.jl",
         "test_arithmetic_adv.jl",
         "test_derivatives.jl",
