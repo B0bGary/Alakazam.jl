@@ -483,9 +483,9 @@ function update_indices!(T::TensorExpression)
 end
 
 function get_unused_indices(T::Union{TensorSuperType,TensorTerm,TensorExpression}, IS::IndexSet)
-    used = IndexSuperType[]
+    used = IndexTypes[]
     collect_indices!(used, T)                  # needs a Vector-accepting collect_indices!
-    out = IndexSuperType[]
+    out = IndexTypes[]
     for i in IS.indices
         i isa DummyPatternIndex && continue    # inline filter_wildcard_dummies
         i in used && continue                   # inline setdiff
@@ -493,7 +493,7 @@ function get_unused_indices(T::Union{TensorSuperType,TensorTerm,TensorExpression
     end
     return out
 end
-function filter_wildcard_dummies(I::Vector{IndexSuperType})
+function filter_wildcard_dummies(I::Vector{IndexTypes})
     return filter(i -> !(i isa DummyPatternIndex), I)
 end
 
@@ -517,15 +517,15 @@ function rename_dummies(T::TensorSuperType)
         d.index_set in index_sets || push!(index_sets, d.index_set)
     end
 
-    all_indices = IndexSuperType[]
+    all_indices = IndexTypes[]
     for i in indices(T)
         i[1] in all_indices || push!(all_indices, i[1])
     end
 
     replacements = Pair{IndexSuperType,IndexSuperType}[]
-    inset = IndexSuperType[]
-    remain = IndexSuperType[]
-    ordered = IndexSuperType[]
+    inset = IndexTypes[]
+    remain = IndexTypes[]
+    ordered = IndexTypes[]
 
     for set in index_sets
         # indices of this set already on the tensor
@@ -637,7 +637,7 @@ function rename_dummies(T::TensorTerm)
         d.index_set in index_sets || push!(index_sets, d.index_set)
     end
 
-    all_indices = IndexSuperType[]
+    all_indices = IndexTypes[]
     for t in terms(T), i in indices(t)
         i[1] in all_indices || push!(all_indices, i[1])
     end
@@ -648,7 +648,7 @@ function rename_dummies(T::TensorTerm)
         push!(dumm_uids, d.uid)
     end
     inset_uids = Set{UInt64}()
-    remain = IndexSuperType[]
+    remain = IndexTypes[]
 
     for set in index_sets
         # indices of this set already in use, excluding the dummies being replaced
@@ -1132,7 +1132,9 @@ end
 
 
 function simplify(TEx::TensorExpression)
-    exp=symmetrise_partials(TEx)
+    # Collect first: every stage below is superlinear in the number of summands, so merging
+    # duplicates up front (cheap, and exact up to dummy naming) is worth far more here than at the end.
+    exp=symmetrise_partials(collect_terms(TEx))
     # exp = rename_dummies(exp)
     # exp = contract_metrics(exp, EpsilonTensor)
     # @show exp,"start"
@@ -1207,7 +1209,9 @@ hard_simplify(T::TensorTerm) = hard_simplify(TensorExpression(T))
 hard_simplify(T::TensorSuperType) = hard_simplify(TensorExpression(T))
 
 function hard_simplify(TEx::TensorExpression)
-    return hard_merge(sort(TEx))
+    # `collect_terms` is a linear pre-pass; `hard_merge` merges strictly more but costs far more
+    # per pair, so shrinking its input first is always worth it.
+    return hard_merge(sort(collect_terms(TEx)))
 end
 
 
@@ -1313,6 +1317,321 @@ function hard_merge(TEx::TensorExpression)
     TEx.summands = out
     return TEx
 end
+##############################################################################################
+# Canonical collection: merging summands that differ only by dummy names and factor order
+##############################################################################################
+
+function _contraction_colours(T::TensorTerm)
+    ts = terms(T)
+    n = length(ts)
+    ind = Vector{Vector{IndexPair}}(undef, n)
+    @inbounds for i in 1:n
+        ind[i] = indices(ts[i])
+    end
+
+    # index uid => the (factor, slot, position) triples carrying it; length 2 means a contraction
+    slots = Dict{UInt64,Vector{Tuple{Int,Int,Bool}}}()
+    @inbounds for i in 1:n, s in eachindex(ind[i])
+        idx, pos = ind[i][s]
+        isLightcone(idx) && continue
+        push!(get!(() -> Tuple{Int,Int,Bool}[], slots, idx.uid), (i, s, pos.position))
+    end
+
+    col = Vector{UInt}(undef, n)
+    @inbounds for i in 1:n
+        h = hash(name(ts[i]), hash(length(ind[i])))
+        for s in eachindex(ind[i])
+            idx, pos = ind[i][s]
+            v = get(slots, idx.uid, nothing)
+            if v === nothing || length(v) != 2
+                h = hash(idx.uid, hash(pos.position, hash(s, h)))   # free: the name matters
+            else
+                h = hash(pos.position, hash(s, h))                  # dummy: the name does not
+            end
+        end
+        col[i] = h
+    end
+
+    # Refine until the induced *partition* stops splitting. Comparing raw colour values would
+    # never terminate early, since every round rehashes them into new values.
+    newcol = Vector{UInt}(undef, n)
+    seen = Set{UInt}()
+    for c in col
+        push!(seen, c)
+    end
+    ndistinct = length(seen)
+    for _ in 1:n
+        @inbounds for i in 1:n
+            acc = UInt(0)
+            for s in eachindex(ind[i])
+                idx, pos = ind[i][s]
+                v = get(slots, idx.uid, nothing)
+                (v === nothing || length(v) != 2) && continue
+                # the other end of this contraction (guard against a self-contraction)
+                other = (v[1][1] == i && v[1][2] == s) ? v[2] : v[1]
+                acc ⊻= hash(col[other[1]], hash(s, hash(other[2], hash(pos.position, UInt(0)))))
+            end
+            newcol[i] = hash(acc, col[i])
+        end
+        copyto!(col, newcol)
+        empty!(seen)
+        for c in col
+            push!(seen, c)
+        end
+        length(seen) == ndistinct && break      # partition stable, further rounds are noise
+        ndistinct = length(seen)
+    end
+    return col
+end
+
+"""
+Sign from permuting graded factors: `(-1)^(odd-graded inversions)`.
+
+Only odd-graded factors can contribute, so those are gathered first and the inversion count runs
+over just them. The naive form is O(n²) over *all* factor pairs with a `grading` call — which
+itself walks a tensor's indices — inside the inner loop, and for an all-bosonic term every one of
+those iterations is wasted.
+"""
+function _graded_perm_sign(ts, perm)
+    odd = Int[]
+    @inbounds for i in eachindex(ts)
+        grading(ts[i]) == 1 && push!(odd, i)
+    end
+    length(odd) < 2 && return 1
+
+    newpos = Vector{Int}(undef, length(perm))       # factor index => position after permuting
+    @inbounds for k in eachindex(perm)
+        newpos[perm[k]] = k
+    end
+    s = 0
+    @inbounds for a in eachindex(odd), b in (a+1):length(odd)
+        newpos[odd[a]] > newpos[odd[b]] && (s += 1)
+    end
+    return iseven(s) ? 1 : -1
+end
+
+"""
+Can the factors of this term be freely permuted?
+
+False as soon as any pair is subject to a commutation relation — matrices with a registered
+commutator do not simply reorder, they generate extra terms, which is `bubble_sort_with_grading!`'s
+job rather than ours. Such terms are left in their given order.
+"""
+function _freely_reorderable(ts)
+    nmat = 0
+    @inbounds for t in ts
+        t isa MatrixSuperType && (nmat += 1)
+    end
+    nmat <= 1 && return true                 # a commutator needs two matrices
+    @inbounds for i in eachindex(ts), j in (i+1):length(ts)
+        can_swap(ts[i], ts[j]) || return false
+    end
+    return true
+end
+
+"""
+    canonical_form(T::TensorTerm) -> (sign, term)
+
+Normalise `T` by reordering commuting factors and renaming dummy indices, such that
+`sign * term == T`.
+
+Two terms with `==` canonical forms are therefore genuinely equal, which makes this a **sound**
+key to merge on. It is not complete: the ordering comes from [`_contraction_colours`](@ref),
+which is a refinement rather than a full graph canonicalisation, and terms whose factors do not
+freely commute are left alone entirely — so equal terms can normalise differently. That only
+costs collection opportunities; it can never merge terms that are not equal.
+
+Expects each tensor's own indices to already be in canonical slot order, i.e. run after `sort`.
+"""
+function canonical_form(T::TensorTerm)
+    ts = terms(T)
+    n = length(ts)
+    n <= 1 && return (1, rename_dummies(T))
+    _freely_reorderable(ts) || return (1, rename_dummies(T))
+    col = _contraction_colours(T)
+    perm = collect(1:n)
+    sort!(perm, by = i -> (col[i], i))       # ties keep source order, so this is deterministic
+    if perm == 1:n
+        return (1, rename_dummies(T))
+    end
+    sgn = _graded_perm_sign(ts, perm)
+    reordered = TensorTerm(TensorSuperType[ts[p] for p in perm])
+    return (sgn, rename_dummies(reordered))
+end
+
+"""
+Rejection key for [`collect_terms`](@ref): a stronger relative of [`term_fingerprint`](@ref) that
+also encodes the *contraction pattern*, not just the factor and free-index multisets.
+
+Each contraction contributes the `(name, slot, position)` of both of its ends, so terms built from
+the same tensors but wired together differently get different keys. Still invariant under factor
+reordering and dummy renaming — a differing key is a sound rejection, an equal key proves nothing.
+Costs one pass and no term copying, unlike building a canonical form.
+"""
+function _collect_prekey(T::TensorTerm)
+    ts = terms(T)
+    nt = length(ts)
+    h = UInt(0)
+    ind = Vector{Vector{IndexPair}}(undef, nt)
+    @inbounds for i in 1:nt
+        ind[i] = indices(ts[i])
+        h ⊻= hash(length(ind[i]), hash(name(ts[i])))
+    end
+
+    slots = Dict{UInt64,Vector{Tuple{Int,Int,Bool}}}()
+    @inbounds for i in 1:nt, sl in eachindex(ind[i])
+        idx, pos = ind[i][sl]
+        isLightcone(idx) && continue
+        push!(get!(() -> Tuple{Int,Int,Bool}[], slots, idx.uid), (i, sl, pos.position))
+    end
+
+    x = UInt(0)   # free indices, by identity
+    y = UInt(0)   # contraction pattern, by endpoint description
+    for (uid, v) in slots
+        if length(v) == 2
+            a = hash(v[1][3], hash(v[1][2], hash(name(ts[v[1][1]]))))
+            b = hash(v[2][3], hash(v[2][2], hash(name(ts[v[2][1]]))))
+            lo, hi = minmax(a, b)
+            y ⊻= hash(hi, lo)
+        else
+            for e in v
+                x ⊻= hash(e[3], hash(uid))
+            end
+        end
+    end
+    return hash(y, hash(x, hash(nt, h)))
+end
+
+"""
+Identity of a factor for signature purposes: everything about it except its indices.
+
+Tensors share an immutable `TensorData`, so object identity settles name, `function_of`, weights,
+tableaux and labels in one comparison. Distinct-but-equal data objects simply fail to match, which
+under-collects rather than over-collects.
+"""
+_factor_identity(t::TensorSuperType) = t isa OperatorSuperType ? hash(name(t)) : objectid(data(t))
+
+"""
+Emit the slot codes for one index vector.
+
+Split out as a function barrier: the factors arrive as `TensorSuperType`, so `indices(t)` is a
+dynamic call — doing it once per factor and handing a concretely typed vector to this loop keeps
+the per-index work inferred.
+"""
+function _sig_slots!(key::Vector{UInt64}, ti::Vector{IndexPair},
+    dummyno::Dict{UInt64,Int}, dums::Set{UInt64})
+    @inbounds for k in eachindex(ti)
+        idx, pos = ti[k]
+        u = idx.uid
+        if u in dums
+            n = get!(dummyno, u, length(dummyno) + 1)
+            push!(key, UInt64(n) | 0x8000_0000_0000_0000)   # tagged so it cannot alias a uid
+        else
+            push!(key, u)
+        end
+        push!(key, UInt64(pos.position))
+    end
+    return key
+end
+
+"""
+Append one factor's contribution to a canonical signature.
+
+Free indices contribute their uid; dummies contribute a sequence number assigned on first
+appearance, so two terms differing only by a consistent dummy renaming produce identical keys.
+Operators additionally contribute their operand's structure, recursively.
+"""
+function _sig_factor!(key::Vector{UInt64}, t::TensorSuperType,
+    dummyno::Dict{UInt64,Int}, dums::Set{UInt64})
+    push!(key, _factor_identity(t))
+    _sig_slots!(key, indices(t), dummyno, dums)
+    if t isa OperatorSuperType
+        for (c, tt) in summands(operand(t))
+            push!(key, hash(c))
+            for u in terms(tt)
+                _sig_factor!(key, u, dummyno, dums)
+            end
+            push!(key, 0xFFFF_FFFF_FFFF_FFFF)               # summand separator
+        end
+    end
+    return key
+end
+
+"""
+    canonical_signature(T::TensorTerm) -> (sign, key)
+
+A key such that two terms share it exactly when they are equal up to dummy renaming and the
+ordering of commuting factors, with `sign * (term with key) == T`.
+
+Unlike [`canonical_form`](@ref) this never materialises a renamed term — it walks the factors once
+and emits integers — which is what makes collecting cheap enough to be worth doing. Terms whose
+factors do not freely commute keep their given order, so they only merge with identically ordered
+terms.
+"""
+function canonical_signature(T::TensorTerm)
+    ts = terms(T)
+    n = length(ts)
+    perm = collect(1:n)
+    sgn = 1
+    if n > 1 && _freely_reorderable(ts)
+        col = _contraction_colours(T)
+        sort!(perm, by = i -> (col[i], i))
+        perm == 1:n || (sgn = _graded_perm_sign(ts, perm))
+    end
+    dums = dummy_uids(T)
+    dummyno = Dict{UInt64,Int}()
+    key = UInt64[]
+    sizehint!(key, 3 * n)
+    @inbounds for p in perm
+        _sig_factor!(key, ts[p], dummyno, dums)
+    end
+    return (sgn, key)
+end
+
+"""
+Collect summands that are equal up to dummy index naming and the ordering of commuting factors.
+
+Groups by [`canonical_signature`](@ref) and merges on exact key equality, so no pair of terms is
+ever compared structurally.
+"""
+function collect_terms(TEx::TensorExpression)
+    s = summands(TEx)
+    n = length(s)
+    n <= 1 && return TEx
+
+    out = CoeffPair[]
+    sizehint!(out, n)
+    keys = Vector{Vector{UInt64}}()
+    signs = Int[]
+    buckets = Dict{UInt64,Vector{Int}}()
+
+    for (coef, tt) in s
+        isZero(coef) && continue
+        sgn, key = canonical_signature(tt)
+        h = hash(key)
+        bk = get!(() -> Int[], buckets, h)
+        found = false
+        for k in bk
+            if keys[k] == key
+                # both sit over the same canonical term; re-express this one against that rep
+                out[k] = CoeffPair(out[k][1] + coef * sgn * signs[k], out[k][2])
+                found = true
+                break
+            end
+        end
+        if !found
+            push!(out, CoeffPair(coef, tt))
+            push!(keys, key)
+            push!(signs, sgn)
+            push!(bk, length(out))
+        end
+    end
+
+    filter!(p -> !isZero(p[1]), out)
+    isempty(out) && return zero()
+    return TensorExpression(_RAW, out)
+end
+
 """Two summands, both coefficient 1: merge if the terms are equal. Cannot produce a zero coefficient."""
 @inline function _merge2(v::Vector{CoeffPair})
     @inbounds if v[1][2] == v[2][2]
@@ -1849,15 +2168,19 @@ function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
         i1 = indices(T1)
         i2 = indices(T2)
 
-        for i = eachindex(i1)
-            if i1[i][1].index_set.default_position == i1[i][2] && i2[i][1].index_set.default_position != i2[i][2]
+        @inbounds for i = eachindex(i1)
+            a, ap = i1[i]
+            b, bp = i2[i]
+            adef = ap == a.index_set.default_position
+            bdef = bp == b.index_set.default_position
+            if adef && !bdef
                 return true
-            elseif i1[i][1].index_set.default_position != i1[i][2] && i2[i][1].index_set.default_position == i2[i][2]
+            elseif !adef && bdef
                 return false
-            elseif i1[i][1] == i2[i][1]
+            elseif a == b
                 continue
             else
-                return i1[i][1] < i2[i][1]
+                return a < b
             end
         end
         return false
@@ -1865,25 +2188,29 @@ function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
         i1 = indices(T1)
         i2 = indices(T2)
         n = min(length(i1), length(i2))#may not have same lengths!
-        for i = 1:n
-            if _is_dummy_uid(dummies, i1[i][1])
-                if _is_dummy_uid(dummies, i2[i][1])
+        @inbounds for i = 1:n
+            a, ap = i1[i]
+            b, bp = i2[i]
+            if _is_dummy_uid(dummies, a)
+                if _is_dummy_uid(dummies, b)
                     continue
                 else
                     return false
 
                 end
-            elseif _is_dummy_uid(dummies, i2[i][1])
+            elseif _is_dummy_uid(dummies, b)
                 return true
             else
-                if i1[i][1].index_set.default_position == i1[i][2] && i2[i][1].index_set.default_position != i2[i][2]
+                adef = ap == a.index_set.default_position
+                bdef = bp == b.index_set.default_position
+                if adef && !bdef
                     return true
-                elseif i1[i][1].index_set.default_position != i1[i][2] && i2[i][1].index_set.default_position == i2[i][2]
+                elseif !adef && bdef
                     return false
-                elseif i1[i][1] == i2[i][1]
+                elseif a == b
                     continue
                 else
-                    return i1[i][1] < i2[i][1]
+                    return a < b
                 end
             end
         end
@@ -2928,7 +3255,7 @@ function collect_indices!(inds::OrderedSet{IndexSuperType}, T)
 
     return inds
 end
-function collect_indices!(inds::Vector{IndexSuperType}, T)
+function collect_indices!(inds::Vector{IndexTypes}, T)
     if T isa OperatorSuperType
         for ind in op_indices(T)
             ind[1] in inds || push!(inds, ind[1])

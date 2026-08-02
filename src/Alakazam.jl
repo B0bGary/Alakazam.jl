@@ -113,7 +113,7 @@ export SymplecticForm
 export pop_metric, contract_metrics, eliminate_kronecker, eliminate_epsilon
 export ≅, cong, get_weighted_terms, term_weight, drop_weight_above, drop_weight_below, ×, append, rename_dummies, rename_dummies!
 export get_unused_indices
-export simplify, hard_simplify, simp_ops_n_sym, canonicalise, canonicalize
+export simplify, hard_simplify, simp_ops_n_sym, canonicalise, canonicalize,collect_terms
 
 ##########################
 #comrels
@@ -313,9 +313,13 @@ end
 const BANNER_DIR = joinpath(@__DIR__, "..", "data")
 function show_banner()
 
-    width = displaysize(stdout)[2]
+    width = try
+        parse(Int, get(ENV, "COLUMNS", string(displaysize(stdout)[2])))
+    catch
+        displaysize(stdout)[2]
+    end
 
-    file = if width >= 120
+    file = if width >= 126
         joinpath(BANNER_DIR, "alakazam_banner_right.ansi")
     else
         joinpath(BANNER_DIR, "alakazam_banner_bottom.ansi")

@@ -480,11 +480,47 @@ function free_indices_nopos(T::Tensorial)
     end
     return out
 end
+"""Above this many index slots, locate dummy pairs by hashing rather than by all-pairs scanning."""
+const _DUMMY_SCAN_CUTOFF = 24
+
 function _dummies(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) where {positional}
     inds = indices(T)
     n = length(inds)
     out = positional ? Pair{IndexTypes,IndexPosition}[] : IndexTypes[]
     n <= 1 && return out
+
+    if n > _DUMMY_SCAN_CUTOFF
+        # One pass instead of the O(n²) double scan below. Pairs are discovered at their *second*
+        # occurrence, so they are sorted back into first-occurrence order to match the emission
+        # order the quadratic version produces.
+        firstat = Dict{UInt64,Int}()
+        sizehint!(firstat, n)
+        found = Tuple{Int,Int}[]
+        @inbounds for j in 1:n
+            idx, pos = inds[j]
+            isLightcone(idx) && continue
+            i = get(firstat, idx.uid, 0)
+            i == -1 && continue                 # already paired; further repeats are not ours to flag
+            if i == 0
+                firstat[idx.uid] = j
+            else
+                inds[i][2] === pos && throw(SameLevelDummyError(T))
+                push!(found, (i, j))
+                firstat[idx.uid] = -1
+            end
+        end
+        length(found) > 1 && sort!(found; by=first)
+        @inbounds for (i, j) in found
+            if positional
+                push!(out, inds[i])
+                push!(out, inds[j])
+            else
+                push!(out, inds[i][1])
+            end
+        end
+        return out
+    end
+
     @inbounds for i in 1:n
         idx, pos = inds[i]
         isLightcone(idx) && continue

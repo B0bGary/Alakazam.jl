@@ -94,12 +94,13 @@ mutable struct Index <: IndexSuperType
             return idx
          end
       end
-      temp = new(valid_name(name), index_set,(hash(name, hash(index_set.name))))
+      temp = new(valid_name(name), index_set, hash(name, hash(index_set.name)))
       push!(index_set.indices, temp)
       return temp
    end
    function Index(name::String)
-      new(valid_name(name), IndexSet(""), (hash(name, hash(""))))
+      s = IndexSet("")
+      return new(valid_name(name), s, hash(name, hash("")))
    end
 
    function Index(args::Union{String,IndexSet,}...)
@@ -142,13 +143,13 @@ mutable struct DummyPatternIndex <: IndexSuperType
             return idx
          end
       end
-      temp = new(name, index_set, (hash(name, hash(index_set.name))))
+      temp = new(name, index_set, hash(name, hash(index_set.name)))
       push!(index_set.indices, temp)
       return temp
    end
 
    function DummyPatternIndex(name::String)
-      new(name, IndexSet(""),(hash(name, hash(""))))
+      return new(name, IndexSet(""), hash(name, hash("")))
    end
    function DummyPatternIndex(names::Vector{String}, index_set::IndexSet)
       return [DummyPatternIndex(name, index_set) for name in names]
@@ -169,7 +170,6 @@ mutable struct Coordinate
       return c
    end
 end
-
 
 #consts
 const upper = IndexPosition(0)

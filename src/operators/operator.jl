@@ -5,7 +5,7 @@ mutable struct OperatorData <: TensorDataSuperType #?
     operator_data::TensorData
     operator_indices::Vector{IndexPair}   # the operator's own indices; TensorData no longer holds them
     #these are the combined properties of op and oprnd
-    indices::Vector{Pair{IndexSuperType,IndexPosition}}
+    indices::Vector{IndexPair}
     function_of::Vector{Coordinate}
     weights::Dict{String,Number}
     tableaux::Set{YoungTableau}

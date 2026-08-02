@@ -160,7 +160,7 @@ end
 """
 function pop_metric(tt::TensorTerm)
     # Which indices are available depends only on what the term already uses plus what the metrics popped so far have taken.
-    claimed = IndexSuperType[]
+    claimed = IndexTypes[]
     collect_indices!(claimed, tt)
     new_term = 1
     for term in terms(tt)
@@ -239,13 +239,13 @@ This is because we have SU(2) flavour in mind. Need to decide the best way of im
 function pop_metric(T::TensorSuperType,
     orig_exp::Union{TensorExpression,TensorTerm,Nothing}=nothing,
     running_term::Union{TensorExpression,TensorTerm,Nothing}=nothing)
-    claimed = IndexSuperType[]
+    claimed = IndexTypes[]
     collect_indices!(claimed, orig_exp === nothing ? T : orig_exp)
     running_term === nothing || collect_indices!(claimed, running_term)
     return _pop_metric(T, claimed)
 end
 
-function _fresh_index(iset::IndexSet, claimed::Vector{IndexSuperType})
+function _fresh_index(iset::IndexSet, claimed::Vector{IndexTypes})
     for i in iset.indices
         i isa DummyPatternIndex && continue
         i in claimed && continue
@@ -256,7 +256,7 @@ function _fresh_index(iset::IndexSet, claimed::Vector{IndexSuperType})
     return nid
 end
 
-function _pop_metric(T::TensorSuperType, claimed::Vector{IndexSuperType})
+function _pop_metric(T::TensorSuperType, claimed::Vector{IndexTypes})
     # skip types
     (T isa AntisymMetricSuperType || T isa SymMetricSuperType ||
      T isa OperatorSuperType || T isa KroneckerSuperType) && return T
@@ -264,8 +264,9 @@ function _pop_metric(T::TensorSuperType, claimed::Vector{IndexSuperType})
     inds = indices(T)
     needs = false
     @inbounds for p in inds
-        isLightcone(p[1]) && continue
-        if !in_default_pos(p)
+        iset = p[1].index_set          # one load; islightcone and default_position both live here
+        iset.islightcone && continue
+        if p[2] != iset.default_position
             needs = true
             break
         end
@@ -276,9 +277,9 @@ function _pop_metric(T::TensorSuperType, claimed::Vector{IndexSuperType})
     new_index_pattern = indices(T)
     @inbounds for pos in eachindex(new_index_pattern)
         index = new_index_pattern[pos]
-        isLightcone(index[1]) && continue
-        in_default_pos(index) && continue
         iset = index[1].index_set
+        iset.islightcone && continue
+        index[2] == iset.default_position && continue
         use_this = _fresh_index(iset, claimed)
         dummy = use_this => (iset.default_position == upper ? lower : upper)
         push!(claimed, use_this)

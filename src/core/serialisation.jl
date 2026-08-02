@@ -601,11 +601,8 @@ function reconstruct(T::Type{I}, d, into::Module=Main) where I<:IndexSuperType
         if idx !== nothing
             return set.indices[idx]
         else
-            args = [
-                from_field(I, Val(f), d[string(f)], into)
-                for f in fieldnames(I) if f != :grading
-            ]
-            return Index(args...)
+            # Build via the normal constructor
+            return I(iN, set)
         end
     else
         error("Missing index set "*sn*". Try importing from header.")

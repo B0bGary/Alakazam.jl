@@ -168,9 +168,9 @@
     ## check generic matrix product reduction rule, where we have to use a metric contraction and relabeling
     @test contract_adjacent(exp, Alakazam.Matrix)==2*KroneckerDelta(ν=>lower, σ=>upper)
 
-    spacetime_indices.signature=(1, 3)
-    spacetime_indices.range=4
-    spacetime_indices.default_position=upper
+
+    spacetime_up = IndexSet("spacetime_up", (1, 3), upper, Metric)
+    μ, ν, ρ, σ = Index("μ", "ν", "ρ", "σ", spacetime_up)
     g1=Gamma(μ=>upper)
     g2=Gamma(ν=>upper)
     g3=Gamma(μ=>lower)
@@ -178,15 +178,15 @@
     @test sort(g1*g2*g3)==g1*g2*g3
     # @test sort(g1*g3*g2)==-g1*g2*g3+2*g1
 
-    @mrule g1*g2*g3 = (2-spacetime_indices.range)*g2
-    @mrule g1*g3 = spacetime_indices.range
+    @mrule g1*g2*g3 = (2-spacetime_up.range)*g2
+    @mrule g1*g3 = spacetime_up.range
 
 
     g4=Gamma(ρ=>upper)
     g5=Gamma(σ=>upper)
 
 
-    @mrule g1*g2*g4*g3 = 2*g4*g2+(spacetime_indices.range-2)*g2*g4 # =4Metric in 4D
+    @mrule g1*g2*g4*g3 = 2*g4*g2+(spacetime_up.range-2)*g2*g4 # =4Metric in 4D
     @test contract_adjacent(g1*g2*g3, Alakazam.Gamma)==-2*g2
     @test contract_adjacent(g1*g3, Alakazam.Gamma)==4
     @test sort(contract_adjacent(g1*g2*g4*g3, Alakazam.Gamma))==4*Metric([ν=>upper, ρ=>upper])#great!!!
