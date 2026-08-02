@@ -1,4 +1,6 @@
 const LabelPair = Pair{String,IndexPosition}
+const _T_INDEX_VEC = Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+const _T_INDEX_PAIR = Pair{I,IndexPosition} where {I<:IndexSuperType}
 const _EMPTY_FUNCTION_OF =  Coordinate[]
 const _EMPTY_TABLEAUX = Set{YoungTableau}()
 const _EMPTY_WEIGHTS = Dict{String,Number}()
@@ -28,9 +30,9 @@ mutable struct TensorData <: TensorDataSuperType
         weights = noweights()
 
         for arg in args
-            if arg isa Vector{Pair{I,IndexPosition}} where {I<:IndexSuperType}
+            if arg isa _T_INDEX_VEC
                 append!(indices, arg)
-            elseif arg isa Pair{I,IndexPosition} where {I<:IndexSuperType}
+            elseif arg isa _T_INDEX_PAIR
                 push!(indices, arg)
             elseif arg isa Coordinate
                 has_coords || (function_of=Coordinate[]; has_coords=true)
@@ -184,19 +186,19 @@ end
 #######
 # common tableaux generation functions
 ######
-function generate_symmetric_tableau(indices::Vector)
-    n = length(indices)
-    return YoungTableau([n], collect(1:n))
-end
-function generate_antisymmetric_tableau(indices::Vector)
-    n = length(indices)
-    return YoungTableau(fill(1, n), collect(1:n))
-end
+# These tableaux are generated many times (eg in the metric), so we cache and share them
+const _SYM_TABLEAU_CACHE = Dict{Int,YoungTableau}()
+const _ASYM_TABLEAU_CACHE = Dict{Int,YoungTableau}()
+
+generate_symmetric_tableau(indices::Vector) = generate_symmetric_tableau(length(indices))
+generate_antisymmetric_tableau(indices::Vector) = generate_antisymmetric_tableau(length(indices))
 function generate_symmetric_tableau(n::Integer)
-    return YoungTableau([n], collect(1:n))
+    k = Int(n)
+    return get!(() -> YoungTableau([k], collect(1:k)), _SYM_TABLEAU_CACHE, k)
 end
 function generate_antisymmetric_tableau(n::Integer)
-    return YoungTableau(fill(1, n), collect(1:n))
+    k = Int(n)
+    return get!(() -> YoungTableau(fill(1, k), collect(1:k)), _ASYM_TABLEAU_CACHE, k)
 end
 function generate_riemann_tableau()
     return YoungTableau([2, 2], [1, 3, 2, 4])

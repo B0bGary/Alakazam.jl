@@ -1,13 +1,33 @@
+"""A permutation of index slots, as a list of disjoint cycles."""
+const PermCycles = Vector{Vector{Int}}
+
 """
 Young Tableau diagram that stores information about symmetries and irreducible representations.
+
+`row_cycles` and `col_cycles` are the row-symmetry and column-antisymmetry generators in
+disjoint-cycle form. They depend only on `tableau`, so they are computed once and cached.
 """
 mutable struct YoungTableau
     row_lengths::Vector{Int64}
     index_assignment::Vector{Int64}
     tableau::Vector{Vector{Int64}}
     adj_matrix::Base.Matrix{Int64}
+    row_cycles::Vector{PermCycles}
+    col_cycles::Vector{PermCycles}
+    cycles_ready::Bool
     # symmetries::Vector{String}
     # antisymmetries::Vector{String}
+end
+
+"""
+Populate a tableau's cached permutation generators if they haven't been built yet.
+"""
+function ensure_cycles!(t::YoungTableau)
+    t.cycles_ready && return t
+    t.row_cycles = PermCycles[perm_cycles(g) for g in row_generators(t.tableau)]
+    t.col_cycles = PermCycles[perm_cycles(g) for g in column_generators(t.tableau)]
+    t.cycles_ready = true
+    return t
 end
 
 function YoungTableau(row_lengths::Vector{Int64}, index_assignment::Vector{Int64})
@@ -18,16 +38,23 @@ end
 function YoungTableau(row_lengths::Vector{Int64}, index_assignment::Vector{Int64}, tot_inds::Int64)
     #build tableau
     tableau = build_rows(index_assignment, row_lengths) #changed to this form, idk if old form was used anywhere else
+    row_gens = row_generators(tableau)
+    col_gens = column_generators(tableau)
     #new adjm construction without using the full symmetry sets
     adjm2 = zeros(Int, tot_inds, tot_inds)
     for i in 1:tot_inds
         adjm2[i, i] = 1
     end
-    for ((i, j), s) in tableau_single_swaps(tableau)
+    for ((i, j), s) in tableau_single_swaps(tableau, row_gens, col_gens)
         adjm2[i, j] = s
         adjm2[j, i] = s
     end
     return YoungTableau(row_lengths, index_assignment, tableau, adjm2)#, symmetries, antisymmetries
+end
+function YoungTableau(row_lengths::Vector{Int64}, index_assignment::Vector{Int64},
+    tableau::Vector{Vector{Int64}}, adj_matrix::Base.Matrix{Int64})
+    return YoungTableau(row_lengths, index_assignment, tableau, adj_matrix,
+        PermCycles[], PermCycles[], false)
 end
 
 
@@ -55,17 +82,20 @@ function build_rows(index_assignment::Vector, row_lengths::Vector)
     return rows
 end
 
-function tableau_single_swaps(tableau)
+tableau_single_swaps(tableau) =
+    tableau_single_swaps(tableau, row_generators(tableau), column_generators(tableau))
+
+function tableau_single_swaps(tableau, row_gens::Vector{Dict{Int,Int}}, col_gens::Vector{Dict{Int,Int}})
 
     n = maximum(vcat(tableau...))
 
     gens = Tuple{Vector{Int},Int}[]
 
-    for g in row_generators(tableau)
+    for g in row_gens
         push!(gens, (dict_to_array(g, n), 1))
     end
 
-    for g in column_generators(tableau)
+    for g in col_gens
         push!(gens, (dict_to_array(g, n), -1))
     end
 
@@ -100,7 +130,7 @@ function tableau_single_swaps(tableau)
 end
 
 function row_generators(rows)
-    gens = []
+    gens = Dict{Int,Int}[]
 
     # build columns explicitly
     cols = Dict{Int,Vector{Int}}()
@@ -139,7 +169,7 @@ function column_generators(rows)
         end
     end
 
-    gens = []
+    gens = Dict{Int,Int}[]
 
     for (_, col) in cols
         for i in 1:(length(col)-1)
@@ -205,6 +235,26 @@ function generate_group_with_paths(rows)
     end
 
     group
+end
+
+"""
+Disjoint-cycle decomposition of a permutation.
+"""
+function perm_cycles(p::Dict{Int,Int})
+    visited = Set{Int}()
+    cycles = PermCycles()
+    for start in sort!(collect(keys(p)))
+        start in visited && continue
+        cycle = Int[]
+        x = start
+        while !(x in visited)
+            push!(cycle, x)
+            push!(visited, x)
+            x = p[x]
+        end
+        length(cycle) > 1 && push!(cycles, cycle)
+    end
+    return cycles
 end
 
 function dict_to_cycles(p::Dict{Int,Int})

@@ -149,25 +149,24 @@ end
 """"Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
 """
 function pop_metric(TEx::TensorExpression)
-    new_exp = zero()
-
+    out = CoeffPair[]
+    sizehint!(out, length(summands(TEx)))
     for summand in summands(TEx)
-        q = summand[1] * pop_metric(summand[2])
-        new_exp = new_exp ⨥ q
+        append!(out, summands(TensorExpression(summand[1] * pop_metric(summand[2]))))
     end
-    return update_indices!(new_exp)
+    isempty(out) && return zero()
+    return update_indices!(TensorExpression(out))
 end
 
 """"Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
 """
 function pop_metric(tt::TensorTerm)
+    # Which indices are available depends only on what the term already uses plus what the metrics popped so far have taken.
+    claimed = IndexSuperType[]
+    collect_indices!(claimed, tt)
     new_term = 1
     for term in terms(tt)
-        if new_term != 1
-            new_term *= pop_metric(term, tt, new_term)
-        else
-            new_term *= pop_metric(term, tt)
-        end
+        new_term *= _pop_metric(term, claimed)
     end
     return update_indices!(new_term)
 end
@@ -242,6 +241,24 @@ This is because we have SU(2) flavour in mind. Need to decide the best way of im
 function pop_metric(T::TensorSuperType,
     orig_exp::Union{TensorExpression,TensorTerm,Nothing}=nothing,
     running_term::Union{TensorExpression,TensorTerm,Nothing}=nothing)
+    claimed = IndexSuperType[]
+    collect_indices!(claimed, orig_exp === nothing ? T : orig_exp)
+    running_term === nothing || collect_indices!(claimed, running_term)
+    return _pop_metric(T, claimed)
+end
+
+function _fresh_index(iset::IndexSet, claimed::Vector{IndexSuperType})
+    for i in iset.indices
+        i isa DummyPatternIndex && continue
+        i in claimed && continue
+        return i
+    end
+    nid = generate_indices(iset)
+    nid === nothing && throw(OutOfIndices(iset))
+    return nid
+end
+
+function _pop_metric(T::TensorSuperType, claimed::Vector{IndexSuperType})
     # skip types
     (T isa AntisymMetricSuperType || T isa SymMetricSuperType ||
      T isa OperatorSuperType || T isa KroneckerSuperType) && return T
@@ -259,23 +276,14 @@ function pop_metric(T::TensorSuperType,
     T = copy_owned(T)
     tensor = 1
     new_index_pattern = indices(T)
-    used_indices = IndexSuperType[]        # small vec than set
     @inbounds for pos in eachindex(new_index_pattern)
         index = new_index_pattern[pos]
         isLightcone(index[1]) && continue
         in_default_pos(index) && continue
         iset = index[1].index_set
-        spare = orig_exp === nothing ? get_unused_indices(T, iset) :
-                get_unused_indices(orig_exp, iset)
-        if orig_exp !== nothing && running_term !== nothing
-            avail = get_unused_indices(running_term, iset)
-            filter!(in(avail), spare)      # in place, no new vector
-        end
-        filter!(∉(used_indices), spare)    # in place
-        use_this = safe_pop!(spare, iset)
+        use_this = _fresh_index(iset, claimed)
         dummy = use_this => (iset.default_position == upper ? lower : upper)
-        push!(used_indices, use_this)
-        push!(used_indices, index[1])
+        push!(claimed, use_this)
         metric = generate_metric(index, dummy)
         metric === nothing && continue
         tensor = tensor * metric

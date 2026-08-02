@@ -323,34 +323,37 @@ I previously had here an operator precendence error. But, the user should just b
 
 
 function ×(T2::TensorExpression, T1::TensorExpression)
-    new = zero()
+    out = CoeffPair[]
+    sizehint!(out, length(T2.summands) * length(T1.summands))
     for summand2 in T2.summands
         for summand1 in T1.summands
-            new += (summand2[1] * summand1[1]) * (summand2[2] × summand1[2])
+            append!(out, summands((summand2[1] * summand1[1]) * (summand2[2] × summand1[2])))
         end
     end
-
-    return new
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 function ×(T1::TensorExpression, T2::Union{TensorSuperType,TensorTerm})
-    new_terms = TensorExpression()
     T1 = rename_dummies(T1)
-    for summandin in eachindex(T1.summands)
-        t = (T1.summands[summandin][2]×T2)
-        new_terms += (T1.summands[summandin][1] * t)
+    out = CoeffPair[]
+    sizehint!(out, length(T1.summands))
+    for summand in T1.summands
+        append!(out, summands(summand[1] * (summand[2] × T2)))
     end
-    return new_terms
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 function ×(T2::Union{TensorSuperType,TensorTerm}, T1::TensorExpression)
-    new_terms = TensorExpression()
     T1 = rename_dummies(T1)
-    for summandin in eachindex(T1.summands)
-        t = (T2 × T1.summands[summandin][2])
-        new_terms += (T1.summands[summandin][1] * t)
+    out = CoeffPair[]
+    sizehint!(out, length(T1.summands))
+    for summand in T1.summands
+        append!(out, summands(summand[1] * (T2 × summand[2])))
     end
-    return new_terms
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 
@@ -937,15 +940,19 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
     best_cost = rep_distance(lexo, start_inds)
     best_sign = 1
 
-    # generators depend only on T's tableaux — build once
-    row_cycles = String[]
-    col_cycles = String[]
-    for tab in tableaux(T)
-        for g in row_generators(tab.tableau)
-            push!(row_cycles, cycles_to_string(dict_to_cycles(g)))
-        end
-        for g in column_generators(tab.tableau)
-            push!(col_cycles, cycles_to_string(dict_to_cycles(g)))
+    # generators depend only on T's tableaux, so they are cached on each YoungTableau on first use
+    tabs = tableaux(T)
+    if length(tabs) == 1
+        tab = ensure_cycles!(first(tabs))
+        row_cycles = tab.row_cycles
+        col_cycles = tab.col_cycles
+    else
+        row_cycles = Vector{PermCycles}()
+        col_cycles = Vector{PermCycles}()
+        for tab in tabs
+            ensure_cycles!(tab)
+            append!(row_cycles, tab.row_cycles)
+            append!(col_cycles, tab.col_cycles)
         end
     end
 
@@ -970,7 +977,7 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
         end
 
         for cycle in row_cycles
-            new_inds = apply_permutation_cycle(curr, cycle)
+            new_inds = apply_permutation_cycles(curr, cycle)
             b = _signbit(sign)
             m = get(seen, new_inds, 0x00)
             if m & b == 0x00
@@ -980,7 +987,7 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
         end
 
         for cycle in col_cycles
-            new_inds = apply_permutation_cycle(curr, cycle)
+            new_inds = apply_permutation_cycles(curr, cycle)
             new_sign = -sign
             b = _signbit(new_sign)
             m = get(seen, new_inds, 0x00)
@@ -1033,6 +1040,23 @@ function permutation_sign(p)
 
     return isodd(inv) ? -1 : 1
 end
+"""
+Applies a permutation, given as disjoint cycles of slot positions, to `v`. Returns a new vector.
+"""
+function apply_permutation_cycles(v::Vector{T}, cycles::PermCycles) where {T}
+    result = copy(v)
+    @inbounds for c in cycles
+        k = length(c)
+        k < 2 && continue
+        temp = result[c[k]]
+        for i in k:-1:2
+            result[c[i]] = result[c[i-1]]
+        end
+        result[c[1]] = temp
+    end
+    return result
+end
+
 """Given a permutation cycle like "(1 5 2)", applies the corresponding permutation to the vector."""
 function apply_permutation_cycle(v::Vector, cycle::String)
     result = copy(v)
@@ -1123,7 +1147,8 @@ canonicalize(T) = canonicalise(T)
 # println(new_exp)
 
 function simp_ops_n_sym(exp::TensorExpression)
-    new_exp = zero()
+    out = CoeffPair[]
+    sizehint!(out, length(exp.summands))
     for summand in exp.summands
         # println("start ",summand)
         new_term = summand[1]
@@ -1148,9 +1173,10 @@ function simp_ops_n_sym(exp::TensorExpression)
         end
         ##println(new_exp)
         ##println(new_term)
-        new_exp += new_term
+        append!(out, summands(TensorExpression(new_term)))
     end
-    return new_exp
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 
@@ -1205,12 +1231,30 @@ end
 #     return isempty(TEx.summands) ? zero() : TEx
 # end
 
+"""
+Cheap test to see of terms are definitely different to avoid hard merge
+"""
+function term_fingerprint(T::TensorTerm)
+    h = UInt(0)
+    for t in terms(T)
+        h ⊻= hash(length(indices(t)), hash(name(t)))
+    end
+    x = UInt(0)
+    inds = indices(T)
+    @inbounds for i in eachindex(inds)
+        _is_dummy_at(inds, i) && continue
+        x ⊻= hash(inds[i][1].uid, hash(inds[i][2].position))
+    end
+    return hash(x, hash(length(terms(T)), h))
+end
+
 function hard_merge(TEx::TensorExpression)
     src = TEx.summands
     n = length(src)
     n == 0 && return zero()
 
     out = Vector{CoeffPair}(undef, n)
+    fps = Vector{UInt}(undef, n)          # fingerprint of each kept summand
     m = 0
 
     @inbounds for i in 1:n
@@ -1219,25 +1263,27 @@ function hard_merge(TEx::TensorExpression)
         t = s[2]
         find_weighted_square(construct_tensorterm_graph(t)) && continue   # identically zero
 
+        fp = term_fingerprint(t)
         found = false
         for k in 1:m
+            fps[k] == fp || continue      # cheap reject before the isomorphism search
             eq, gr = hard_equals_graded(t, out[k][2])
             eq || continue
             c = gr * out[k][1] + s[1]
             if isZero(c)
                 for q in k:(m-1)
-                    ;
-                    out[q] = out[q+1];
+                    out[q] = out[q+1]
+                    fps[q] = fps[q+1]
                 end
                 m -= 1
             else
-                out[k] = CoeffPair(c, t)
+                out[k] = CoeffPair(c, t)   # same fingerprint as before, fps[k] still valid
             end
             found = true;
             break
         end
 
-        found || (m += 1; out[m]=s)
+        found || (m += 1; out[m]=s; fps[m]=fp)
     end
 
     m == 0 && return zero()
@@ -1365,6 +1411,8 @@ end
 #     return TEx
 # end
 const _EMPTY_IDX = Int[]
+"""Above this many summands `merge_sum` hashes terms instead of comparing all pairs."""
+const _MERGE_HASH_CUTOFF = 16
 
 function merge_sum(TEx::TensorExpression)
     src = TEx.summands
@@ -1374,26 +1422,51 @@ function merge_sum(TEx::TensorExpression)
         @inbounds return isZero(src[1][1]) ? zero() : TEx
     end
 
-    # --- detection: first summand that needs anything doing to it ---
+    # detection
     firstbad = 0
-    @inbounds for i in 1:n
-        isZero(src[i][1]) && (firstbad=i; break)
-        ti = src[i][2]
-        for j in 1:(i-1)
-            src[j][2] == ti && (firstbad=i; break)
+    buckets = nothing
+    if n <= _MERGE_HASH_CUTOFF
+        @inbounds for i in 1:n
+            isZero(src[i][1]) && (firstbad=i; break)
+            ti = src[i][2]
+            for j in 1:(i-1)
+                src[j][2] == ti && (firstbad=i; break)
+            end
+            firstbad != 0 && break
         end
-        firstbad != 0 && break
+    else
+        b = Dict{UInt,Vector{Int}}()
+        sizehint!(b, n)
+        @inbounds for i in 1:n
+            if isZero(src[i][1])
+                firstbad = i
+                break
+            end
+            ti = src[i][2]
+            bk = get!(() -> Int[], b, hash(ti))
+            dup = false
+            for j in bk
+                if src[j][2] == ti
+                    dup = true
+                    break
+                end
+            end
+            if dup
+                firstbad = i
+                break
+            end
+            push!(bk, i)          # only reached for a clean, distinct summand
+        end
+        buckets = b
     end
-    firstbad == 0 && return TEx          # nothing to do — ZERO allocations
-
-    # --- one exact-size buffer, manual length, no push!/deleteat! ---
+    firstbad == 0 && return TEx          # nothing to do
     out = Vector{CoeffPair}(undef, n)
     m = firstbad - 1
     @inbounds for i in 1:m
         out[i] = src[i]                  # clean prefix, already known distinct & nonzero
     end
 
-    if n <= 16
+    if n <= _MERGE_HASH_CUTOFF
         @inbounds for i in firstbad:n
             s = src[i]
             isZero(s[1]) && continue
@@ -1418,9 +1491,11 @@ function merge_sum(TEx::TensorExpression)
             found || (m += 1; out[m]=s)
         end
     else
-        buckets = Dict{UInt,Vector{Int}}()
-        @inbounds for k in 1:m
-            push!(get!(() -> Int[], buckets, hash(out[k][2])), k)
+        if buckets === nothing
+            buckets = Dict{UInt,Vector{Int}}()
+            @inbounds for k in 1:m
+                push!(get!(() -> Int[], buckets, hash(out[k][2])), k)
+            end
         end
         ncancelled = 0
         @inbounds for i in firstbad:n
@@ -1461,36 +1536,63 @@ function merge_sum(TEx::TensorExpression)
     return TEx
 end
 
+"""
+Keying for symmetry equivs
+"""
+function _sym_bucket_key(T::TensorSuperType)
+    T isa OperatorSuperType && return UInt(0)
+    h = hash(name(T))
+    h = hash(tableaux(T), h)
+    inds = indices(T)
+    h = hash(length(inds), h)
+    x = UInt(0)
+    @inbounds for i in eachindex(inds)
+        _is_dummy_at(inds, i) && continue
+        x ⊻= hash(inds[i][1].uid, hash(inds[i][2].position))
+    end
+    return hash(x, h)
+end
+
 function merge_sum_syms(TEx::TensorExpression)
-    # @show TEx
     out = filter!(x -> !isZero(x[1]), TEx.summands) #removes 0 coefficnets
     if isempty(out)
         return zero()
     end
     TEx.summands = out
     new_merged = CoeffPair[]
-    for summand in TEx.summands
-        found = false
-        for i in eachindex(new_merged)
+    exact = Dict{UInt,Vector{Int}}()
+    symb = Dict{UInt,Vector{Int}}()
 
-            if summand[2] == new_merged[i][2]
-                # @show summand[2], new_merged[i][2]
-                # @show summand[2] , new_merged[i][2] "equal"
-                new_merged[i] = (new_merged[i][1] + summand[1] => summand[2])
+    for summand in TEx.summands
+        t = summand[2]
+        found = false
+
+        for i in get(exact, hash(t), _EMPTY_IDX)
+            if t == new_merged[i][2]
+                new_merged[i] = (new_merged[i][1] + summand[1] => t)
                 found = true
                 break
-            elseif length(summand[2].terms) == 1 && length(new_merged[i][2].terms) == 1
-                rescomp = same_tensor_mod_syms(summand[2].terms[1], new_merged[i][2].terms[1])
-                # @show rescomp
-                if rescomp[1] == true #i had this block removed before idk why...
-                    new_merged[i] = (rescomp[2] * new_merged[i][1] + summand[1] => summand[2])
-                    found = true
-                end
-            elseif length(summand[2].terms) == length(new_merged[i][2].terms)
             end
         end
+
+        if !found && length(t.terms) == 1
+            key = _sym_bucket_key(t.terms[1])
+            for i in get(symb, key, _EMPTY_IDX)
+                length(new_merged[i][2].terms) == 1 || continue
+                rescomp = same_tensor_mod_syms(t.terms[1], new_merged[i][2].terms[1])
+                if rescomp[1] == true
+                    new_merged[i] = (rescomp[2] * new_merged[i][1] + summand[1] => t)
+                    found = true
+                    break
+                end
+            end
+        end
+
         if !found
             push!(new_merged, summand)
+            k = length(new_merged)
+            push!(get!(() -> Int[], exact, hash(t)), k)
+            length(t.terms) == 1 && push!(get!(() -> Int[], symb, _sym_bucket_key(t.terms[1])), k)
         end
     end
 
@@ -1660,10 +1762,9 @@ end
 
 Base.sort(T::TensorSuperType) = sort(TensorExpression(T))
 function Base.sort(TEx::TensorExpression)::TensorExpression
-    new_exp = zero()
-    if isZeroTens(TEx)
-        return new_exp
-    end
+    isZeroTens(TEx) && return zero()
+    out = CoeffPair[]
+    sizehint!(out, length(TEx.summands))
     for summand in TEx.summands
         coeff = summand[1]
         new_terms = copy(summand[2])
@@ -1672,9 +1773,10 @@ function Base.sort(TEx::TensorExpression)::TensorExpression
             fac *= sort_symmetric!(term)[1]#indices to canonical order, edit in place and extract factors.
         end
         (fac2, expout) = bubble_sort_with_grading!(new_terms)
-        new_exp += coeff * fac * expout
+        append!(out, summands((coeff * fac) * expout))
     end
-    return new_exp
+    isempty(out) && return zero()
+    return TensorExpression(out)
 end
 
 
@@ -2657,14 +2759,18 @@ function copy(T::TensorTerm)
 end
 copy(T::TensorSuperType) = typeof(T)(symcopy(data(T)))
 function copy(T::TensorExpression)
-    out = TensorExpression()
-    if length(terms(T)) == 1 && isZero(first_coef(T))
-        return out
+    s = summands(T)
+    if length(s) == 1 && isZero(s[1][1])
+        return TensorExpression()
     end
-    for summand in summands(T)
-        out += summand[1] * copy(summand[2])
+    out = CoeffPair[]
+    sizehint!(out, length(s))
+    @inbounds for i in eachindex(s)
+        isZero(s[i][1]) && continue     
+        push!(out, CoeffPair(s[i][1], copy(s[i][2])))
     end
-    return out
+    isempty(out) && return TensorExpression()
+    return TensorExpression(_RAW, out)
 end
 """
     copy_owned(x)
