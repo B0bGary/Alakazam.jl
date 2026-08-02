@@ -6,18 +6,19 @@
 """
 mutable struct Metric <: SymMetricSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Metric(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     # signature::Pair{Int,Int} #added metric signature
-    Metric(d::TensorData) = new(d)
     function Metric(name::String, args...)
-        t = TensorData(name, args...)
-        if length(indices(t)) != 2
+        (t, tinds) = build_tensor(name, args...)
+        if length(tinds) != 2
             throw(ArgumentError("Metric must have exactly 2 indices!"))
         end
-        if indices(t)[1][2] != indices(t)[2][2]
+        if tinds[1][2] != tinds[2][2]
             throw(ArgumentError("Metric indices must have the same level!"))
         end
-        add_tableau!(t, generate_symmetric_tableau(indices(t)))
-        return new(t)
+        t = _add_tableau(t, generate_symmetric_tableau(tinds))
+        return new(t, tinds)
     end
     # function Metric(name::String, indices::Vector{Pair{I,IndexPosition}}=Vector{Pair{IndexSuperType,IndexPosition}}(), signature=nothing) where {I<:IndexSuperType}
     #     if length(indices) != 2
@@ -42,10 +43,12 @@ end
 
 mutable struct EpsilonTensor <: EpsilonTensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    EpsilonTensor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     EpsilonTensor(args...) = EpsilonTensor("ϵ", args...)
     function EpsilonTensor(name::String, args...)
-        t = TensorData(name, args...)
-        i = indices(t)
+        (t, tinds) = build_tensor(name, args...)
+        i = tinds
         #the below enforces only two index epsilon tensor. 
         # if i[1][2] != i[2][2] || i[1][1].index_set != i[2][1].index_set # length(i) != 2 || #removed the length check for now
         #     throw(InvalidEpsilonIndices()) #should be both upper or both lower
@@ -60,21 +63,20 @@ mutable struct EpsilonTensor <: EpsilonTensorSuperType
                 "an epsilon tensor on index set '$(i[1][1].index_set.name)' requires " *
                 "$(i[1][1].index_set.range) indices (the dimension of the set) in order to be a top (volume) form - got $(length(i)) indices."))
         end
-        add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
-        return new(t)
-    end
-    function EpsilonTensor(d::TensorData)
-        return new(d)
+        t = _add_tableau(t, generate_antisymmetric_tableau(tinds))
+        return new(t, tinds)
     end
 end
 
 
 mutable struct SymplecticForm <: EpsilonTensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    SymplecticForm(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     SymplecticForm(args...) = SymplecticForm("ω", args...)
     function SymplecticForm(name::String, args...)
-        t = TensorData(name, args...)
-        i = indices(t)
+        (t, tinds) = build_tensor(name, args...)
+        i = tinds
         #ensure all indices are from same index set, all upper, and that even number of indices
         if length(unique(idx.index_set for (idx, pos) in i)) != 1
             throw(InvalidEpsilonIndices(i, "all indices must belong to the same index set."))
@@ -83,11 +85,8 @@ mutable struct SymplecticForm <: EpsilonTensorSuperType
         elseif length(i) % 2 != 0
             throw(InvalidEpsilonIndices(i, "a sympletic form requires an even number of indices, got $(length(i))."))
         end
-        add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
-        return new(t)
-    end
-    function SymplecticForm(d::TensorData)
-        return new(d)
+        t = _add_tableau(t, generate_antisymmetric_tableau(tinds))
+        return new(t, tinds)
     end
 end
 
@@ -95,19 +94,18 @@ end
 
 mutable struct KroneckerDelta <: KroneckerSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    KroneckerDelta(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     KroneckerDelta(args...) = KroneckerDelta("δ", args...)
     function KroneckerDelta(name::String, args...)
-        t = TensorData(name, args...)
-        i = indices(t)
+        (t, tinds) = build_tensor(name, args...)
+        i = tinds
         if i[1][2] == i[2][2] || i[1][1].index_set != i[2][1].index_set #should be one upper and one lower #should be from the same index set
             throw(InvalidKroneckerIndices(i))
         end
-        add_tableau!(t, generate_symmetric_tableau(indices(t)))
+        t = _add_tableau(t, generate_symmetric_tableau(tinds))
 
-        return new(t)
-    end
-    function KroneckerDelta(d::TensorData)
-        return new(d)
+        return new(t, tinds)
     end
 end
 
@@ -545,8 +543,6 @@ end
 
 function _contract_metrics_term(T::TensorTerm, typ::Type)
     ts = terms(T)
-
-    # nothing of this type — return the term untouched, no copy
     any(t -> t isa typ, ts) || return (1, 1, 1, T)
 
     T = copy_owned(T)

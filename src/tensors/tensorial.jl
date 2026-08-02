@@ -11,15 +11,22 @@ const _EMPTY_LABELS = LabelPair[]
 @inline nolabels()::Vector{LabelPair} = _EMPTY_LABELS
 """
 Mutual tensor data that all tensors should have in common. This makes it easier to add new features to tensors.
+Includes everything about a tensor except its indices. 
 """
-mutable struct TensorData <: TensorDataSuperType
+struct TensorData <: TensorDataSuperType
     name::String
-    indices::Vector{IndexPair}
     function_of::Vector{Coordinate} #set if ok
     weights::Dict{String,Number}
     tableaux::Set{YoungTableau}
     labels::Vector{LabelPair}
-    function TensorData(name::String, args...)
+end
+
+"""
+    build_tensor(name, args...) -> (TensorData, Vector{IndexPair})
+
+Parse the tensor constructor arguments into the shared data and the index vector.
+"""
+function build_tensor(name::String, args...)
         indices = Vector{IndexPair}()
         function_of = coordfree();
         has_coords = false
@@ -68,27 +75,36 @@ mutable struct TensorData <: TensorDataSuperType
         tabs = has_tabs ? reduce_tableaux(tableaux) : tableaux
 
         if !has_coords
-            return new(name, indices, function_of, weights, tabs, labels)
+            return (TensorData(name, function_of, weights, tabs, labels), indices)
         end
         w = Dict{String,Number}()
         for c in function_of
             ;
             w[c.name] = 1;
         end
-        return new(name, indices, function_of, merge(w, weights), tabs, labels)
-    end
-    # raw constructor — stores fields directly, no processing. For copying.
-    function TensorData(name::String, indices::Vector{IndexPair},
-        function_of::Vector{Coordinate},
-        weights::Dict{String,Number},
-        tableaux::Set{YoungTableau},
-        labels::Vector{LabelPair})
-        return new(name, indices, function_of, weights, tableaux, labels)
-    end
-    function TensorData(td::TensorData)
-        return td
-    end
+        return (TensorData(name, function_of, merge(w, weights), tabs, labels), indices)
 end
+
+"""Rebuild a `TensorData` with one field replaced. Used by the rare mutating operations."""
+_with_name(p::TensorData, nm::String) =
+    TensorData(nm, p.function_of, p.weights, p.tableaux, p.labels)
+_with_tableaux(p::TensorData, tabs::Set{YoungTableau}) =
+    TensorData(p.name, p.function_of, p.weights, tabs, p.labels)
+_with_function_of(p::TensorData, fo::Vector{Coordinate}) =
+    TensorData(p.name, fo, p.weights, p.tableaux, p.labels)
+
+# Defined here rather than in young.jl because that file loads before TensorData exists.
+function _add_tableau(p::TensorData, tab::YoungTableau)
+    tabs = tableaux(p)
+    if tabs === notableaux()
+        tabs = Set{YoungTableau}()
+        tabs.dict[tab] = nothing
+        return _with_tableaux(p, tabs)
+    end
+    push!(tabs, tab)
+    return _with_tableaux(p, tabs)
+end
+add_tableau!(T::TensorSuperType, tab::YoungTableau) = (T.data = _add_tableau(T.data, tab); T)
 
 
 function _insert_coord!(v::Vector{Coordinate}, c::Coordinate)
@@ -105,11 +121,10 @@ end
 #pattern matching struct... don't touch
 mutable struct DummyPatternTensor <: TensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    DummyPatternTensor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function DummyPatternTensor(name::String, args...)
-        return new(TensorData(name, args...))
-    end
-    function DummyPatternTensor(d::TensorData)
-        return new(d)
+        return new(build_tensor(name, args...)...)
     end
 end
 
@@ -123,39 +138,36 @@ end
 """Basic Tensor object."""
 mutable struct Tensor <: TensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Tensor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Tensor(name::String, args...)
-        return new(TensorData(name, args...))
-    end
-    function Tensor(d::TensorData)
-        return new(d)
+        return new(build_tensor(name, args...)...)
     end
 end
 
 """Basic Fermion. Fermionic no matter the assigned indices. Identical to a tensor otherwise."""
 mutable struct Fermion <: TensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Fermion(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Fermion(name::String, args...)
-        return new(TensorData(name, args...))
-    end
-    function Fermion(d::TensorData)
-        return new(d)
+        return new(build_tensor(name, args...)...)
     end
 end
 """Basic Boson. Bosonic no matter the assigned indices. Identical to a tensor otherwise."""
 mutable struct Boson <: TensorSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Boson(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Boson(name::String, args...)
-        return new(TensorData(name, args...))
-    end
-    function Boson(d::TensorData)
-        return new(d)
+        return new(build_tensor(name, args...)...)
     end
 end
 
 function SymmetricTensor(name::String, args...)
     t = Tensor(name, args...)
     if length(indices(t))>1
-        add_tableau!(data(t), generate_symmetric_tableau(indices(t)))
+        add_tableau!(t, generate_symmetric_tableau(indices(t)))
         # data(t).tableaux = reduce_tableaux(tableaux(t))
     end
     return t
@@ -164,7 +176,7 @@ end
 function AntisymmetricTensor(name::String, args...)
     t = Tensor(name, args...)
     if length(indices(t))>1
-        add_tableau!(data(t), generate_antisymmetric_tableau(indices(t)))
+        add_tableau!(t, generate_antisymmetric_tableau(indices(t)))
     end
     return t
 end
@@ -178,7 +190,7 @@ function RiemannTensor(name::String, args...)
     if length(indices(t)) != 4 #perhaps at some point want to fix this incase people have some sort of multi-metric gravity etc
         throw(ArgumentError("Riemann tensor must have exactly 4 indices"))
     end
-    add_tableau!(data(t), generate_riemann_tableau())
+    add_tableau!(t, generate_riemann_tableau())
     return t
 end
 

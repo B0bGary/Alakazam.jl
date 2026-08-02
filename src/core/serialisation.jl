@@ -198,7 +198,7 @@ to_dict(x::YoungTableau) = return Dict(
 #######################
 treat_field(x, f) = f
 treat_field(x, f::Set{YoungTableau}) = [to_dict(t) for t in tableaux(x)]
-treat_field(x, f::Vector{Pair{I,IndexPosition}}) where I<:IndexSuperType = [to_dict(t) for t in indices(x)]
+treat_field(x, f::Vector{Pair{I,IndexPosition}}) where I<:IndexSuperType = [to_dict(t) for t in f]
 treat_field(x, f::TensorExpression) = to_dict(f)
 treat_field(x, f::TensorDataSuperType) = x isa OperatorSuperType ? to_dict_op(f) : to_dict(f)
 # treat_field(x, f::Set{Coordinate}) = [to_dict(c) for c in f]
@@ -209,6 +209,21 @@ function to_dict(x::TensorDataSuperType)
         "type" => string(typeof(x)),
         (string(f) => treat_field(x, getfield(x, f)) for f in fieldnames(typeof(x)))...)
     return out
+end
+
+"""
+A tensor's data and its indices are separate objects now
+"""
+function _flat_tensor_dict(x)
+    return Dict(
+        "type" => "Alakazam.TensorData",
+        "name" => name(x),
+        "indices" => [to_dict(i) for i in indices(x)],
+        "function_of" => [to_dict(c) for c in function_of(x)],
+        "weights" => weights(x),
+        "tableaux" => [to_dict(t) for t in tableaux(x)],
+        "labels" => labels(x),
+    )
 end
 
 """
@@ -241,9 +256,7 @@ end
 ########################################
 #basic tensors and TEXPs
 function to_dict(x::TensorSuperType)
-    out = Dict(
-        "type" => string(typeof(x)), "data"=>to_dict(data(x)))
-    return out
+    return Dict("type" => string(typeof(x)), "data" => _flat_tensor_dict(x))
 end
 
 function to_dict(x::TensorTerm)
@@ -463,6 +476,10 @@ from_field(::Type{T}, f, v, into::Module=Main) where T =
 function from_field(::Type{T}, ::Val{:indices}, v, into::Module=Main) where T
     return [from_json_value(x["index"], into)=>IndexPosition(x["position"]) for x in v]
 end
+function from_field(::Type{T}, ::Val{:operator_indices}, v, into::Module=Main) where T
+    return Pair{IndexTypes,IndexPosition}[from_json_value(x["index"], into)=>IndexPosition(x["position"]) for x in v]
+end
+
 function from_field(::Type{T}, ::Val{:metric_type}, v, into::Module=Main) where T
     return eval(Meta.parse(v))
 end
@@ -486,6 +503,54 @@ function from_json_value(x::AbstractVector, into::Module=Main)
     out = map(v -> from_json_value(v, into), x)
     return isconcretetype(eltype(out)) ? out : identity.(out)   # narrow if possible
 end
+"""
+Labels round-trip awkwardly: JSON renders a `Vector{Pair{String,IndexPosition}}` as a map, so an
+empty label list comes back as `{}` rather than `[]`. Accept either shape.
+"""
+_as_labels(v::AbstractDict) = LabelPair[String(k) => _as_position(p) for (k, p) in v]
+_as_labels(v::AbstractVector) = LabelPair[_as_label_pair(x) for x in v]
+_as_label_pair(x::Pair) = LabelPair(String(x[1]), _as_position(x[2]))
+_as_label_pair(x::AbstractDict) = LabelPair(String(x["first"]), _as_position(x["second"]))
+_as_position(p::IndexPosition) = p
+_as_position(p) = IndexPosition(Bool(p))
+
+"""Rebuild a `TensorData` alone - used for an operator's own data block, which has no indices."""
+reconstruct(::Type{TensorData}, d, into::Module=Main) = _tensor_parts(d, into)[1]
+
+"""Rebuild a `TensorData` and its index vector from the flat serialised layout."""
+function _tensor_parts(d, into::Module=Main)
+    nm   = from_field(TensorData, Val(:name), d["name"], into)
+    # an operator's TensorData block has no "indices" key: its indices live on the OperatorData
+    inds = haskey(d, "indices") ? from_field(TensorData, Val(:indices), d["indices"], into) : IndexPair[]
+    fo   = from_field(TensorData, Val(:function_of), d["function_of"], into)
+    w    = from_field(TensorData, Val(:weights), d["weights"], into)
+    tabs = from_field(TensorData, Val(:tableaux), d["tableaux"], into)
+    labs = from_field(TensorData, Val(:labels), d["labels"], into)
+    # route through the argument parser so each piece lands in its declared field type
+    return build_tensor(nm,
+        Vector{IndexPair}(inds),
+        Vector{Coordinate}(fo),
+        Dict{String,Number}(w),
+        Vector{YoungTableau}(tabs),
+        _as_labels(labs))
+end
+
+"""Tensors serialise as one "data" block; split it back into data and indices."""
+function reconstruct(T::Type{<:TensorSuperType}, d, into::Module=Main)
+    return T(_tensor_parts(d["data"], into)...)
+end
+
+"""
+Operators are also `<:TensorSuperType` but serialise field-by-field (see `to_dict_op`), so they
+keep the generic reconstruction rather than the tensor one above.
+"""
+function reconstruct(T::Type{<:OperatorSuperType}, d, into::Module=Main)
+    args = map(fieldnames(T)) do f
+        from_field(T, Val(f), d[string(f)], into)
+    end
+    return T(args...)
+end
+
 #generic reconstruction
 function reconstruct(T, d, into::Module=Main)
     args = map(fieldnames(T)) do f
@@ -561,9 +626,16 @@ function reconstruct(::Type{c}, d, into::Module=Main) where c<:Coordinate
 
     return Coordinate(name, sets)
 end
-"""Reconstruct Operators"""
-reconstruct(::Type{OperatorData}, d, into::Module=Main) =
-    OperatorData(from_json_value(d["operator_data"], into), from_json_value(d["operand"], into))
+"""Reconstruct Operators.
+
+The operator's own indices used to live inside its `TensorData`; they are now a separate field, so
+they are read back separately and handed to the constructor alongside it.
+"""
+function reconstruct(::Type{OperatorData}, d, into::Module=Main)
+    op_data = from_json_value(d["operator_data"], into)
+    op_inds = from_field(OperatorData, Val(:operator_indices), d["operator_indices"], into)
+    return OperatorData(op_data, op_inds, from_json_value(d["operand"], into))
+end
 
 
 function reconstruct(::Type{N}, d, into::Module=Main) where N<:Number

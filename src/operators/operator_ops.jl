@@ -5,7 +5,7 @@
 ##############################################################################################################################
 operand(O::OperatorSuperType) = data(O).operand
 op_data(O::OperatorSuperType) = data(O).operator_data
-op_indices(O::OperatorSuperType) = indices(op_data(O))
+op_indices(O::OperatorSuperType) = data(O).operator_indices
 op_function_of(O::OperatorSuperType) = function_of(op_data(O))
 op_weights(O::OperatorSuperType) = weights(op_data(O))
 op_tableaux(O::OperatorSuperType) = tableaux(op_data(O))
@@ -62,9 +62,6 @@ function set_operand_deep!(O::TensorExpression, oprd::Tensorial)
         end
 
     end
-    # data(O).operand = TensorExpression(oprd)
-    # operand swaps may have changed child index counts — resize tterm's list
-    # update_indices!(O,n)#make sure everything is updated when we do these sort of things
     update_functionof!(O)
     return O
 end
@@ -113,7 +110,7 @@ function set_operand_indices!(O::OperatorSuperType, inds::Vector{<:Pair{<:IndexS
     return O
 end
 function set_op_indices!(O::OperatorSuperType, inds::Vector{<:Pair{<:IndexSuperType,IndexPosition}})# where {M<:IndexSuperType}
-    op_data(O).indices = inds
+    data(O).operator_indices = inds
     return O
 end
 
@@ -314,7 +311,8 @@ function symcopy(d::OperatorData)
         :copy,                          # dispatch to the raw new(args...) constructor
         d.name,
         symcopy(d.operand),             # TensorExpression operand
-        symcopy(d.operator_data),       # TensorData for the operator
+        d.operator_data,                # immutable and shared now
+        d.operator_indices,             # copy on write
         d.indices,                # copy on write now
         d.function_of,            # might change if operand is updated -> but with current implementation, i think its ok
         d.weights,                      # shared 
@@ -330,7 +328,8 @@ copy_owned(d::OperatorData) = OperatorData(
     :copy,
     d.name,
     copy_owned(d.operand),          # operand tree owned all the way down
-    copy_owned(d.operator_data),    # the operator's own TensorData
+    d.operator_data,                # immutable and shared
+    copy(d.operator_indices),       # OWNED
     copy(d.indices),                # OWNED
     copy(d.function_of),
     d.weights,

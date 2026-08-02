@@ -74,7 +74,7 @@ function expand_derivative(TEX::Union{TensorExpression,<:CovDerivSuperType}, out
         # println("is cov deriv")
         D = set_operand!(copy(TEX), zero())
         expanded = _expand_derivative(TEX, D, outertex)
-        return expand_derivative(expanded, outertex)   # sweep again — result may still contain CovDerivSuperType terms
+        return expand_derivative(expanded, outertex)   # sweep again to capture any other derivs
     end
 
     newtex = zero()
@@ -412,7 +412,8 @@ end
 
 function same_operator(D1::DerivativeSuperType, D2::DerivativeSuperType)
     name(D1) == name(D2) || return (false => _NO_MATCH)
-    ind1 = op_indices(D1); ind2 = op_indices(D2)
+    ind1 = op_indices(D1);
+    ind2 = op_indices(D2)
     length(ind1) == length(ind2) || return (false => _NO_MATCH)
 
     # cheap structural pass: positions and index sets must agree
@@ -532,8 +533,8 @@ function same_tensor_mod_pattern(T1::T, T2::T_2, index_dict::Dict{Index,Index}) 
 
     # cheap pass: positions and index sets must agree, no allocation
     @inbounds for i in 1:n
-        ind1[i][2] == ind2[i][2]                       || return (false, _NO_MATCH)
-        ind1[i][1].index_set === ind2[i][1].index_set  || return (false, _NO_MATCH)
+        ind1[i][2] == ind2[i][2] || return (false, _NO_MATCH)
+        ind1[i][1].index_set === ind2[i][1].index_set || return (false, _NO_MATCH)
     end
 
     # second pass: build the free-index correspondence
@@ -544,7 +545,7 @@ function same_tensor_mod_pattern(T1::T, T2::T_2, index_dict::Dict{Index,Index}) 
         if haskey(index_dict, a)
             index_dict[a] == b || return (false, _NO_MATCH)
         elseif haskey(temp_dict, a)
-            temp_dict[a] == b  || return (false, _NO_MATCH)
+            temp_dict[a] == b || return (false, _NO_MATCH)
         else
             temp_dict[a] = b
         end
@@ -567,7 +568,8 @@ function apply_derivative(TEX::TensorExpression)
     found = false
     for (_, tt) in s, t in terms(tt)
         if t isa DerivativeSuperType
-            found = true; break
+            found = true;
+            break
         end
     end
     found || return TEX
@@ -599,32 +601,66 @@ function apply_derivative(D::DerivativeSuperType)
 
     out = CoeffPair[]
     sizehint!(out, length(s))
+    factors = TensorSuperType[]
     for (coef, tt) in s
-        oterm = coef
+        ts = terms(tt)
+        empty!(factors)
+        sizehint!(factors, length(ts))
+        c = coef
+        simple = true
         annihilated = false
-        for tensor in terms(tt)
+        for tensor in ts
             if tensor isa DerivativeSuperType
                 tens = terms(term(summands(operand(tensor))[1]))[1]
                 fo = function_of(tens)
                 hit = false
-                for c in coord(tensor)
-                    if c in fo; hit = true; break; end
+                for cc in coord(tensor)
+                    if cc in fo
+                        ;
+                        hit = true;
+                        break;
+                    end
                 end
                 if !hit
                     annihilated = true
                     break                      # whole summand vanishes
                 end
-                oterm *= perform_derivative_action(tensor)
+                res = perform_derivative_action(tensor)
+                if res isa TensorSuperType
+                    push!(factors, res)
+                else
+                    sm = summands(TensorExpression(res))
+                    if length(sm) == 1
+                        c = c * sm[1][1]
+                        append!(factors, terms(sm[1][2]))
+                    else
+                        simple = false
+                        break
+                    end
+                end
             else
-                oterm *= tensor
+                push!(factors, tensor)
             end
         end
         annihilated && continue
+
+        local oterm
+        if simple
+            term_out = TensorTerm(copy(factors))
+            _check_term_indices(term_out)
+            oterm = c * term_out
+        else
+            oterm = coef                       # rare: rebuild the general (quadratic) way
+            for tensor in ts
+                oterm *= (tensor isa DerivativeSuperType ?
+                          perform_derivative_action(tensor) : tensor)
+            end
+        end
         isZeroTens(oterm) && continue
         append!(out, summands(oterm))
     end
     isempty(out) && return zero()
-    return TensorExpression(_RAW,out)
+    return TensorExpression(_RAW, out)
 end
 
 """
@@ -648,8 +684,14 @@ function perform_derivative_action(D::DerivativeSuperType)
             # build the inverse map once, in place
             all_invs = Dict{Index,Index}()
             sizehint!(all_invs, length(o) + length(om))
-            for (a, b) in o;  all_invs[b] = a; end
-            for (a, b) in om; all_invs[b] = a; end     # om entries win, matching merge(inv_o, inv_om)
+            for (a, b) in o
+                ;
+                all_invs[b] = a;
+            end
+            for (a, b) in om
+                ;
+                all_invs[b] = a;
+            end     # om entries win, matching merge(inv_o, inv_om)
             return index_to_pattern(replacement, all_invs)
         end
     end
@@ -815,7 +857,8 @@ function product_rule(TEX::TensorExpression)
     found = false
     for (_, tt) in s, t in terms(tt)
         if t isa LeibnizOperatorSuperType
-            found = true; break
+            found = true;
+            break
         end
     end
     found || return TEX
@@ -876,16 +919,16 @@ end
 
 # fast: construct with the new operand directly with no copy
 _with_operand(O::DerivativeSuperType, newop::TensorExpression) =
-    typeof(O)(OperatorData(symcopy(op_data(O)), newop), coord(O))
+    typeof(O)(OperatorData(op_data(O), op_indices(O), newop), coord(O))
 
 _with_operand(O::OperatorSuperType, newop::TensorExpression) =
-    typeof(O)(OperatorData(symcopy(op_data(O)), newop))
+    typeof(O)(OperatorData(op_data(O), op_indices(O), newop))
 
 _with_operand(O::LieBracketSuperType, newop::TensorExpression) =
-    typeof(O)(O.A, O.grading, OperatorData(symcopy(op_data(O)), newop))
+    typeof(O)(O.A, O.grading, OperatorData(op_data(O), op_indices(O), newop))
 
 _with_operand(O::VariationalSuperType, newop::TensorExpression) =
-    typeof(O)(OperatorData(symcopy(op_data(O)), newop), O.var)
+    typeof(O)(OperatorData(op_data(O), op_indices(O), newop), O.var)
 
 # # generic fallback 
 # function _with_operand(O::OperatorSuperType, newop::TensorExpression)

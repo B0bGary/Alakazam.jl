@@ -3,6 +3,7 @@ mutable struct OperatorData <: TensorDataSuperType #?
     name::String
     operand::TensorExpression
     operator_data::TensorData
+    operator_indices::Vector{IndexPair}   # the operator's own indices; TensorData no longer holds them
     #these are the combined properties of op and oprnd
     indices::Vector{Pair{IndexSuperType,IndexPosition}}
     function_of::Vector{Coordinate}
@@ -11,31 +12,31 @@ mutable struct OperatorData <: TensorDataSuperType #?
     labels::Vector{Pair{String,IndexPosition}}
 
     function OperatorData(name::String, operand::TensorExpression, args...)
-        given_data=false
-        for arg in args
-            if arg isa TensorData
-                op_data=arg
-                top=Tensor(op_data)
-                valid_index_placement(top, operand)
-                given_data=true
-                break
-            end
-        end
-        if !given_data
-            top = Tensor(name, args...)#change eventually to not have to do full construction
-            op_data = data(top)
-            valid_index_placement(top, operand)
-        end
+        top = Tensor(name, args...)#change eventually to not have to do full construction
+        op_data = data(top)
+        op_inds = indices(top)
+        valid_index_placement(top, operand)
         # println(top)
         # @show operand
         # @show indices(op_data)
         # @show indices(operand)
-        return new(name, operand, op_data,
-            vcat(indices(op_data), indices(operand)),
+        return new(name, operand, op_data, op_inds,
+            vcat(op_inds, indices(operand)),
             vcat(function_of(op_data), function_of(operand)),
             weights(operand),#merge(weights(operand),weights(op_data)), ### need to add weights... need to think about best way, since not homo across summands in texp. see operator_weight func
             tableaux(op_data),###### actually.... not right... need to shift....  vcat(tableaux(op_data),tableaux(operand)). complicated, would need checks to see if all terms have tabs
             labels(op_data)#vcat(labels(op_data),labels(operand))
+        )
+    end
+    """Operator part supplied directly (a tensor already built elsewhere), with its own indices."""
+    function OperatorData(name::String, operand::TensorExpression,
+        op_data::TensorData, op_inds::Vector{IndexPair})
+        return new(name, operand, op_data, op_inds,
+            vcat(op_inds, indices(operand)),
+            vcat(function_of(op_data), function_of(operand)),
+            weights(operand),
+            tableaux(op_data),
+            labels(op_data)
         )
     end
     #special case for copy
@@ -43,9 +44,9 @@ mutable struct OperatorData <: TensorDataSuperType #?
         return new(args...)
     end
     #special case for copy
-    function OperatorData(op_data::TensorData, operand::TensorExpression)
-        return new(name(op_data), operand, op_data,
-            vcat(indices(op_data), indices(operand)),
+    function OperatorData(op_data::TensorData, op_inds::Vector{IndexPair}, operand::TensorExpression)
+        return new(name(op_data), operand, op_data, op_inds,
+            vcat(op_inds, indices(operand)),
             vcat(function_of(op_data), function_of(operand)),
             weights(operand),#merge(weights(operand),weights(op_data)), ### need to add weights... need to think about best way, since not homo across summands in texp. see operator_weight func
             tableaux(op_data),###### actually.... not right... need to shift....  vcat(tableaux(op_data),tableaux(operand)). complicated, would need checks to see if all terms have tabs

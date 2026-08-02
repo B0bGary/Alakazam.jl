@@ -10,7 +10,9 @@ mutable struct Lie <: LieBracketSuperType
     data::OperatorData
     function Lie(A::Tensorial, B::Tensorial, grading::Int=BOSONIC)
         @assert grading in (0, 1) "grading must be 0 (bosonic) or 1 (fermionic)"
-        op_data = OperatorData("Lie"*sprint(print, A), B, data(A))
+        op_data = A isa OperatorSuperType ?
+                  OperatorData("Lie"*sprint(print, A), TensorExpression(B)) :
+                  OperatorData("Lie"*sprint(print, A), TensorExpression(B), data(A), indices(A))
         #note that the name here is just for distinction in op data
         return new(TensorExpression(A), grading, op_data)
     end

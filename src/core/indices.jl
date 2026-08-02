@@ -15,14 +15,14 @@ mutable struct IndexSet
    range::Int
    signature::Tuple{Int64,Int64}
    metric_type::Union{Type{<:MetricSuperType},Nothing}
-   indices::Vector{I} where {I<:IndexSuperType}
+   indices::Vector{IndexSuperType}
    default_position::IndexPosition
    grading::Int
    conjugate::Union{IndexSet,Nothing}
    algebra::Union{LieAlgebraSuperType,Nothing}
    islightcone::Bool
    function IndexSet(name::String, args...)
-      range = 1
+      range = 4
       metric_type = Metric
       signature = nothing
       default_position = upper
@@ -125,8 +125,7 @@ mutable struct Index <: IndexSuperType
          return Index(first(names), index_set)  # fall through to original
       end
       last_arg = names[end]
-      # check if last arg was meant to be used differently — 
-      # but since IndexSet isn't a String, use keyword for that case
+      # check if last arg was meant to be used differently
       return [Index(name, index_set) for name in names]
    end
 end

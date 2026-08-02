@@ -172,7 +172,8 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
                     operator_index_subs!(match.index_matches, rep)
                     update_indices!(rep)
                     if rep isa DummyPatternTensor
-                        rep = typeof(terms(exp)[1])(data(rep))
+                        # rebuild as the concrete tensor type, carrying props and indices across
+                        rep = typeof(terms(exp)[1])(data(rep), indices(rep))
                     end
                 end
             end
@@ -371,7 +372,7 @@ function patt_match(pat::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}}, exp:
         end
 
     else
-        # multiple frequencies in pattern — must all match
+        # multiple frequencies in pattern, must all match
         # seed with empty match
         all_current = NamedTuple[(position_matches=[], tensor_name_matches=copy(dummy_matching), index_matches=copy(dummy_index_matching))]
 

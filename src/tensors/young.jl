@@ -344,6 +344,13 @@ function Base.push!(tabs::Set{YoungTableau}, t::YoungTableau)
     return tabs
 end
 
+"""
+Attach a tableau.
+
+Operators keep a mutable `tableaux` field; plain tensors hold it inside the immutable, shared
+`TensorData`, so there we swap in a rebuilt one rather than mutating what copies may share.
+Note this is only ever reached during construction.
+"""
 function add_tableau!(T::TensorDataSuperType, tab::YoungTableau)
     tabs = tableaux(T)
     if tabs === notableaux()
@@ -553,7 +560,7 @@ end
 function symcopy(s::Set{YoungTableau})
     out = Set{YoungTableau}()
     for t in s
-        out.dict[t] = nothing        # direct insert — skip push!/reduce_tableaux
+        out.dict[t] = nothing        # direct insert, skip push!/reduce_tableaux
     end
     return out
 end

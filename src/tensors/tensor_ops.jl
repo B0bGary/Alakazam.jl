@@ -36,7 +36,7 @@ end
 #     h
 # )
 function Base.hash(d::TensorSuperType, h::UInt)::UInt
-    h = hash(data(d).name, h)
+    h = hash(name(d), h)
     @inbounds for p in indices(d)
         h = hash(p[1].uid, hash(p[2].position, h))
     end
@@ -422,6 +422,9 @@ end
 
 update_indices!(T::TensorSuperType) = T
 
+"""Below this many indices the pairwise duplicate scan beats building a count table."""
+const _EXACT_SCAN_CUTOFF = 16
+
 """
 Updates external indices of a tensor term, expression, or operator, by looking at the indices of all the terms it contains.
 """
@@ -442,17 +445,26 @@ function update_indices!(T::TensorTerm, n::Int=-1)
         nnl += 1
         mask |= _bit(p[1])
     end
-
-    # count_ones(mask) < nnl means a repeat, or a hash collision — check exactly
-    if count_ones(mask) != nnl
-        @inbounds for i in eachindex(inds)
-            idx = inds[i][1]
-            isLightcone(idx) && continue
-            c = 1
-            for j in (i+1):length(inds)
-                inds[j][1] == idx && (c += 1)
+ if count_ones(mask) != nnl
+        if nnl <= _EXACT_SCAN_CUTOFF
+            @inbounds for i in eachindex(inds)
+                idx = inds[i][1]
+                isLightcone(idx) && continue
+                c = 1
+                for j in (i+1):length(inds)
+                    inds[j][1] == idx && (c += 1)
+                end
+                c > 2 && throw(OverusedIndices(T))
             end
-            c > 2 && throw(OverusedIndices(T))
+        else
+            counts = Dict{UInt64,Int}()
+            sizehint!(counts, nnl)
+            @inbounds for p in inds
+                isLightcone(p[1]) && continue
+                c = get(counts, p[1].uid, 0) + 1
+                c > 2 && throw(OverusedIndices(T))
+                counts[p[1].uid] = c
+            end
         end
     end
 
@@ -630,35 +642,43 @@ function rename_dummies(T::TensorTerm)
         i[1] in all_indices || push!(all_indices, i[1])
     end
 
-    inset = IndexSuperType[]
+    # membership sets: `a in dumms` was a linear scan run once per index of the term, i.e. O(k²)
+    dumm_uids = Set{UInt64}()
+    for d in dumms
+        push!(dumm_uids, d.uid)
+    end
+    inset_uids = Set{UInt64}()
     remain = IndexSuperType[]
 
     for set in index_sets
         # indices of this set already in use, excluding the dummies being replaced
-        empty!(inset)
+        empty!(inset_uids)
         for a in all_indices
             a.index_set === set || continue
-            a in dumms && continue
-            push!(inset, a)
+            a.uid in dumm_uids && continue
+            push!(inset_uids, a.uid)
         end
 
         # candidates: this set's non-wildcard indices not already in use
         empty!(remain)
         for x in set.indices
             x isa DummyPatternIndex && continue
-            x in inset && continue
+            x.uid in inset_uids && continue
             push!(remain, x)
         end
 
-        replacements = Dict{IndexSuperType,IndexSuperType}()
+        # keyed by uid: an abstract key type makes every hash a dynamic dispatch
+        replacements = Dict{UInt64,IndexSuperType}()
+        cursor = 1                     # walk `remain` rather than popfirst!, which shifts it
         for d in dumms
             d.index_set === set || continue
-            if isempty(remain)
+            if cursor > length(remain)
                 nid = generate_indices(set)
                 nid === nothing && throw(OutOfIndices(set))
                 push!(remain, nid)
             end
-            replacements[d] = popfirst!(remain)
+            replacements[d.uid] = remain[cursor]
+            cursor += 1
         end
         isempty(replacements) || (T = rename_recursive!(T, replacements))
     end
@@ -696,14 +716,14 @@ end
 function rename_recursive!(t::TensorSuperType, replacements)
     if t isa OperatorSuperType
         oi = op_indices(t)
-        if any(p -> haskey(replacements, p[1]), oi)
-            set_op_indices!(t, IndexPair[Pair(get(replacements, x, x), y) for (x, y) in oi])
+        if any(p -> haskey(replacements, p[1].uid), oi)
+            set_op_indices!(t, IndexPair[Pair(get(replacements, x.uid, x), y) for (x, y) in oi])
         end
         rename_recursive!(operand(t), replacements)
     else
         ti = indices(t)
-        if any(p -> haskey(replacements, p[1]), ti)
-            set_indices!(t, IndexPair[Pair(get(replacements, x, x), y) for (x, y) in ti])
+        if any(p -> haskey(replacements, p[1].uid), ti)
+            set_indices!(t, IndexPair[Pair(get(replacements, x.uid, x), y) for (x, y) in ti])
         end
     end
     return t
@@ -929,6 +949,8 @@ breadth-first for a representative matching the lexicographic target.
 """
 function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
     inds = indices(T)
+    # Nothing to reorder below two indices
+    length(inds) <= 1 && return (1, inds)
     perm = sortperm(inds)
     lexo = inds[perm]
 
@@ -1803,15 +1825,57 @@ end
 
 
 
-function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
-    try
-        if dummies === nothing
-            return T1 < T2
-        elseif length(dummies) == length(indices(T1))
-            i1 = indices(T1)
-            i2 = indices(T2)
+"""
+Dummy indices of a term as a set of uids, for O(1) membership during sorting.
 
-            for i = eachindex(i1)
+`bubble_sort_with_grading!` consults this once per comparison, so a `Vector` here costs a linear
+scan every time — the dominant cost of sorting a long product.
+"""
+function dummy_uids(T::Tensorial)
+    s = Set{UInt64}()
+    for d in dummies(T)
+        push!(s, d.uid)
+    end
+    return s
+end
+
+@inline _is_dummy_uid(dummies::Set{UInt64}, idx) = idx.uid in dummies
+@inline _is_dummy_uid(dummies, idx) = idx in dummies   # legacy: any container of indices
+
+function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
+    if dummies === nothing
+        return T1 < T2
+    elseif length(dummies) == length(indices(T1))
+        i1 = indices(T1)
+        i2 = indices(T2)
+
+        for i = eachindex(i1)
+            if i1[i][1].index_set.default_position == i1[i][2] && i2[i][1].index_set.default_position != i2[i][2]
+                return true
+            elseif i1[i][1].index_set.default_position != i1[i][2] && i2[i][1].index_set.default_position == i2[i][2]
+                return false
+            elseif i1[i][1] == i2[i][1]
+                continue
+            else
+                return i1[i][1] < i2[i][1]
+            end
+        end
+        return false
+    else
+        i1 = indices(T1)
+        i2 = indices(T2)
+        n = min(length(i1), length(i2))#may not have same lengths!
+        for i = 1:n
+            if _is_dummy_uid(dummies, i1[i][1])
+                if _is_dummy_uid(dummies, i2[i][1])
+                    continue
+                else
+                    return false
+
+                end
+            elseif _is_dummy_uid(dummies, i2[i][1])
+                return true
+            else
                 if i1[i][1].index_set.default_position == i1[i][2] && i2[i][1].index_set.default_position != i2[i][2]
                     return true
                 elseif i1[i][1].index_set.default_position != i1[i][2] && i2[i][1].index_set.default_position == i2[i][2]
@@ -1822,45 +1886,9 @@ function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
                     return i1[i][1] < i2[i][1]
                 end
             end
-            return false
-        else
-            # println("in dumms")
-            # println(dummies)
-            i1 = indices(T1)
-            i2 = indices(T2)
-            n = min(length(i1), length(i2))#may not have same lengths!
-            for i = 1:n
-                if i1[i][1] in dummies
-                    if i2[i][1] in dummies
-                        continue
-                    else
-                        return false
-
-                    end
-                elseif i2[i][1] in dummies
-                    return true
-                else
-                    if i1[i][1].index_set.default_position == i1[i][2] && i2[i][1].index_set.default_position != i2[i][2]
-                        return true
-                    elseif i1[i][1].index_set.default_position != i1[i][2] && i2[i][1].index_set.default_position == i2[i][2]
-                        return false
-                    elseif i1[i][1] == i2[i][1]
-                        continue
-                    else
-                        return i1[i][1] < i2[i][1]
-                    end
-                end
-            end
-            # All common entries were equal or dummies
-            return length(i1) < length(i2)
         end
-        return false
-    catch e
-        @show T1
-        @show T2
-        @show i1 = indices(T1)
-        @show i2 = indices(T2)
-        rethrow(e)
+        # All common entries were equal or dummies
+        return length(i1) < length(i2)
     end
 end
 
@@ -1895,7 +1923,10 @@ end
 # end
 
 function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType, dummies=nothing)
-    if haskey(sort_order, name(T1))
+    # tensors cloned from a common source share their (immutable) data, so this settles name
+    # equality with a pointer comparison instead of hashing and comparing strings
+    data(T1) === data(T2) && return is_less_mod_dummies(T1, T2, dummies)
+    if !isempty(sort_order) && haskey(sort_order, name(T1))
         if haskey(sort_order, name(T2))
             if sort_order[name(T1)] < sort_order[name(T2)]
                 return true
@@ -1923,7 +1954,7 @@ function can_swap(a::TensorSuperType, b::TensorSuperType)
 end
 
 function bubble_sort_with_grading!(T::TensorTerm)::Tuple{Int,TensorExpression}
-    dums = dummies(T)
+    dums = dummy_uids(T)      # uid set: the comparator hits this on every comparison
     v = terms(T)
     n = length(v)
     swapped = true
@@ -2716,28 +2747,11 @@ end
 symcopy(x) = error("symcopy not defined on ", typeof(x), ".")
 symcopy(x::Pair) = x
 symcopy(x::String) = x
-symcopy(t::TensorSuperType) = typeof(t)(symcopy(data(t)))
-# the field types that currently fall through to deepcopy:
-symcopy(v::Vector{<:Pair}) = copy(v)                    # indices, labels — Pairs are immutable
+symcopy(t::TensorSuperType) = typeof(t)(t.data, t.indices)
+symcopy(v::Vector{<:Pair}) = copy(v)                    # indices, labels, pairs are immutable
 symcopy(d::Dict) = copy(d)                              # weights
-# symcopy(s::OrderedSet{Coordinate}) = copy(s)            # function_of — Coordinates shared via registry
 symcopy(s::Vector{Coordinate}) = s
-function symcopy(d::TensorData)
-    return TensorData(
-        d.name,
-        d.indices,     # only this is mutated ever...
-        d.function_of,       # shared
-        d.weights,           # shared
-        d.tableaux,          # shared
-        d.labels,            # shared
-    )
-end
-symcopy_owned(d::TensorData) = begin
-    #  NCOPY[]+=1 
-    return TensorData(d.name, copy(d.indices), d.function_of, d.weights, d.tableaux, d.labels)
-end
-#dont need to check over
-# symcopy(t::TensorExpression) = TensorExpression(_RAW, CoeffPair[coef => symcopy(term) for (coef, term) in summands(t)])
+symcopy(d::TensorData) = d           # immutable and shared, nothing to copy
 function symcopy(t::TensorExpression)
     s = summands(t)
     out = Vector{CoeffPair}(undef, length(s))
@@ -2752,12 +2766,15 @@ function symcopy(tt::TensorTerm)
 end
 #see if below like above?
 function copy(T::TensorTerm)
-    if isempty(terms(T))
-        return TensorTerm(Vector{TensorSuperType}())
+    ts = terms(T)
+    isempty(ts) && return TensorTerm(Vector{TensorSuperType}())
+    out = Vector{TensorSuperType}(undef, length(ts))
+    @inbounds for i in eachindex(ts)
+        out[i] = copy(ts[i])
     end
-    return TensorTerm([copy(t) for t in terms(T)])
+    return TensorTerm(out)
 end
-copy(T::TensorSuperType) = typeof(T)(symcopy(data(T)))
+copy(T::TensorSuperType) = typeof(T)(T.data, T.indices)
 function copy(T::TensorExpression)
     s = summands(T)
     if length(s) == 1 && isZero(s[1][1])
@@ -2780,18 +2797,7 @@ Safe to mutate in place without affecting the original.
 """
 copy_owned(x) = symcopy(x)
 
-copy_owned(d::TensorData) = begin
-    return TensorData(
-        d.name,
-        copy(d.indices),                # OWNED
-        d.function_of,
-        d.weights,
-        d.tableaux,
-        d.labels,
-        # d.uid,
-    )
-end
-copy_owned(t::TensorSuperType) = typeof(t)(copy_owned(data(t)))
+copy_owned(t::TensorSuperType) = typeof(t)(t.data, copy(t.indices))
 copy_owned(tt::TensorTerm) = TensorTerm(TensorSuperType[copy_owned(t) for t in terms(tt)])
 function copy_owned(t::TensorExpression)
     nt = TensorExpression()

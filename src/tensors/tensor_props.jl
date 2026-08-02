@@ -51,10 +51,17 @@ first_summands(T::TensorExpression) = summands(T)[1][2]
 
 
 
-"""Get the data associated to a tensor object."""
-function data(T::TensorSuperType)
-    return T.data
-end
+"""Get the data associated to a tensor object.
+
+Plain tensors return their shared [`TensorData`](@ref), operators return their `OperatorData`.
+"""
+data(T::TensorSuperType) = T.data
+data(T::OperatorSuperType) = T.data
+
+"""Re-bundle a tensor's shared props and its indices into a `TensorData`.
+"""
+tensor_data(T::TensorSuperType) = data(T)
+tensor_data(T::OperatorSuperType) = op_data(T)
 
 
 """Return the name String of a tensor."""
@@ -62,13 +69,20 @@ name(T::TensorDataSuperType)= T.name
 """Return the name String of a tensor."""
 name(T::TensorSuperType)=name(data(T))
 
+"""Rename a tensor. Data is immutable, so this returns a new tensor with the copied data but a new name.
+"""
 function set_name!(T::TensorSuperType, newname::String)
+    T.data = _with_name(T.data, newname)
+    return newname
+end
+function set_name!(T::OperatorSuperType, newname::String)
     return T.data.name = newname
 end
 
 indices(::SymorNum) = Vector{<:Pair{<:IndexSuperType,IndexPosition}}()
-indices(T::TensorDataSuperType) = T.indices
-indices(T::TensorSuperType) = indices(data(T))
+indices(T::OperatorData) = T.indices
+indices(T::TensorSuperType) = T.indices
+indices(T::OperatorSuperType) = indices(data(T))
 indices(T::TensorTerm) = T.indices
 """
 Gets the vector of index/position pairs attached to an expression.
@@ -82,7 +96,7 @@ function indices(T::TensorExpression)
 end
 
 function set_indices!(T::TensorSuperType, inds::Vector{<:Pair{<:IndexSuperType,IndexPosition}})# where {M<:IndexSuperType}
-    data(T).indices = inds
+    T.indices = inds
     return T
 end
 """Only updates the external indices, not those of the underlying tensors. Use set_indices_deep! otherwise."""
@@ -133,6 +147,7 @@ end
 function function_of(T::TensorDataSuperType)
     return T.function_of
 end
+
 function function_of(T::TensorSuperType)
     return function_of(data(T))
 end
@@ -333,7 +348,7 @@ function _dummies_raw(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) w
     for (idx, pos) in inds
         isLightcone(idx) && continue
 
-        if (idx => pos) in seen        # linear `in` — fast for small n
+        if (idx => pos) in seen        # linear, fast for small n
             println(T)
             println(idx => pos)
             @show indices(T)
@@ -343,14 +358,13 @@ function _dummies_raw(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) w
                 push!(dummies, idx => op_pos(pos))
                 push!(dummies, idx => pos)
             else
-                idx in dummies || push!(dummies, idx)   # was OrderedSet — dedup manually
+                idx in dummies || push!(dummies, idx) 
             end
         else
             push!(seen, idx => pos)
         end
     end
 
-    # isempty(dummies) && return dummies,seen      # nothing to sort, skip the findfirst closure
     return dummies, seen    # return both, unsorted
 end
 """
@@ -405,6 +419,28 @@ function valid_index_placement(T1, T2)
 
     return true
 end
+"""
+One-pass index validity check for a finished factor list.
+
+Equivalent to the pairwise screening `valid_index_placement` does while a term is built up, but
+O(k) instead of O(k²): an index may appear at most twice, and if it appears twice it must be once
+raised and once lowered. Used where a term is assembled in one go rather than by repeated `*`.
+"""
+function _check_term_indices(T::TensorTerm)
+    inds = indices(T)
+    length(inds) < 2 && return T
+    seen = Dict{UInt64,Tuple{Int,Bool}}()      # uid => (occurrences, position of first sighting)
+    @inbounds for (idx, pos) in inds
+        isLightcone(idx) && continue
+        cnt, firstpos = get(seen, idx.uid, (0, false))
+        cnt += 1
+        cnt > 2 && throw(OverusedIndices(T))
+        cnt == 2 && firstpos == pos.position && throw(SameLevelDummyError(T))
+        seen[idx.uid] = (cnt, cnt == 1 ? pos.position : firstpos)
+    end
+    return T
+end
+
 function _ccl_exact(T1::Tensorial, T2::Tensorial)
     i2 = indices(T2)
     @inbounds for p1 in indices(T1)
@@ -472,8 +508,7 @@ function _dummies(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) where
     return out
 end
 
-"""Check for Index id"""
-@inline _bit(idx) = idx.uid          # old: `UInt64(1) << (idx.id & 63)` 
+@inline _bit(idx) = UInt64(1) << (idx.uid & 63)
 
 function _ccd_exact(T1::Tensorial, T2::Tensorial)
     i1 = indices(T1);
@@ -494,7 +529,7 @@ function _ccd_exact(T1::Tensorial, T2::Tensorial)
     end
     return false
 end
-"""Is indices(T)[i] a dummy — same index appearing at the opposite position elsewhere in T?"""
+"""Is indices(T)[i] a dummy, same index appearing at the opposite position elsewhere in T?"""
 @inline function _is_dummy_at(inds, i)
     @inbounds idx, pos = inds[i]
     isLightcone(idx) && return false

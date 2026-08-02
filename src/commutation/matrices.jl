@@ -5,18 +5,17 @@ It will (anti)commute with all tensor for which an explicit com-rel is not defin
     """
 mutable struct Matrix <: MatrixSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Matrix(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Matrix(name::String, args...)
-        return new(TensorData(name, args...))
-    end
-    function Matrix(d::TensorData)
-        return new(d)
+        return new(build_tensor(name, args...)...)
     end
 end
 
 # mutable struct Ket <: MatrixSuperType
 #     data::TensorData
 #     function Ket(name::String, args...)
-#         return new(TensorData(name, args...))
+#         return new(build_tensor(name, args...)...)
 #     end
 #     function Ket(d::TensorData)
 #         return new(d)
@@ -25,7 +24,7 @@ end
 # mutable struct Bra <: MatrixSuperType
 #     data::TensorData
 #     function Bra(name::String, args...)
-#         return new(TensorData(name, args...))
+#         return new(build_tensor(name, args...)...)
 #     end
 #     function Bra(d::TensorData)
 #         return new(d)
@@ -35,42 +34,39 @@ end
 
 mutable struct Pauli <: PauliSuperType
     data::TensorData
-    function Pauli(d::TensorData)
-        return new(d)
-    end
+    indices::Vector{IndexPair}
+    Pauli(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Pauli(name::String, args...)
-        return new(TensorData(name, args...))
+        return new(build_tensor(name, args...)...)
     end
     function Pauli(args...)
-        return new(TensorData("σ", args...))
+        return new(build_tensor("σ", args...)...)
     end
 
 end
 
 mutable struct Gamma <: GammaSuperType
     data::TensorData
-    function Gamma(d::TensorData)
-        return new(d)
-    end
+    indices::Vector{IndexPair}
+    Gamma(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Gamma(name::String, args...)
-        return new(TensorData(name, args...))
+        return new(build_tensor(name, args...)...)
     end
     function Gamma(args...)
-        return new(TensorData("γ", args...))
+        return new(build_tensor("γ", args...)...)
     end
 
 end
 
 mutable struct Gamma5 <: Gamma5SuperType
     data::TensorData
-    function Gamma5(d::TensorData)
-        return new(d)
-    end
+    indices::Vector{IndexPair}
+    Gamma5(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Gamma5(name::String, args...)
-        return new(TensorData(name, "5" => upper, args...))
+        return new(build_tensor(name, "5" => upper, args...)...)
     end
     function Gamma5(args...)
-        return new(TensorData("γ5", "5" => upper, args...))
+        return new(build_tensor("γ5", "5" => upper, args...)...)
     end
 
 end
@@ -88,9 +84,10 @@ macro matrix(name)
     name isa Symbol || error("@matrix expects a type name symbol, got $name")
     esc(quote
         mutable struct $name <: MatrixSuperType
-            data::TensorData
-            $name(args...) = new(TensorData(args...))
-            $name(d::TensorData) = new(d)
+            data::$(TensorData)
+            indices::Vector{$(IndexPair)}
+            $name(args...) = new($(build_tensor)(args...)...)
+            $name(d::$(TensorData), i::Vector{$(IndexPair)}) = new(d, i)
         end
     end)
 end

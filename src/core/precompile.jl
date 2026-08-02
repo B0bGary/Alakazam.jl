@@ -157,7 +157,6 @@ end
 
 let
     IDX = (Index, DummyPatternIndex)
-    # element types both appear in your inference dump — cover both
     PR = (Pair{Index,IndexPosition}, Pair{DummyPatternIndex,IndexPosition},
         Pair{IndexSuperType,IndexPosition})
     IOS = (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
