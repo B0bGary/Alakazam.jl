@@ -575,12 +575,63 @@ function rename_dummies(T::TensorSuperType)
 
     return T
 end
-"""Swap the positions of all indices in an expression, i.e. all lower indices are moved to upper, and vice versa."""
-function op_pos(tt::Tensorial)
-    transform(t -> op_pos(t), tt)
-end
+"""
+Map the position of every *free* index through `f`, leaving dummy pairs untouched.
 
-op_pos(tt::TensorSuperType) = set_indices_deep!(copy(tt), op_pos(indices(tt)))
+Dummies are skipped deliberately. A summed pair needs one raised and one lowered member, so a rule
+that moved both to the same level would not produce a valid expression; and under an antisymmetric
+metric reversing a pair is not even a no-op, since
+``\\psi^{\\alpha}\\chi_{\\alpha} = -\\psi_{\\alpha}\\chi^{\\alpha}``, so it would silently change a
+sign. Free indices occur once, so moving them can never create a coincidence.
+
+Which indices are dummies is a property of the whole term, not of any one tensor, so the set is
+computed here and passed down.
+"""
+function _map_free_positions(tt::TensorTerm, f)
+    dums = Set{UInt64}(d.uid for d in dummies(tt))
+    return prod(set_indices_deep!(copy(t),
+                    IndexPair[(p[1].uid in dums ? p : (p[1] => f(p[2]))) for p in indices(t)])
+                for t in terms(tt))
+end
+function _map_free_positions(ex::TensorExpression, f)
+    isZeroTens(ex) && return ex
+    return sum(c * _map_free_positions(tt, f) for (c, tt) in summands(ex))
+end
+_map_free_positions(t::TensorSuperType, f) = _map_free_positions(TensorTerm(t), f)
+
+"""
+    raise_all(T)
+
+Return a copy of `T` with every free index moved to the upper position. Dummy pairs are left as
+they are. See also [`lower_all`](@ref) and [`flip_all`](@ref).
+"""
+raise_all(T::Tensorial) = _map_free_positions(T, _ -> upper)
+
+"""
+    lower_all(T)
+
+Return a copy of `T` with every free index moved to the lower position; the counterpart of
+[`raise_all`](@ref).
+"""
+lower_all(T::Tensorial) = _map_free_positions(T, _ -> lower)
+
+"""
+    flip_all(T)
+
+Return a copy of `T` with every free index position reversed, upper becoming lower and lower upper.
+Dummy pairs are left untouched, as for [`raise_all`](@ref) and [`lower_all`](@ref).
+
+This is the operation that builds ``M_{ij}`` from ``M^{ij}`` so the two can be contracted together.
+"""
+flip_all(T::Tensorial) = _map_free_positions(T, op_pos)
+
+"""Reverse the positions of the free indices of an expression; an alias for [`flip_all`](@ref).
+
+`op_pos` remains the primitive that reverses a bare `IndexPosition`, an index/position pair, or a
+vector of them. On a whole expression it defers to `flip_all`, so that dummy pairs are preserved
+rather than reversed.
+"""
+op_pos(tt::Tensorial) = flip_all(tt)
 
 
 
@@ -2280,10 +2331,43 @@ function can_swap(a::TensorSuperType, b::TensorSuperType)
     return true
 end
 
+"""
+True when no two factors carry a registered commutation relation, so reordering them can only ever
+contribute a sign and never an extra term.
+
+Only matrices can fail this, and only in pairs, so the scan runs over the matrix factors alone --
+for an expression with none (the common case) it is a single linear pass.
+"""
+function _all_freely_commuting(v)
+    mats = Int[]
+    @inbounds for i in eachindex(v)
+        v[i] isa MatrixSuperType && push!(mats, i)
+    end
+    length(mats) < 2 && return true
+    @inbounds for a in eachindex(mats), b in (a+1):length(mats)
+        can_swap(v[mats[a]], v[mats[b]]) || return false
+    end
+    return true
+end
+
 function bubble_sort_with_grading!(T::TensorTerm)::Tuple{Int,TensorExpression}
     dums = dummy_uids(T)      # uid set: the comparator hits this on every comparison
     v = terms(T)
     n = length(v)
+
+    # Adjacent-swap sorting is only forced when a swap can emit a commutator remainder, since an
+    # algorithm that moves factors over long distances cannot account for the terms generated at
+    # each intermediate transposition. When no factor pair carries a relation, no remainder can
+    # arise: the target ordering is reachable directly, and the graded sign is a property of the
+    # permutation, recoverable by counting inversions among the odd-graded factors.
+    if n > 1 && _all_freely_commuting(v)
+        perm = sortperm(1:n; lt=(i, j) -> custom_order_isless(v[i], v[j], dums), alg=MergeSort)
+        sgn = _graded_perm_sign(v, perm)
+        v .= v[perm]
+        update_indices!(T)
+        return (sgn, sgn * T)
+    end
+
     swapped = true
     swaps = 0
     out_expression = zero()

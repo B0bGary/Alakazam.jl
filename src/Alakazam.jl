@@ -28,6 +28,7 @@ import Symbolics: terms
 export IndexSuperType, Index, IndexSet, IndexPosition, IndexGrading, DummyPatternIndex, Coordinate, @indices
 #index functions
 export get_index, det, in_default_pos, op_pos, dimension, safe_pop!
+export raise_all, lower_all, flip_all
 export SymorNum
 #global properties
 export SET_REGISTRY, COORD_REGISTRY, sort_order, get_sort_order, custom_sort_order!

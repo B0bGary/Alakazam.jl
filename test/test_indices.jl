@@ -80,4 +80,38 @@
         @test_nowarn Alakazam.simplify(expr)
     end
 
+
+    ###############################################
+    ### raise_all / lower_all / flip_all: free indices only, dummies preserved
+    ###############################################
+    pset = IndexSet("posn_test", 4, upper)
+    pm, pn = Index("pm", pset), Index("pn", pset)
+    A1 = Tensor("A", [pm => upper])
+    B1 = Tensor("B", [pm => lower, pn => lower])      # pm is a dummy, pn is free
+    trm = A1 * B1
+
+    @test Set(Alakazam.name.(dummies(trm))) == Set(["pm"])
+    # the free index moves, the dummy pair does not
+    @test indices(terms(raise_all(trm))[2]) == [pm => lower, pn => upper]
+    @test indices(terms(lower_all(trm))[2]) == [pm => lower, pn => lower]
+    @test indices(terms(flip_all(trm))[2])  == [pm => lower, pn => upper]
+    # op_pos on a whole expression is an alias for flip_all
+    @test op_pos(trm) == flip_all(trm)
+    # ... but remains the primitive on a bare position
+    @test op_pos(upper) == lower && op_pos(lower) == upper
+    # flip_all is its own inverse
+    @test flip_all(flip_all(trm)) == trm
+
+    # building M_{ij} from M^{ij} so the two contract
+    Mup = Tensor("M", [pm => upper, pn => upper])
+    @test indices(flip_all(Mup)) == [pm => lower, pn => lower]
+    @test length(free_indices(Alakazam.simplify(flip_all(Mup) * Mup))) == 0
+
+    # a contracted spinor pair is left alone: under an antisymmetric metric reversing it would
+    # change the sign, and Alakazam does not relate the two forms
+    sset = IndexSet("posn_spin", 2, upper, EpsilonTensor, Alakazam.fermionic)
+    sa = Index("sa", sset)
+    spair = Tensor("psi", [sa => upper]) * Tensor("chi", [sa => lower])
+    @test flip_all(spair) == spair
+
 end
