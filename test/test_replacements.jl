@@ -52,11 +52,11 @@
     #exact
     @test Alakazam.simplify(replace_pattern(replace_pattern(L, "F_{?a?b}", da-db), "F^{?a?b}", dau-dbu)) == F2inA
     #mixed exact and wildcard indices
-    da2=PartialDerivative("∂", DummyPatternTensor("A", [b=>lower], x), x, μ=>lower)
-    db2=PartialDerivative("∂", DummyPatternTensor("A", [μ=>lower], x), x, b=>lower)
+    da2=PartialDerivative("∂", Tensor("A", [b=>lower], x), x, μ=>lower)
+    db2=PartialDerivative("∂", Tensor("A", [μ=>lower], x), x, b=>lower)
     @test Alakazam.simplify(replace_pattern(replace_pattern(L, "F_{μ?b}", da2-db2), "F^{?a?b}", dau-dbu)) == F2inA
-    da3=PartialDerivative("∂", DummyPatternTensor("A", [ν=>lower], x), x, μ=>lower)
-    db3=PartialDerivative("∂", DummyPatternTensor("A", [μ=>lower], x), x, ν=>lower)
+    da3=PartialDerivative("∂", Tensor("A", [ν=>lower], x), x, μ=>lower)
+    db3=PartialDerivative("∂", Tensor("A", [μ=>lower], x), x, ν=>lower)
     @test Alakazam.simplify(replace_pattern(replace_pattern(L, "F_{μν}", da3-db3), "F^{?a?b}", dau-dbu)) == F2inA
     @test Alakazam.simplify(replace_pattern(replace_pattern(L, "?G_{μν}", da3-db3), "F^{?a?b}", dau-dbu)) == F2inA
 
@@ -84,7 +84,7 @@
     @test Alakazam.hard_simplify(apply_derivative(bi))==Alakazam. zero()
 
     ###############################################
-    ### μlti-tensor patterns
+    ### multi-tensor patterns
     ### A pattern string parses into a TensorTerm, so it may name several tensors at once.
     ###############################################
     Zs = Tensor("Z")
@@ -101,9 +101,9 @@
     # a self-contraction can be sent to zero, e.g. imposing an on-shell condition k_a k^a = 0
     @test replace_pattern(Km(lower) * Km(upper) + Am(lower) * Am(upper), "K_{?x}K^{?x}", zero()) ==
           Am(lower) * Am(upper)
-    # three tensors in one pattern (two was the most that used to work)
+    # three tensors in one pattern
     @test replace_pattern(Am(lower) * Bm(upper) * Cn, "A_{?x}B^{?x}C^{?y}", Zs) == TensorExpression(Zs)
-    # wildcard tensor names inside a μlti-tensor pattern
+    # wildcard tensor names inside a multi-tensor pattern
     @test replace_pattern(Am(lower) * Bm(upper), "?P_{?x}?Q^{?x}", Zs) == TensorExpression(Zs)
     # the replacement may itself be a sum
     @test replace_pattern(Am(lower) * Bm(upper), "A_{?x}B^{?x}", Zs + 2 * Tensor("W")) ==
@@ -122,7 +122,7 @@
 
 
     ###############################################
-    ### labels, and the DT"..." pattern macro
+    ### labels and wildcards through the T"..." macro
     ###############################################
     # labels parse from the same string syntax as indices: a digit, or anything not naming a
     # variable in scope, is a label; 'quotes' force a label even when that name IS in scope.
@@ -131,27 +131,48 @@
     @test labels(T"A_'bare'μ") == [("bare" => lower)]
     @test T"k_1^μ" != T"k_2^μ"
 
-    # DT"..." shares that parser but emits pattern objects
-    @test DT"?A_?x?y" isa DummyPatternTensor
-    @test all(p[1] isa DummyPatternIndex for p in indices(DT"?A_?x?y"))
-    @test DT"A_?x" isa DummyPatternTensor && Alakazam.name(DT"A_?x") == "A"
+    # patterns and tensors come from the SAME macro: a wildcard is just a leading ?
+    @test Alakazam.name(T"?A_?x?y") == "?A"
+    @test all(p[1] isa DummyPatternIndex for p in indices(T"?A_?x?y"))
+    @test T"A_?x" isa Tensor && Alakazam.name(T"A_?x") == "A"
 
     # ... and can be used directly as a pattern, singly or as a product
     Pk(p) = Tensor("P", [μ => p]); Qk(p) = Tensor("Q", [μ => p]); Rk = Tensor("R", [ν => upper])
     Zd = Tensor("Z")
     @test replace_pattern(TensorExpression(Pk(lower) * Qk(upper) * Rk),
-                          TensorTerm(DT"P_?x"), TensorExpression(Zd)) == Zd * Qk(upper) * Rk
+                          TensorTerm(T"P_?x"), TensorExpression(Zd)) == Zd * Qk(upper) * Rk
     @test replace_pattern(TensorExpression(Pk(lower) * Qk(upper) * Rk),
-                          DT"P_?x" * DT"Q^?x", TensorExpression(Zd)) == Zd * Rk
+                          T"P_?x" * T"Q^?x", TensorExpression(Zd)) == Zd * Rk
 
     # a pattern naming no label is a wildcard over labels; one that names a label must match it
     k1e = TensorExpression(T"k_1^μ" * Tensor("m", [μ => lower]))
     k2e = TensorExpression(T"k_2^μ" * Tensor("m", [μ => lower]))
-    @test replace_pattern(k1e, TensorTerm(DT"k^?x"), TensorExpression(Zd)) != k1e   # unlabelled
-    @test replace_pattern(k2e, TensorTerm(DT"k^?x"), TensorExpression(Zd)) != k2e   # matches both
-    @test replace_pattern(k1e, TensorTerm(DT"k_1^?x"), TensorExpression(Zd)) != k1e # labelled
-    @test replace_pattern(k2e, TensorTerm(DT"k_1^?x"), TensorExpression(Zd)) == k2e # k_2 untouched
+    mlow = Tensor("m", [μ => lower])
+    @test replace_pattern(k1e, TensorTerm(T"k^?x"), TensorExpression(Zd)) == Zd * mlow   # unlabelled
+    @test replace_pattern(k2e, TensorTerm(T"k^?x"), TensorExpression(Zd)) == Zd * mlow   # matches both
+    @test replace_pattern(k1e, TensorTerm(T"k_1^?x"), TensorExpression(Zd)) == Zd * mlow # labelled
+    @test replace_pattern(k2e, TensorTerm(T"k_1^?x"), TensorExpression(Zd)) == k2e       # k_2 untouched
 
+
+    ###############################################
+    ### wildcard names in a replacement, and concrete ones left alone
+    ###############################################
+    # NB a wildcard is ? plus a SINGLE character; "?bw" parses as index ?b carrying the label w.
+    # built without coordinate dependence, since T"..." patterns carry none
+    gw = DummyPatternIndex("g", spacetime_indices)
+    ep = Tensor("P", [μ => lower]) * Tensor("C", [ν => upper])
+    epB = Tensor("B", [μ => lower]) * Tensor("C", [ν => upper])
+
+    # a wildcard-named replacement is bound to whatever the pattern matched
+    @test replace_pattern(TensorExpression(ep), TensorTerm(T"?A_?g"), TensorExpression(T"?A_?g")) == ep
+
+    # a replacement whose name is concrete is NOT looked up in the bindings. This used to throw a
+    # KeyError, because a pattern-typed replacement was taken to imply a wildcard name.
+    @test replace_pattern(TensorExpression(ep), TensorTerm(T"?A_?g"), TensorExpression(T"B_?g")) == epB
+
+    # and the same written as a plain Tensor, which is now the only representation
+    @test replace_pattern(TensorExpression(ep), TensorTerm(T"?A_?g"),
+                          TensorExpression(Tensor("B", [gw => lower]))) == epB
 
     ###############################################
     ### wildcard indices must bind consistently across the whole pattern
@@ -193,7 +214,7 @@
     u1 = RepMx("u", "1" => lower); U1 = RepMx("U", "1" => lower)
     ga = Gamma(μ => upper); gb = Gamma(ν => upper)
     chain = TensorExpression(Ub * ga * u1 * U1 * gb * Uu)
-    @test replace_pattern(chain, DT"u_1" * DT"U_1", TensorExpression(Xx)) == Ub * ga * Xx * gb * Uu
+    @test replace_pattern(chain, T"u_1" * T"U_1", TensorExpression(Xx)) == Ub * ga * Xx * gb * Uu
 
 
     ###############################################
@@ -214,5 +235,331 @@
     Fd = DragMx("F")
     @test Alakazam.can_swap(Bd, Fd)
     @test replace_pattern(TensorExpression(Ad * Fd * Bd), "AB", Xd) == Xd * Fd
+
+
+    ###############################################
+    ###############################################
+    ### EDGE CASES
+    ### Silent non-matching is the dominant failure mode here, so most of these pin down that
+    ### something specific does NOT happen.
+    ###############################################
+    ###############################################
+
+    Ze = Tensor("Z"); We = Tensor("W")
+    Ae(p) = Tensor("A", [μ => p]); Be(p) = Tensor("B", [μ => p]); Ce = Tensor("C", [ν => upper])
+    Aq(i, p) = Tensor("A", [i => p])
+
+    ### --- parser limits: these fail SILENTLY, which is why they are pinned ---------------------
+    # a tensor name in a pattern string is a single character
+    @test replace_pattern(Ae(lower) * Ce, "AB_{?x}", Ze) == Ae(lower) * Ce
+    # a wildcard is ? plus a single character; "?abc" is not a three-letter wildcard
+    @test replace_pattern(Ae(lower) * Ce, "?abc", Ze) == Ae(lower) * Ce
+    # a pattern with no indices matches only a tensor with no indices
+    @test replace_pattern(Ae(lower) * Ce, "C", Ze) == Ae(lower) * Ce
+    @test replace_pattern(Ae(lower) * Tensor("C"), "C", Ze) == Ae(lower) * Ze
+    # a pattern longer than the term cannot match
+    @test replace_pattern(Ae(lower), "A_{?x}B^{?x}C^{?y}", Ze) == TensorExpression(Ae(lower))
+    # whitespace is insignificant, and a lone index needs no braces
+    @test replace_pattern(Ae(lower) * Ce, " A_{?x} ", Ze) == Ze * Ce
+    @test replace_pattern(Ae(lower) * Ce, "A_μ", Ze) == Ze * Ce
+    # degenerate patterns are rejected rather than silently matching everything
+    @test_throws Exception replace_pattern(Ae(lower) * Ce, "?", Ze)
+    @test_throws Exception replace_pattern(Ae(lower) * Ce, "", Ze)
+
+    ### --- mixed upper/lower slots need the macro, not a pattern string -------------------------
+    # the string parser restarts its slot counter at each ^/_ group, so "A_{?x}^{?y}" describes a
+    # ONE-index tensor and cannot match A_{μ}{}^{ν}.
+    Mx2 = Tensor("A", [μ => lower, ν => upper])
+    @test length(indices(Alakazam.parse_pattern2tensor("A_{?x}^{?y}"))) == 1
+    @test replace_pattern(TensorExpression(Mx2), "A_{?x}^{?y}", Ze) == TensorExpression(Mx2)
+    # T"..." goes through the T"..." parser, which tracks positions properly
+    @test length(indices(T"A_?x^?y")) == 2
+    @test replace_pattern(TensorExpression(Mx2), TensorTerm(T"A_?x^?y"), TensorExpression(Ze)) ==
+          TensorExpression(Ze)
+
+    ### --- wildcard binding ---------------------------------------------------------------------
+    # a repeated wildcard NAME demands the same tensor throughout
+    @test replace_pattern(Ae(lower) * Be(upper), "?A_{?x}?A^{?x}", Ze) == Ae(lower) * Be(upper)
+    @test replace_pattern(Aq(μ, lower) * Aq(μ, upper), "?A_{?x}?A^{?x}", Ze) == TensorExpression(Ze)
+    # distinct wildcards are NOT required to bind distinct tensors
+    @test replace_pattern(Aq(μ, lower) * Aq(μ, upper), "?P_{?x}?Q^{?x}", Ze) == TensorExpression(Ze)
+
+    ### --- names and special tensors ------------------------------------------------------------
+    # dotted and barred names survive the parser
+    @test Alakazam.name(T"Ȧ_?x") == "Ȧ" && Alakazam.name(T"Ā_?x") == "Ā"
+    @test replace_pattern(Tensor("Ȧ", [μ => lower]) * Ce, "Ȧ_{?g}", Ze) == Ze * Ce
+    # built-in tensors are matched by their printed name, and by wildcards
+    @test Alakazam.name(Metric([μ => lower, ν => lower])) == "η"
+    @test replace_pattern(Metric([μ => lower, ν => lower]) * Tensor("C", [ρ => upper]), "η_{?g?h}", Ze) ==
+          Ze * Tensor("C", [ρ => upper])
+    @test replace_pattern(Metric([μ => lower, ν => lower]) * Tensor("C", [ρ => upper]), "?P_{?g?h}", Ze) ==
+          Ze * Tensor("C", [ρ => upper])
+    # a Kronecker has mixed slots, so again it needs the macro
+    @test replace_pattern(TensorExpression(KroneckerDelta(μ => lower, ν => upper) * Tensor("C", [ρ => upper])),
+                          TensorTerm(T"δ_?g^?h"), TensorExpression(Ze)) == Ze * Tensor("C", [ρ => upper])
+    # matching is by name, so a Fermion is matched by a plain pattern even though == now checks type
+    @test replace_pattern(Fermion("A", [μ => lower]) * Ce, "A_{?g}", Ze) == Ze * Ce
+
+    ### --- coefficients are carried through -----------------------------------------------------
+    @test replace_pattern((3//4) * Ae(lower), "A_{?g}", Ze) == (3//4) * Ze
+    @test replace_pattern(Ae(lower), "A_{?g}", 2 * Ze) == 2 * Ze
+    @test replace_pattern(Ae(lower) * Ce, "A_{?g}", Ze + We) == Ze * Ce + We * Ce
+
+    ### --- zero, and total annihilation ---------------------------------------------------------
+    @test isZeroTens(replace_pattern(Ae(lower) * Ce, "A_{?x}", zero()))
+    @test isZeroTens(replace_pattern(Ae(lower), "A_{?x}", zero()))
+
+    ### --- graded signs accumulate one per crossing -----------------------------------------------
+    Fe(p) = Tensor("F", [e => p]); Ge(p) = Tensor("G", [e => p])
+    Hp = Tensor("H", [f => upper]); Jp = Tensor("J", [g => upper])
+    @test grading(Fe(lower)) == 1 && grading(Hp) == 1 && grading(Jp) == 1
+    @test replace_pattern(Fe(lower) * Ge(upper) * Hp * Jp, "F_{?x}G^{?x}", Ze) == Ze * Hp * Jp    # 0
+    @test replace_pattern(Fe(lower) * Hp * Ge(upper) * Jp, "F_{?x}G^{?x}", Ze) == -(Ze * Hp * Jp) # 1
+    @test replace_pattern(Fe(lower) * Hp * Jp * Ge(upper), "F_{?x}G^{?x}", Ze) == Ze * Hp * Jp    # 2
+
+    ### --- commutator remainders, one per factor crossed ------------------------------------------
+    # NB commutators are keyed by tensor NAME, so these must not reuse A/B/C from the block above.
+    @matrix EdgeMx
+    Pm = EdgeMx("P"); Qm = EdgeMx("Q"); Rm = EdgeMx("R"); Sm = EdgeMx("S"); Xm = EdgeMx("X")
+    Symbolics.@syms hs
+    @commutator [Rm, Qm] = hs * Sm
+    @test !Alakazam.can_swap(Qm, Rm)
+    @test replace_pattern(TensorExpression(Pm * Qm * Rm), "PQ", Xm) == Xm * Rm          # adjacent
+    @test replace_pattern(TensorExpression(Pm * Rm * Qm), "PQ", Xm) == Xm * Rm + hs * Pm * Sm
+    # two crossings give two remainders
+    @test replace_pattern(TensorExpression(Pm * Rm * Rm * Qm), "PQ", Xm) ==
+          Xm * Rm * Rm + 2 * hs * Pm * Sm * Rm
+    # factors after the match are untouched
+    @test replace_pattern(TensorExpression(Pm * Rm * Qm * EdgeMx("T")), "PQ", Xm) ==
+          Xm * Rm * EdgeMx("T") + hs * Pm * Sm * EdgeMx("T")
+    # a matrix with no registered relation is crossed for free
+    @test replace_pattern(TensorExpression(Pm * EdgeMx("U") * Qm), "PQ", Xm) == Xm * EdgeMx("U")
+
+    ### --- operators --------------------------------------------------------------------------------
+    gs = DummyPatternIndex("g", spacetime_indices)
+    # a pattern reaches into an operator's operand
+    @test replace_pattern(TensorExpression(PartialDerivative("∂", Tensor("A", [ν => lower], x), x, μ => lower)),
+                          "A_{?g}", Tensor("B", [gs => lower], x)) ==
+          TensorExpression(PartialDerivative("∂", Tensor("B", [ν => lower], x), x, μ => lower))
+    # and a replacement may itself contain one
+    @test replace_pattern(Tensor("Q", [ν => lower], x) * Tensor("C", [ρ => upper]), "Q_{?g}",
+                          PartialDerivative("∂", Tensor("A", [gs => lower], x), x, μ => lower)) ==
+          PartialDerivative("∂", Tensor("A", [ν => lower], x), x, μ => lower) * Tensor("C", [ρ => upper])
+
+    ### --- repeat, and termination on self-referential replacements ---------------------------------
+    @test replace_pattern(Aq(μ, lower) * Aq(ν, lower) * Aq(ρ, lower), "A_{?x}", Ze) == Ze * Ze * Ze
+    @test replace_pattern(Aq(μ, lower) * Aq(ν, lower), "A_{?x}", Ze, false) == Ze * Aq(ν, lower)
+    # replacing a tensor by itself, or by itself times something, must not loop forever
+    @test replace_pattern(Ae(lower) * Ce, "A_{?x}", Ae(lower)) == Ae(lower) * Ce
+    @test replace_pattern(Ae(lower) * Ce, "A_{?x}", Ae(lower) * We) == Ae(lower) * We * Ce
+
+    ### --- hazard: a replacement may introduce an index already free in the term ---------------------
+    # ν is free in C^{ν}, so this creates a contraction the user may not have intended. Pinned as
+    # current behaviour: the replacement's indices are used as given, without renaming.
+    @test replace_pattern(Ae(lower) * Ce, "A_{?g}", Tensor("B", [ν => lower])) ==
+          Tensor("B", [ν => lower]) * Ce
+
+    ### --- a decoy occurrence of the same name must not hide a match -------------------------------
+    # a decoy of a DIFFERENT name is separated by the histogram
+    @test replace_pattern(Tensor("D", [ν => lower]) * Aq(μ, lower) * Aq(μ, upper), "A_{?x}A^{?x}", Ze) ==
+      Tensor("D", [ν => lower]) * Ze
+    # a same-named decoy used to defeat the match: ?x bound to ν at position 1 and was never
+    # reconsidered, though the pattern sits at positions 2,3. The scan now restarts from each
+    # occurrence, so the later match is found.
+    @test replace_pattern(Aq(ν, lower) * Aq(μ, lower) * Aq(μ, upper), "A_{?x}A^{?x}", Ze) ==
+      Aq(ν, lower) * Ze
+    @test replace_pattern(Aq(ν, lower) * Aq(ρ, lower) * Aq(μ, lower) * Aq(μ, upper), "A_{?x}A^{?x}", Ze) ==
+      Aq(ν, lower) * Aq(ρ, lower) * Ze
+    # a decoy in a slot the pattern cannot use never binds, so it was always harmless
+    @test replace_pattern(Aq(ν, upper) * Aq(μ, lower) * Aq(μ, upper), "A_{?x}A^{?x}", Ze) ==
+      Aq(ν, upper) * Ze
+    # the matched factors need not be adjacent: here the pattern sits at positions 1 and 3
+    @test replace_pattern(Aq(ν, lower) * Aq(μ, lower) * Aq(ν, upper), "A_{?x}A^{?x}", Ze) ==
+      Ze * Aq(μ, lower)
+    # two interleaved contractions, both replaced
+    @test replace_pattern(Aq(μ, lower) * Aq(ν, lower) * Aq(ν, upper) * Aq(μ, upper), "A_{?x}A^{?x}", Ze) ==
+      Ze * Ze
+    # and a genuine non-match is still rejected
+    @test replace_pattern(Aq(μ, lower) * Aq(ν, lower), "A_{?x}A^{?x}", Ze) ==
+      Aq(μ, lower) * Aq(ν, lower)
+
+
+    ###############################################
+    ### ?A takes the matched NAME; ??A takes the matched OBJECT
+    ###############################################
+    firstt(v) = first(terms(first_summand(TensorExpression(v))))
+
+    # a source carrying every kind of data a tensor can have
+    Psrc = SymmetricTensor("P", [μ => lower, ν => lower], x, "lab" => lower)
+    @test length(tableaux(Psrc)) == 1 && length(labels(Psrc)) == 1 && !isempty(Alakazam.function_of(Psrc))
+
+    # ?A keeps only the name: coordinates, tableaux and labels come from the replacement as written
+    viaName = firstt(replace_pattern(TensorExpression(Psrc), TensorTerm(T"?A_?g?h"), TensorExpression(T"?A_?g?h")))
+    @test Alakazam.name(viaName) == "P"
+    @test isempty(tableaux(viaName)) && isempty(labels(viaName)) && isempty(Alakazam.function_of(viaName))
+    @test viaName != Psrc
+
+    # ??A adopts the object, so replacing a tensor by itself is the identity
+    viaObj = firstt(replace_pattern(TensorExpression(Psrc), TensorTerm(T"?A_?g?h"), TensorExpression(T"??A_?g?h")))
+    @test viaObj == Psrc
+    @test length(tableaux(viaObj)) == 1 && length(labels(viaObj)) == 1
+
+    # the type comes with the object, so grading is preserved. Under ?A a Fermion would come back
+    # as a Tensor and silently stop anticommuting.
+    Fsrc = Fermion("P", [μ => lower, ν => lower], x)
+    @test typeof(firstt(replace_pattern(TensorExpression(Fsrc), TensorTerm(T"?A_?g?h"),
+                                        TensorExpression(T"?A_?g?h")))) == Tensor
+    fObj = firstt(replace_pattern(TensorExpression(Fsrc), TensorTerm(T"?A_?g?h"), TensorExpression(T"??A_?g?h")))
+    @test typeof(fObj) == Fermion && grading(fObj) == 1 && fObj == Fsrc
+
+    # both forms name the same binding, and both parsers accept the doubled marker
+    @test Alakazam.name(first(terms(Alakazam.parse_pattern2tensor("??A_{?g}")))) == "??A"
+    @test Alakazam.name(first(terms(Alakazam.parse_pattern2tensor("?A_{?g}")))) == "?A"
+    @test firstt(replace_pattern(TensorExpression(Psrc), "?A_{?g?h}", "??A_{?g?h}")) == Psrc
+
+
+    ###############################################
+    ### further edge cases
+    ###############################################
+    Pw(i, p) = Tensor("P", [i => p]); Qw(i, p) = Tensor("Q", [i => p])
+
+    # a wildcard index will not bind across two different index sets
+    @test replace_pattern(Pw(μ, lower) * Qw(e, upper), "P_{?g}Q^{?g}", Ze) == Pw(μ, lower) * Qw(e, upper)
+    @test replace_pattern(Pw(μ, lower) * Qw(μ, upper), "P_{?g}Q^{?g}", Ze) == TensorExpression(Ze)
+    # distinct wildcards may of course span different sets
+    @test replace_pattern(Pw(μ, lower) * Qw(e, upper), "P_{?g}Q^{?h}", Ze) == TensorExpression(Ze)
+
+    # one expression factor cannot fill two pattern slots
+    @test replace_pattern(Aq(μ, lower), "A_{?x}A^{?y}", Ze) == TensorExpression(Aq(μ, lower))
+    @test replace_pattern(Aq(μ, lower) * Aq(μ, upper), "A_{?x}A^{?x}A_{?y}", Ze) ==
+          Aq(μ, lower) * Aq(μ, upper)
+    # two disjoint copies are both replaced when repeating, one when not
+    @test replace_pattern(Aq(μ, lower) * Aq(μ, upper) * Aq(ν, lower) * Aq(ν, upper), "A_{?x}A^{?x}", Ze) ==
+          Ze * Ze
+    @test replace_pattern(Aq(μ, lower) * Aq(μ, upper) * Aq(ν, lower) * Aq(ν, upper), "A_{?x}A^{?x}", Ze, false) ==
+          Ze * Aq(ν, lower) * Aq(ν, upper)
+    # the same wildcard twice on ONE tensor is a self-contraction
+    @test replace_pattern(Tensor("A", [μ => lower, μ => lower]), "A_{?x?x}", Ze) == TensorExpression(Ze)
+
+    # a pattern carrying no coordinates still matches a coordinate-dependent tensor
+    @test replace_pattern(Tensor("P", [μ => lower], x) * Ce, "P_{?g}", Ze) == Ze * Ce
+
+    # tableaux survive a replacement, and remain functionally live
+    Asym = AntisymmetricTensor("A", [DummyPatternIndex("g", spacetime_indices) => lower,
+                                     DummyPatternIndex("h", spacetime_indices) => lower])
+    repl = firstt(replace_pattern(TensorExpression(Tensor("P", [μ => lower, ν => lower])), "P_{?g?h}", Asym))
+    @test length(tableaux(repl)) == 1
+    @test isZeroTens(Alakazam.hard_simplify(repl * SymmetricTensor("B", [μ => upper, ν => upper])))
+
+    # a pattern reaches through two levels of operator nesting
+    inner2 = PartialDerivative("∂", Tensor("A", [ν => lower], x), x, μ => lower)
+    @test replace_pattern(TensorExpression(PartialDerivative("∂", inner2, x, ρ => lower)),
+                          "A_{?g}", Tensor("B", [gs => lower], x)) ==
+          TensorExpression(PartialDerivative("∂",
+              PartialDerivative("∂", Tensor("B", [ν => lower], x), x, μ => lower), x, ρ => lower))
+
+    # degenerate inputs are handled rather than crashing
+    @test isZeroTens(replace_pattern(zero(), "A_{?g}", Ze))
+    @test replace_pattern(Aq(μ, lower), "A_{?g}", Ze) == TensorExpression(Ze)
+    # a replacement naming an index the pattern never bound is reported, not silently dropped
+    @test_throws InvalidReplacementPattern replace_pattern(
+        Aq(μ, lower), "A_{?g}", Tensor("B", [DummyPatternIndex("zz", spacetime_indices) => lower]))
+
+    # replacement is idempotent once the pattern is gone
+    once = replace_pattern(Aq(μ, lower) * Ce, "A_{?g}", Ze)
+    @test replace_pattern(once, "A_{?g}", Ze) == once
+
+    # a fermion sitting between two matched matrices is crossed, and the commutator still fires
+    ferm = Tensor("F", [e => lower])
+    @test replace_pattern(TensorExpression(Pm * ferm * Rm * Qm), "PQ", Xm) ==
+          Xm * ferm * Rm + hs * Pm * Sm * ferm
+
+
+    ###############################################
+    ### wildcard names are resolved wherever they sit, and reported when unbound
+    ###############################################
+    Pco = Tensor("P", [μ => lower], x); Cup = Tensor("C", [ν => upper])
+
+    # a wildcard nested in an operator operand used to leak the literal "?A"/"??A" into the result
+    @test replace_pattern(TensorExpression(Pco * Cup), "?A_{?g}",
+                          PartialDerivative("∂", Tensor("??A", [gs => lower]), x, ρ => lower)) ==
+          PartialDerivative("∂", Pco, x, ρ => lower) * Cup
+    # ?A takes only the name, so the result carries no coordinate dependence
+    @test replace_pattern(TensorExpression(Pco * Cup), "?A_{?g}",
+                          PartialDerivative("∂", Tensor("?A", [gs => lower]), x, ρ => lower)) ==
+          PartialDerivative("∂", Tensor("P", [μ => lower]), x, ρ => lower) * Cup
+    # ... at any depth
+    @test replace_pattern(TensorExpression(Pco * Cup), "?A_{?g}",
+              PartialDerivative("∂", PartialDerivative("∂", Tensor("??A", [gs => lower]), x, σ => lower),
+                                x, ρ => lower)) ==
+          PartialDerivative("∂", PartialDerivative("∂", Pco, x, σ => lower), x, ρ => lower) * Cup
+
+    # an unbound wildcard name is reported rather than printed into the answer
+    @test_throws InvalidReplacementPattern replace_pattern(
+        TensorExpression(Pco), "?B_{?g}", Alakazam.parse_pattern2tensor("?A_{?g}"))
+    @test_throws InvalidReplacementPattern replace_pattern(
+        TensorExpression(Pco), "?B_{?g}", Alakazam.parse_pattern2tensor("??A_{?g}"))
+    @test_throws InvalidReplacementPattern replace_pattern(
+        TensorExpression(Pco), "P_{?g}", Alakazam.parse_pattern2tensor("?A_{?g}"))
+
+    ###############################################
+    ### ??A resolution details
+    ###############################################
+    # the adopted data wins over anything written on the ??A itself
+    @test labels(firstt(replace_pattern(TensorExpression(Psrc), "?A_{?g?h}",
+                                        TensorExpression(T"??A_?g?h_'own'")))) == ["lab" => lower]
+    # whereas ?A keeps what was written, since it takes only the name
+    @test labels(firstt(replace_pattern(TensorExpression(Psrc), "?A_{?g?h}",
+                                        TensorExpression(T"?A_?g?h_'own'")))) == ["own" => lower]
+    # built-in tensor types are adopted with their type intact
+    @test typeof(firstt(replace_pattern(TensorExpression(Metric([μ => lower, ν => lower])), "?A_{?g?h}",
+                        Alakazam.parse_pattern2tensor("??A_{?g?h}")))) == Metric
+    # a replacement may use the same wildcard more than once
+    @test replace_pattern(TensorExpression(Pco * Cup), "?A_{?g}",
+                          Alakazam.parse_pattern2tensor("?A_{?g}?A^{?g}")) ==
+          Tensor("P", [μ => lower]) * Tensor("P", [μ => upper]) * Cup
+    # ??A -> ??A is the identity and must not loop under repeat
+    @test firstt(replace_pattern(TensorExpression(Psrc), "?A_{?g?h}", TensorExpression(T"??A_?g?h"))) == Psrc
+
+
+    ###############################################
+    ### every combination of argument forms is accepted
+    ### Expression, pattern and replacement may each be a bare tensor, a term, an expression, or
+    ### (pattern/replacement) a pattern string. Object patterns used to work in one shape only.
+    ###############################################
+    gmatch = DummyPatternIndex("g", spacetime_indices)
+    let exps = (Tensor("A", [μ => lower]),
+                TensorTerm(Tensor("A", [μ => lower])),
+                TensorExpression(Tensor("A", [μ => lower]))),
+        pats = ("A_{?g}", TensorTerm(Tensor("A", [gmatch => lower])), Tensor("A", [gmatch => lower])),
+        reps = (Tensor("Z"), TensorTerm(Tensor("Z")), TensorExpression(Tensor("Z")), "Z")
+
+        @test all(replace_pattern(e, p, r) == TensorExpression(Tensor("Z"))
+                  for e in exps, p in pats, r in reps)
+    end
+
+    ###############################################
+    ### the call leaves its arguments alone
+    ###############################################
+    src_e = Tensor("A", [μ => lower]) * Tensor("C", [ν => upper])
+    src_before = string(src_e)
+    reusable = Tensor("B", [gmatch => lower])
+    reusable_before = string(reusable)
+    @test replace_pattern(src_e, "A_{?g}", reusable) == Tensor("B", [μ => lower]) * Tensor("C", [ν => upper])
+    @test string(src_e) == src_before                      # the expression is not mutated
+    @test string(reusable) == reusable_before              # nor is the replacement
+    # so the same replacement object may be reused, as a rule table would
+    @test replace_pattern(Tensor("A", [ν => lower]), "A_{?g}", reusable) ==
+          TensorExpression(Tensor("B", [ν => lower]))
+
+    ###############################################
+    ### repeat terminates and reaches every occurrence
+    ###############################################
+    let idxs = [Index("rp$(k)", spacetime_indices) for k in 1:40]
+        many = prod(Tensor("A", [i => lower]) for i in idxs)
+        done = replace_pattern(many, "A_{?g}", Tensor("Z"))
+        @test length(terms(first_summand(done))) == 40
+        @test all(Alakazam.name(t) == "Z" for t in terms(first_summand(done)))
+    end
 
 end

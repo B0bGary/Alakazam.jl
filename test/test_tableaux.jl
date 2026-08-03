@@ -105,6 +105,41 @@
     #see if we can compute large tableau w/o hanging
     @test (YoungTableau([4,4,4,4],[1:16;]);true)
 
+    ###
+    # mono-term vs multi-term symmetry.
+    # Mono-term symmetries are those expressible as a signed permutation of a single monomial's
+    # slots; they are what Butler-Portugal (Cadabra's canonicalise, xAct's ToCanonical) solves,
+    # and what hard_simplify's graph isomorphism solves independently.
+    Ri(i,j,k,l) = Tensor("R", [i=>lower, j=>lower, k=>lower, l=>lower], [riemann_tabelau])
+    Rup(i,j,k,l) = Tensor("R", [i=>upper, j=>upper, k=>upper, l=>upper], [riemann_tabelau])
+
+    @test Alakazam.hard_simplify(Ri(a,b,c,d) + Ri(b,a,c,d)) == Alakazam.zero()   # antisym in 1,2
+    @test Alakazam.hard_simplify(Ri(a,b,c,d) - Ri(c,d,a,b)) == Alakazam.zero()   # pair exchange
+    # the antisym-against-sym zero, found by the 4-cycle search rather than by pairwise comparison
+    @test Alakazam.hard_simplify(AntisymmetricTensor("A",[a=>upper,b=>upper])
+                                *SymmetricTensor("B",[a=>lower,b=>lower])) == Alakazam.zero()
+
+    # Multi-term symmetries are linear relations across several monomials, each of which is
+    # separately non-zero and separately canonical. Butler-Portugal cannot see these, and neither
+    # can graph isomorphism -- they need the Young projector, which hard_simplify runs only on
+    # request. Note neither identity is a pairwise t == ±u relation: Bianchi ties three monomials
+    # together at once, and the contracted form relates two by a factor of 1/2.
+    bianchi = Ri(a,b,c,d) + Ri(a,c,d,b) + Ri(a,d,b,c)
+    @test Alakazam.hard_simplify(bianchi) != Alakazam.zero()                      # not mono-term
+    @test Alakazam.hard_simplify(bianchi; multiterm=true) == Alakazam.zero()
+
+    # a contracted consequence of Bianchi: R_{abcd}R^{acbd} = 1/2 R_{abcd}R^{abcd}
+    contracted = Ri(a,b,c,d)*Rup(a,c,b,d) - (1//2)*Ri(a,b,c,d)*Rup(a,b,c,d)
+    @test Alakazam.hard_simplify(contracted) != Alakazam.zero()
+    @test Alakazam.hard_simplify(contracted; multiterm=true) == Alakazam.zero()
+    @test cong(Ri(a,b,c,d)*Rup(a,c,b,d), (1//2)*Ri(a,b,c,d)*Rup(a,b,c,d))         # ≅ opts in
+
+    # the budget is evaluated from tableau shape alone, before any projection is performed
+    @test young_projector_size(riemann_tabelau) == 16
+    @test young_projector_size(Ri(a,b,c,d)*Rup(a,c,b,d)) == 256
+    @test young_projector_size(Tensor("V", [a=>lower])) == 1                      # no tableau
+    @test Alakazam.hard_simplify(contracted; multiterm=true, multiterm_budget=8) == contracted
+
     @test canonicalise(S1-S2)==0
     @test canonicalise(S2)==S1
     @test (sort(S2)==S1);

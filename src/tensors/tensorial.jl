@@ -118,16 +118,6 @@ function _insert_coord!(v::Vector{Coordinate}, c::Coordinate)
     push!(v, c)
     return v
 end
-#pattern matching struct... don't touch
-mutable struct DummyPatternTensor <: TensorSuperType
-    data::TensorData
-    indices::Vector{IndexPair}
-    DummyPatternTensor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
-    function DummyPatternTensor(name::String, args...)
-        return new(build_tensor(name, args...)...)
-    end
-end
-
 
 
 #####################
@@ -554,9 +544,17 @@ function next_index(expr, i, comma_mode)
 
     return Symbol(name), pos
 end
+"""
+Build one index slot from a parsed token.
+
+In order of precedence: a leading `?` is a wildcard, becoming a `DummyPatternIndex` resolved at
+match time; a `'quoted'` name is a label even when a variable of that name is in scope; a defined
+identifier is that index; anything else (digits, undefined names) is a label.
+"""
 function slot_expr(idx::Symbol, pos)
     name = string(idx)
-    # 'quoted' forces a label even when a variable of that name is in scope
+    startswith(name, "?") &&
+        return :($(Pair{IndexTypes,IndexPosition})($(DummyPatternIndex)($(name[nextind(name, 1):end])), $pos))
     startswith(name, "'") &&
         return :($(Pair{String,IndexPosition})($(name[nextind(name, 1):end]), $pos))
     Base.isidentifier(name) ||
@@ -567,32 +565,27 @@ function slot_expr(idx::Symbol, pos)
 end
 
 """
-Slot builder for pattern strings (`DT"..."`).
+Shared body for the `@Tensor` and `T"..."` parsers.
 
-A leading `?` marks a wildcard, which becomes a `DummyPatternIndex` resolved at match time rather
-than a variable looked up in the caller's scope. Everything else follows `slot_expr`: a defined
-identifier is an index, anything else (digits, undefined names) is a label.
+Patterns are built by exactly the same parser as ordinary tensors, and so inherit labels, tableaux,
+symmetry syntax and coordinate dependence. A wildcard needs no separate type: `?x` in a slot is a
+`DummyPatternIndex`, and a wildcard name is a tensor whose name begins with `?`, which is what the
+matcher tests.
 """
-function dummy_slot_expr(idx::Symbol, pos)
-    name = string(idx)
-    startswith(name, "?") &&
-        return :($(Pair{IndexTypes,IndexPosition})($(DummyPatternIndex)($(name[nextind(name,1):end])), $pos))
-    return slot_expr(idx, pos)
-end
-"""
-Shared body for the `@Tensor`/`T"..."` and `DT"..."` string parsers.
-
-`dummy=true` emits a `DummyPatternTensor` and turns `?x` slots into `DummyPatternIndex`, so that
-patterns are built by exactly the same parser as ordinary tensors and therefore inherit labels,
-tableaux, symmetry syntax and coordinate dependence.
-"""
-function _parse_tensor_string(expr::String, dummy::Bool=false)
-    length(expr) == 1 && return dummy ? DummyPatternTensor(expr) : Tensor(expr)
+function _parse_tensor_string(expr::String)
+    length(expr) == 1 && return Tensor(expr)
 
     nameend = firstindex(expr)
-    startswith(expr, "?") && (nameend = nextind(expr, nameend))
+    # "?A" is a wildcard name; "??A" additionally adopts the matched object's data
+    if startswith(expr, "??")
+        nameend = nextind(expr, nextind(expr, nameend))
+    elseif startswith(expr, "?")
+        nameend = nextind(expr, nameend)
+    end
     symbol = expr[firstindex(expr):nameend]
 
+    # A tensor name is one character. Several objects of the same kind are told apart by labels --
+    # `T"k_1^μ"` and `T"k_2^μ"` -- not by longer names.
     @assert length(expr) > 1 && contains("_^([{?", expr[nextind(expr, nameend)]) "Tensor name should be one character."
 
     positions = []
@@ -675,10 +668,11 @@ function _parse_tensor_string(expr::String, dummy::Bool=false)
                     push!(indices, Symbol("'" * expr[j:prevind(expr, k)]))
                     push!(positions, currpos)
                     i = k
-                elseif dummy && expr[i] == '?'
-                    # ?x -> wildcard index; consume the marker together with its name
+                elseif expr[i] == '?'
+                    # ?x -> wildcard index; consume the marker together with its name. A suffix is
+                    # folded into its combining mark here, since there is no scope variable to do it.
                     idx, newi = next_index(expr, nextind(expr, i), comma_mode)
-                    push!(indices, Symbol("?" * string(special_index(idx))))
+                    push!(indices, Symbol("?" * apply_index_suffix(string(special_index(idx)))))
                     push!(positions, currpos)
                     i = newi
                 else
@@ -704,11 +698,10 @@ function _parse_tensor_string(expr::String, dummy::Bool=false)
     # indplacement = quote
     #     [$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]
     # end
-    slots = [(dummy ? dummy_slot_expr : slot_expr)(idx, pos) for (idx, pos) in zip(indices, positions)]
+    slots = [slot_expr(idx, pos) for (idx, pos) in zip(indices, positions)]
 
-    ctor = dummy ? DummyPatternTensor : Tensor
     return quote
-         $ctor(
+         $(Tensor)(
             $symbol,
             $(slots...),
             [$tableaulist...],
@@ -718,21 +711,9 @@ function _parse_tensor_string(expr::String, dummy::Bool=false)
 end
 
 macro Tensor(expr::String)
-    return _parse_tensor_string(expr, false)
+    return _parse_tensor_string(expr)
 end
 
-"""
-    DT"?A_?a?b"
-
-Build a *pattern* tensor for [`replace_pattern`](@ref), using the same syntax as `T"..."`.
-
-`?` marks a wildcard: as the name it gives a `DummyPatternTensor` (any tensor), and on a slot a
-`DummyPatternIndex` (any index in that position). Because it shares the `T"..."` parser, patterns
-also get labels, tableaux and the `(...)`/`[...]` symmetry syntax.
-"""
-macro DT_str(expr::String)
-    return _parse_tensor_string(expr, true)
-end
 
 # function has_comma_outside_curly(expr::String)
 #     depth = 0
@@ -764,6 +745,27 @@ function has_comma_before_structure(expr, i)
 end
 macro Tensor_str(expr::String)
     return esc(:(@Tensor $expr))
+end
+
+"""Combining mark written for each recognised index suffix, matching what `uni_to_TeX` decodes."""
+const _INDEX_SUFFIX_MARKS = ("dot" => '̇', "bar" => '̄', "hat" => '̂')
+
+"""
+    apply_index_suffix(name) -> String
+
+Rewrite a suffixed index name into the combining-mark form used throughout, so `xdot` becomes `̇x`.
+
+A named index picks this up for free: `A_adot` resolves `adot` in the caller's scope, where the user
+wrote the mark directly. A wildcard has no such variable, so the parser applies the convention
+itself and `?xdot` denotes the dotted index rather than one literally called "xdot".
+"""
+function apply_index_suffix(nm::AbstractString)
+    for (suf, mark) in _INDEX_SUFFIX_MARKS
+        if length(nm) > length(suf) && endswith(nm, suf)
+            return string(mark) * chop(nm, tail=length(suf))
+        end
+    end
+    return String(nm)
 end
 
 function special_index(idx::Symbol)

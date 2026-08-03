@@ -1,66 +1,44 @@
 ####################################################################################################
-#various functions to be called
+# replace_pattern: the single entry point.
 
-function replace_pattern(exp::TensorTerm, pattern::String, replace::TensorTerm, repeat::Bool=true)
-    return substitute_terms(exp, parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
-end
-function replace_pattern(exp::TensorTerm, pattern::String, replace::TensorExpression, repeat::Bool=true)
-    return substitute_terms(exp, parse_pattern2tensor(pattern), replace, repeat)
-end
-function replace_pattern(exp::TensorTerm, pattern::String, replace::TensorSuperType, repeat::Bool=true)
-    return substitute_terms(exp, parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
-end
-function replace_pattern(exp::TensorSuperType, pattern::String, replace::TensorSuperType, repeat::Bool=true)
-    return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
-end
-function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorTerm, repeat::Bool=true)
+"""Normalise anything the user may pass as an expression or a replacement."""
+_as_expression(v::TensorExpression) = v
+_as_expression(v::Tensorial) = TensorExpression(v)
+_as_expression(v::String) = TensorExpression(parse_pattern2tensor(v))
+# a contraction standing for a scalar invariant is the commonest rule of all, so numbers and
+# symbolic scalars are accepted as replacements directly
+_as_expression(v::SymorNum) = TensorExpression(v)
+
+"""Normalise anything the user may pass as a pattern into the `TensorTerm` the matcher wants."""
+_as_pattern(p::TensorTerm) = p
+_as_pattern(p::TensorSuperType) = TensorTerm(p)
+_as_pattern(p::String) = parse_pattern2tensor(p)
+
+"""
+    replace_pattern(exp, pattern, replace, repeat=true, excluded=Set{TensorSuperType}())
+
+Find `pattern` in `exp` and substitute `replace` for it, repeating until no match remains unless
+`repeat` is false.
+
+Each of the three may be given in whatever form is convenient: a bare tensor, a `TensorTerm`, or a
+`TensorExpression`, and the pattern and the replacement may also be pattern strings such as
+`"?A_{?x}B^{?x}"`. They are normalised here, so every combination is accepted rather than only the
+pairings that happen to have a method.
+
+A wildcard is `?` followed by a single character: `?A` as a name matches any tensor, `?x` in a slot
+matches any index, and repeated wildcards must bind consistently. In the replacement, `?A` supplies
+the matched tensor's name while `??A` supplies the matched object itself.
+"""
+function replace_pattern(exp::Tensorial, pattern::Union{Tensorial,String},
+                         replace::Union{Tensorial,String,SymorNum}, repeat::Bool=true,
+                         excluded::Set{TensorSuperType}=Set{TensorSuperType}())
+    pat = _as_pattern(pattern)
+    rep = _as_expression(replace)
     new_exp = zero()
-    for summand in summands(exp)
-        new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
+    for summand in summands(_as_expression(exp))
+        new_exp += coef(summand) * substitute_terms(term(summand), pat, rep, repeat, excluded)
     end
     return new_exp
-end
-function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorSuperType, repeat::Bool=true)
-    new_exp = zero()
-    for summand in summands(exp)
-        new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(replace), repeat)
-    end
-    return new_exp
-end
-
-function replace_pattern(exp::TensorTerm, pattern::String, replace::String, repeat::Bool=true)
-    return substitute_terms(exp, parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat)
-end
-function replace_pattern(exp::TensorSuperType, pattern::String, replace::String, repeat::Bool=true)
-    return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat)
-end
-function replace_pattern(exp::TensorExpression, pattern::String, replace::String, repeat::Bool=true, excluded::Set{TensorSuperType}=Set{TensorSuperType}())
-    new_exp = zero()
-    for summand in summands(exp)
-        new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat, excluded)
-    end
-    return new_exp
-end
-
-
-function replace_pattern(exp::TensorExpression, pattern::String, replace::TensorExpression, repeat::Bool=true)
-    new_exp = zero()
-    for summand in summands(exp)
-        new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), replace, repeat)
-    end
-    return new_exp
-end
-
-function replace_pattern(exp::TensorExpression, pattern::TensorTerm, replace::TensorExpression, repeat::Bool=true, excluded::Set{TensorSuperType}=Set{TensorSuperType}())
-    new_exp = zero()
-    for summand in summands(exp)
-        new_exp += coef(summand)*substitute_terms(term(summand), pattern, replace, repeat, excluded)
-    end
-    return new_exp
-end
-
-function replace_pattern(exp::TensorSuperType, pattern::String, replace::TensorExpression, repeat::Bool=true)
-    return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), replace, repeat)
 end
 
 
@@ -170,6 +148,11 @@ Groups tensors into instances of the term before replacing, so that grading is c
 """
 function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorExpression, repeat::Bool=true, excluded::Set{T}=Set{TensorSuperType}()) where T<:TensorSuperType
 
+    # An empty pattern would match vacuously at every position and substitute nothing, so it is
+    # rejected rather than silently rewriting the expression.
+    isempty(terms(pattern)) && throw(InvalidReplacementPattern(
+        "the pattern is empty", "a pattern must name at least one tensor"))
+
     #call recursviely on the oeprand...
     if isTensor(exp) isa OperatorSuperType
         # println("did this")
@@ -199,7 +182,11 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
 
         new_exp = zero()
 
-        for match in out.all_matches
+        # Only the first match is substituted. `all_matches` holds the alternative ways the pattern
+        # could bind, which are choices rather than summands: adding them would multiply-count a
+        # single occurrence, and for a wildcard name matching several different tensors the
+        # alternatives need not even share free indices. Further occurrences are reached by `repeat`.
+        let match = first(out.all_matches)
             allt = terms(exp)
             poss = sort!([v[2] for v in values(match.position_matches)])
             matched = Set(poss)
@@ -220,20 +207,26 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
             pre = TensorSuperType[allt[i] for i in 1:(anchor-1)]
             post = TensorSuperType[allt[i] for i in (anchor+1):length(allt) if !(i in matched)]
 
+            # How a wildcard in the replacement resolves:
+            #   ?A   takes the matched tensor's NAME, and nothing else. Coordinates, tableaux,
+            #        labels and the concrete type all come from the replacement as written, so
+            #        `?A` can be used to strip or restate them.
+            #   ??A  takes the matched OBJECT: its data and its type, with only the index
+            #        placement coming from the replacement. `??A -> ??A` is the identity, and a
+            #        matched Fermion stays a Fermion rather than losing its grading.
+            # Both refer to the same binding, so `??A` looks up the `?A` recorded by the pattern.
+            pat_terms = terms(pattern)
+            matched_src = Dict{String,TensorSuperType}()
+            for pr in match.position_matches
+                matched_src[name(pat_terms[pr[1]])] = allt[pr[2]]
+            end
+
             rep2 = copy(replace)
+            resolve_wildcard_names!(rep2, match.tensor_name_matches, matched_src)
             for summand in summands(rep2)
-                for repind in eachindex(terms(term(summand)))
-                    rep = terms(term(summand))[repind]
-                    rep_dum = typeof(rep) <: DummyPatternTensor
-                    if rep_dum
-                        set_name!(rep, match.tensor_name_matches[name(rep)])
-                    end
+                for rep in terms(term(summand))
                     operator_index_subs!(match.index_matches, rep)
                     update_indices!(rep)
-                    if rep isa DummyPatternTensor
-                        # rebuild as the concrete tensor type, carrying props and indices across
-                        rep = typeof(terms(exp)[1])(data(rep), indices(rep))
-                    end
                 end
             end
 
@@ -258,6 +251,47 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
     else
         return exp
     end
+end
+
+"""
+Resolve wildcard tensor names in a replacement, descending through operator operands.
+
+`names` maps a pattern wildcard to the concrete name it bound; `srcs` maps it to the matched object
+itself. A name left unresolved would print as a literal `?A` in the result, so an unbound wildcard is
+reported rather than passed through.
+"""
+function resolve_wildcard_names!(rep, names::Dict{String,String}, srcs::Dict{String,TensorSuperType})
+    if rep isa TensorExpression
+        for summand in summands(rep)
+            trms = terms(term(summand))
+            for i in eachindex(trms)
+                trms[i] = resolve_wildcard_names!(trms[i], names, srcs)
+            end
+        end
+        return rep
+    elseif rep isa OperatorSuperType
+        resolve_wildcard_names!(operand(rep), names, srcs)
+        return rep
+    end
+
+    pn = name(rep)
+    startswith(pn, "?") || return rep
+    whole = startswith(pn, "??")                      # ??A adopts the object, ?A only its name
+    key = whole ? pn[nextind(pn, 1):end] : pn
+
+    nm = get(names, key, nothing)
+    nm === nothing && throw(InvalidReplacementPattern(
+        "wildcard tensor '$key' in the replacement has no match in the pattern",
+        isempty(names) ? "the pattern names no wildcard tensors" :
+                         "available: " * join(sort!(collect(keys(names))), ", ")))
+
+    if whole
+        src = get(srcs, key, nothing)
+        src !== nothing && applicable(typeof(src), data(src), indices(rep)) &&
+            return typeof(src)(data(src), copy(indices(rep)))
+    end
+    set_name!(rep, nm)
+    return rep
 end
 
 """Deep function for replacing dummies in operators"""
@@ -317,6 +351,32 @@ function match_dummy_logic(dummy_matching::Dict{String,String}, dummy_name::Stri
 end
 
 
+"""
+Assign every pattern slot of one name class to a distinct expression position.
+
+Each slot is tried against every free position rather than scanned forward, because a forward scan
+is order-dependent: it cannot match a pattern whose slots occur in the expression in the opposite
+order. That case arises as soon as several factors share a name and are told apart by their labels
+or index positions --- `k_1` and `k_2`, say --- which is precisely what labels are for.
+
+Returns `(matched, [pattern position => expression position], bindings)`. The search is bounded by
+the size of the name class, which the histogram has already cut down.
+"""
+function assign_slots(patpos::Vector{Int}, exppos::Vector{Int}, j::Int, used::AbstractVector{Bool},
+                      acc::Dict{String,IndexSuperType}, patt::TensorTerm, expr::TensorTerm)
+    j > length(patpos) && return (true, Pair{Int,Int}[], acc)
+    for t in eachindex(exppos)
+        used[t] && continue
+        outt = check_index_match(patpos[j], exppos[t], patt, expr, acc)
+        outt[1] || continue
+        used[t] = true
+        done, rest, acc3 = assign_slots(patpos, exppos, j + 1, used, outt[2], patt, expr)
+        used[t] = false
+        done && return (true, pushfirst!(rest, patpos[j] => exppos[t]), acc3)
+    end
+    return (false, Pair{Int,Int}[], acc)
+end
+
 """Uses pattern matching to find a pattern in an expression, and returns the match if found. Accounts for dummy tensors and indices.
 Uses a recursive dynamic programming approach, peeling off one term at a time from the pattern and expression, and checking for matches."""
 function patt_match(pat::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}}, exp::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}},
@@ -351,31 +411,21 @@ function patt_match(pat::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}}, exp:
                                     dummy_temp = out[2]
                                 end
                             end
-                            match = []
-                            j = 1
-                            # Thread the index bindings through successive occurrences. Passing the
-                            # original `dummy_index_matching` to every call let a wildcard rebind
-                            # freely, so a pattern like "q_{?x}q^{?x}" matched `q^i q_j` and silently zeroed terms that do not vanish.
-                            acc = dummy_index_matching
-                            for i in 1:ekey
-                                outt = check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp, acc)
-                                if outt[1]
-                                    push!(match, pvalues[1][2][j] => eval[2][i])
-                                    acc = outt[2]
-                                    j += 1
-                                    if j > pkeys[1]
-                                        dumindtemp = acc
-                                        break
-                                    end
-                                end
-                            end
-                            if j <= pkeys[1]
+                            # Bindings are threaded through the assignment, so a repeated wildcard
+                            # must bind consistently: passing the original `dummy_index_matching`
+                            # to every check let one rebind freely, and "q_{?x}q^{?x}" then matched
+                            # `q^i q_j`, silently zeroing terms that do not vanish.
+                            ok, match, acc = assign_slots(pvalues[1][2], eval[2], 1,
+                                                          falses(length(eval[2])),
+                                                          dummy_index_matching, tensorpatt, tensorexp)
+                            if !ok
                                 if !pdummy
                                     return (matched=false, all_matches=NamedTuple[])
                                 else
                                     continue
                                 end
                             end
+                            dumindtemp = acc
                             push!(matches, (position_matches=match, tensor_name_matches=copy(dummy_temp), index_matches=copy(dumindtemp)))
                             if !repeat
                                 return (matched=true, all_matches=matches)
@@ -438,7 +488,7 @@ function patt_match(pat::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}}, exp:
     else
         # multiple frequencies in pattern, must all match
         # seed with empty match
-        all_current = NamedTuple[(position_matches=[], tensor_name_matches=copy(dummy_matching), index_matches=copy(dummy_index_matching))]
+        all_current = NamedTuple[(position_matches=Pair{Int,Int}[], tensor_name_matches=copy(dummy_matching), index_matches=copy(dummy_index_matching))]
 
         for (pkeys, pvalues) in pat
             next = NamedTuple[]
@@ -494,13 +544,12 @@ Checks if the indices of a pattern tensor and expression tensor match, accountin
 function check_index_match(loc_pat::Int, loc_exp::Int, pat::TensorTerm, exp::TensorTerm, dumind::Dict{String,IndexSuperType})
     dummy = copy(dumind)
     # i think we dont need this if statement...
-    # if typeof(terms(pat)[loc_pat]) <: DummyPatternTensor
     ptens = terms(pat)[loc_pat]
     etens = terms(exp)[loc_exp]
 
     # Labels: a pattern that names none is a wildcard over labels, so every pattern written before
     # labels existed keeps matching exactly as it did. A pattern that *does* name labels must match
-    # them exactly, which is what lets `DT"k_1^?a"` pick out k₁ without also taking k₂.
+    # them exactly, which is what lets `T"k_1^?a"` pick out k₁ without also taking k₂.
     if !isempty(labels(ptens)) && labels(ptens) != labels(etens)
         return (false, dumind)
     end
@@ -559,8 +608,17 @@ function parse_pattern2tensor(pattern::String)
     #Construct the tensor
     for char in it #should only get here at the start of a tensor if valid syntax!!!!!!!!!!
         if string(char) == "?"
-            s = string(iterate(it)[1])
-            tensor = DummyPatternTensor("?" * s) #?A  ie the name isn't important
+            # "?A" is a wildcard name; "??A" additionally adopts the matched object's data
+            prefix = "?"
+            if peek(it) == '?'
+                iterate(it)
+                prefix = "??"
+            end
+            nxt = iterate(it)
+            nxt === nothing && throw(InvalidReplacementPattern(
+                "pattern ends with '$prefix', which names no tensor",
+                "a wildcard name is '?' (or '??') followed by a single character, as in \"?A\""))
+            tensor = Tensor(prefix * string(nxt[1]))
         else
             tensor = Tensor(string(char)) #A     name is important #maybe something about coord dependance
         end

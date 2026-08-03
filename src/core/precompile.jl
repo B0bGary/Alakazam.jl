@@ -249,7 +249,7 @@ end
 
 
 let
-    TENS = (Tensor, Fermion, Boson, DummyPatternTensor)
+    TENS = (Tensor, Fermion, Boson)
     IDX = (Index, DummyPatternIndex)
     IPV = (Vector{IndexPair}, Vector{Pair{Index,IndexPosition}},
         Vector{Pair{DummyPatternIndex,IndexPosition}})
@@ -344,9 +344,9 @@ let
     v = (2 * pce^4 * pcs^2 - 10 * pce^4 * pcs * pcu) / (-pcs * pcu)
     Symbolics.simplify(Symbolics.expand(Symbolics.substitute(v, Dict(pcs => pcs - pcu))))
 
-    # multi-tensor patterns, and object patterns built by DT"..."
+    # multi-tensor patterns, and object patterns built by T"..."
     replace_pattern(TensorExpression(A * B * C), "A_{?x}B^{?x}", Z)
-    replace_pattern(TensorExpression(A * B * C), TensorTerm(DT"A_?x"), TensorExpression(Z))
+    replace_pattern(TensorExpression(A * B * C), TensorTerm(T"A_?x"), TensorExpression(Z))
     op_pos(TensorExpression(A * B))
 
     # A Feynman-amplitude shaped calculation

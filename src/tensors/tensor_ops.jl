@@ -19,8 +19,16 @@ transform(f, t::Tensorial) = f(t)
 #hard_equals is a version of == that checks for equivalence mod symmetries and dummy index relabeling
 
 #change to use our tabelau code!
-function ==(a::TensorSuperType, b::TensorSuperType)
-    if (name(a) == name(b) && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
+"""
+Two tensors are equal when they are the same *kind* of object carrying the same name, indices,
+coordinate dependence, tableaux and labels.
+
+The type check is not incidental. A `Boson`, a `Fermion` and a plain `Tensor` of the same name
+differ in grading, and a `Mat` in whether it commutes, so treating them as equal would let objects
+with different algebraic behaviour merge in a sum.
+"""
+function ==(a::TensorSuperType, b::TensorSuperType)#name first since easiest discriminator
+    if ( name(a) == name(b) && typeof(a) == typeof(b)  && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
         # println("apparnetly equl inds")
         return true
     else
@@ -36,6 +44,7 @@ end
 #     h
 # )
 function Base.hash(d::TensorSuperType, h::UInt)::UInt
+    h = hash(typeof(d), h)     # kept in step with `==`, which distinguishes Boson/Fermion/Tensor/Mat
     h = hash(name(d), h)
     @inbounds for p in indices(d)
         h = hash(p[1].uid, hash(p[2].position, h))
@@ -221,11 +230,19 @@ function ≅(a::TensorSuperType, b::TensorSuperType)#change to use our tabelau c
     (same, grweight) = same_tensor_mod_syms(a, b)
     return (same && grweight == 1)
 end
+"""
+`≅` is the deep equality test, so it opts into the multi-term (Young projector) comparison that
+`hard_simplify` leaves off by default. Two expressions differing by a Bianchi-type identity are
+therefore congruent even though neither `==` nor `hard_simplify` alone would merge them.
+"""
 function ≅(a::TensorExpression, b::TensorExpression)
     a = hard_merge(a)
     b = hard_merge(b)
     C=merge_sum_syms(a-b)
-    m = hard_merge(symmetrise_partials(C))
+    # only the final test opts into the projector: it is a zero test on the difference, which is
+    # exactly the case multi-term reduction settles, and projecting a and b separately would cost
+    # more while deciding nothing extra
+    m = hard_merge(symmetrise_partials(C); multiterm=true)
     return m == zero()
 end
 
@@ -1256,13 +1273,24 @@ end
 
 
 
-hard_simplify(T::TensorTerm) = hard_simplify(TensorExpression(T))
-hard_simplify(T::TensorSuperType) = hard_simplify(TensorExpression(T))
+hard_simplify(T::TensorTerm; kw...) = hard_simplify(TensorExpression(T); kw...)
+hard_simplify(T::TensorSuperType; kw...) = hard_simplify(TensorExpression(T); kw...)
 
-function hard_simplify(TEx::TensorExpression)
+"""
+    hard_simplify(TEx; multiterm=false, multiterm_budget=DEFAULT_MULTITERM_BUDGET)
+
+Merge terms up to symmetry and dummy relabelling, more aggressively than `simplify`.
+
+By default only mono-term symmetries are used decided by graph isomorphism. Setting `multiterm=true` additionally
+tries the Young projector on pairs that survive, which reaches identities spanning several terms
+such as the first Bianchi identity. That test is exponential in the number of symmetric factors,
+so it is opt-in and bounded by `multiterm_budget`; see [`multiterm_equal`](@ref).
+"""
+function hard_simplify(TEx::TensorExpression; multiterm::Bool=false,
+                       multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
     # `collect_terms` is a linear pre-pass; `hard_merge` merges strictly more but costs far more
     # per pair, so shrinking its input first is always worth it.
-    return hard_merge(sort(collect_terms(TEx)))
+    return hard_merge(sort(collect_terms(TEx)); multiterm, multiterm_budget)
 end
 
 
@@ -1325,7 +1353,8 @@ function term_fingerprint(T::TensorTerm)
     return hash(x, hash(length(terms(T)), h))
 end
 
-function hard_merge(TEx::TensorExpression)
+function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
+                    multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
     src = TEx.summands
     n = length(src)
     n == 0 && return zero()
@@ -1366,6 +1395,9 @@ function hard_merge(TEx::TensorExpression)
     m == 0 && return zero()
     m < n && resize!(out, m)
     TEx.summands = out
+    # multi-term symmetries relate whole sums rather than pairs of summands, so the projector runs
+    # once over the merged result rather than inside the loop above
+    multiterm && return multiterm_reduce(TEx; budget=multiterm_budget)
     return TEx
 end
 ##############################################################################################
@@ -2610,10 +2642,6 @@ end
 
 function tens2str(T::TensorSuperType)
     out = ""
-    if typeof(T) == DummyPatternTensor
-        # out*="?"
-    end
-
     if T isa Gamma5
         out *= first(name(T))
     else
@@ -2740,6 +2768,111 @@ end
 
 #complicated logic to convert a youngtab to a projection operator of permuations, and apply to a tensor
 #this was quite sensitive to get working for generic tableaux
+##############################################################################################
+# Multi-term symmetry: deciding equality with the Young projector
+#
+# `hard_merge`'s graph isomorphism decides *mono-term* symmetry -- equality up to a signed
+# permutation of one monomial's slots, the same problem Butler-Portugal solves. Identities that
+# span several monomials, each separately non-zero and separately canonical (the first Bianchi
+# identity R_a[bcd] = 0 being the standard example), are invisible to it. Those need the Young
+# projector, which is exponential, so it is offered as an opt-in decision procedure rather than a
+# rewriting step: the projected form is discarded and the caller's original representation kept.
+##############################################################################################
+
+const _PROJ_CAP = typemax(Int) ÷ 4
+
+@inline _sat_mul(a::Int, b::Int) = (b != 0 && a > _PROJ_CAP ÷ b) ? _PROJ_CAP : a * b
+
+function _fact_sat(n::Int)
+    n >= 21 && return _PROJ_CAP
+    f = 1
+    for i in 2:n
+        f *= i
+    end
+    return f
+end
+
+"""
+    young_projector_size(x) -> Int
+
+The number of signed permutations the Young symmetriser of `x` expands into: for one tableau,
+the product of the row-group and column-group orders, `∏ᵢ rᵢ! · ∏ⱼ cⱼ!` over row lengths `rᵢ`
+and column lengths `cⱼ`. Sizes add over a tensor's tableaux and multiply over a term's factors.
+
+This depends only on tableau *shape*, so it can be evaluated before any projection is performed
+and used to refuse one that would be too expensive. Saturates at `_PROJ_CAP` rather than
+overflowing.
+"""
+function young_projector_size(tab::YoungTableau)
+    rows = tab.row_lengths
+    isempty(rows) && return 1
+    n = 1
+    for r in rows
+        n = _sat_mul(n, _fact_sat(r))
+    end
+    for j in 1:maximum(rows)                 # column lengths are the conjugate partition
+        n = _sat_mul(n, _fact_sat(count(>=(j), rows)))
+    end
+    return n
+end
+
+function young_projector_size(T::TensorSuperType)
+    tabs = tableaux(T)
+    isempty(tabs) && return 1
+    n = 0
+    for tab in tabs
+        n = min(_PROJ_CAP, n + young_projector_size(tab))
+    end
+    return n
+end
+
+young_projector_size(T::OperatorSuperType) =
+    _sat_mul(invoke(young_projector_size, Tuple{TensorSuperType}, T), young_projector_size(operand(T)))
+
+function young_projector_size(T::TensorTerm)
+    n = 1
+    for t in terms(T)
+        n = _sat_mul(n, young_projector_size(t))
+    end
+    return n
+end
+
+young_projector_size(TEx::TensorExpression) =
+    isempty(summands(TEx)) ? 1 : maximum(young_projector_size(t) for (_, t) in summands(TEx))
+
+"""Default ceiling on `young_projector_size` before multi-term reduction is skipped."""
+const DEFAULT_MULTITERM_BUDGET = 1024
+
+"""
+    multiterm_reduce(TEx; budget=DEFAULT_MULTITERM_BUDGET) -> TensorExpression
+
+Try to reduce `TEx` using multi-term symmetries, by projecting every term onto its Young
+symmetriser and merging the result.
+
+Unlike mono-term canonicalisation this is inherently a *global* operation on the sum and cannot be
+expressed as a pairwise merge: a multi-term identity need not relate any two summands by a sign.
+The first Bianchi identity relates three monomials at once, and
+`R_{abcd}R^{acbd} = ½ R_{abcd}R^{abcd}` relates two by a rational factor -- neither is a `t == ±u`
+comparison of the kind `hard_equals_graded` performs.
+
+The projected expression is kept only when it is strictly smaller than the input, and discarded
+otherwise, since projection generally *expands* a term (a single Riemann tensor becomes 16
+summands) and the projected form is not the form the user wrote. A result of zero is therefore
+always kept, which is the case that matters most: it is what makes `≅` decide Bianchi-type
+identities.
+
+Projection is exponential in the number of symmetric factors, so it is skipped unless
+`young_projector_size` -- which is computable from tableau shape alone, before any work is done --
+lies between `2` and `budget`.
+"""
+function multiterm_reduce(TEx::TensorExpression; budget::Int=DEFAULT_MULTITERM_BUDGET)
+    sz = young_projector_size(TEx)
+    (sz <= 1 || sz > budget) && return TEx
+    proj = hard_merge(sort(collect_terms(young_projection(TEx))))
+    isZeroTens(proj) && return zero()
+    return length(summands(proj)) < length(summands(TEx)) ? proj : TEx
+end
+
 function young_projection(TT::TensorTerm, proj::Union{Vector{String},Nothing}=nothing)
     ts = terms(TT)
     isempty(ts) && return TensorExpression(TT)

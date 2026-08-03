@@ -46,8 +46,7 @@ export to_latex
 
 ##########################
 #base tensors
-export @DT_str
-export TensorData, TensorDataSuperType, DummyPatternTensor, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
+export TensorData, TensorDataSuperType, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
 export SymmetricTensor, AntisymmetricTensor, RiemannTensor
 export Boson, Fermion
 export @Tensor, @T_str
@@ -97,6 +96,7 @@ export MixedWeightOperandTerms, SameLevelDummyError, InvalidDerivativeBasis, Inv
 #tableau
 ##########################
 export YoungTableau, generate_symmetric_tableau, generate_antisymmetric_tableau, generate_riemann_tableau, young_projection
+export young_projector_size, multiterm_reduce
 
 ##########################
 #special tensors
@@ -192,7 +192,7 @@ export @syms #reexport from symbolics...
 # export add_derivative_action, index_to_pattern, same_tensor_mod_pattern, apply_derivative
 # export perform_derivative_action, expand_derivative, product_rule, to_lc_expression
 
-# export IndexSuperType, IndexSet, Index, DummyPatternIndex, Coordinate, DummyPatternTensor, TensorSuperType
+# export IndexSuperType, IndexSet, Index, DummyPatternIndex, Coordinate, TensorSuperType
 # export Tensor, @Tensor, RiemannTensor, SymmetricTensor, AntisymmetricTensor
 # #,TotallyAntisymmetricSuperType,TotallySymmetricSuperType,SymmetricTensor
 # export TensorTerm, TensorExpression, EpsilonTensor, EpsilonTensorSuperType

@@ -71,8 +71,24 @@
     # the pre-existing dotted index from the setup above
     @test indices(T"A^αdot") == [αdot => upper]
     # suffixes survive in pattern strings too
-    @test Alakazam.name(indices(DT"?A_?xdot")[1][1]) == "xdot"
-    @test indices(DT"?A_?xdot")[1][1] isa DummyPatternIndex
+    # a wildcard has no scope variable to resolve, so the parser folds the suffix into its
+    # combining mark itself: ?xdot denotes the dotted index, not one literally called "xdot"
+    @test Alakazam.name(indices(T"?A_?xdot")[1][1]) == string('̇') * "x"
+    @test Alakazam.name(indices(T"?A_?xbar")[1][1]) == string('̄') * "x"
+    @test Alakazam.name(indices(T"?A_?xhat")[1][1]) == string('̂') * "x"
+    @test Alakazam.name(indices(T"?A_?x")[1][1]) == "x"          # unsuffixed is untouched
+    @test indices(T"?A_?xdot")[1][1] isa DummyPatternIndex
+    # the converted name is what the binding is keyed on, so a dotted wildcard round-trips
+    # between pattern and replacement. (It does not restrict matching: a wildcard matches any
+    # index, and its own name is only a binding label.)
+    let dt = Index(string('̇') * "q", flavour_indices)
+        @test replace_pattern(TensorExpression(Tensor("V", [dt => lower])),
+                              TensorTerm(T"V_?qdot"), TensorExpression(T"W_?qdot")) ==
+              TensorExpression(Tensor("W", [dt => lower]))
+        @test replace_pattern(TensorExpression(Tensor("V", [b => lower])),
+                              TensorTerm(T"V_?qdot"), TensorExpression(T"W_?qdot")) ==
+              TensorExpression(Tensor("W", [b => lower]))
+    end
 
     ###############################################
     ### {...} is the coordinate group, not an index group

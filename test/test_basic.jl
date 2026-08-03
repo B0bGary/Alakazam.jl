@@ -56,4 +56,28 @@
     @test (to_latex((1+im/2)*tt);true)
 
     @test (fresh_indices(T1,tt);true)
+
+    ###############################################
+    ### equality distinguishes the kind of object, not just its name and indices.
+    ### Boson, Fermion, Tensor and Mat differ in grading or in whether they commute, so equating
+    ### them would let objects with different algebraic behaviour merge in a sum.
+    ###############################################
+    @test Tensor("W", [a => lower]) == Tensor("W", [a => lower])
+    @test Tensor("W", [a => lower]) != Boson("W", [a => lower])
+    @test Tensor("W", [a => lower]) != Fermion("W", [a => lower])
+    @test Boson("W", [a => lower]) != Fermion("W", [a => lower])
+    @test grading(Fermion("W", [a => lower])) != grading(Boson("W", [a => lower]))
+
+    # hash agrees with ==, so the two never collide in a Dict or a merge
+    @test hash(Tensor("W", [a => lower])) != hash(Fermion("W", [a => lower]))
+    @test hash(Tensor("W", [a => lower])) == hash(Tensor("W", [a => lower]))
+
+    # matrices are a distinct kind again: they need not commute
+    @matrix EqMx
+    @test EqMx("W") != Tensor("W")
+    @test EqMx("W") == EqMx("W")
+
+    # and the distinction survives into expressions, so unlike kinds do not cancel
+    @test !isZeroTens(Tensor("W", [a => lower]) - Boson("W", [a => lower]))
+    @test isZeroTens(Boson("W", [a => lower]) - Boson("W", [a => lower]))
 end

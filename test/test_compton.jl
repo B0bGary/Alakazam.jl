@@ -5,33 +5,32 @@ of the Redberry paper (arXiv:1302.1219, Sec. 1.2).   γ(k₁)φ(k₃) → γ(k�
 
 @testset "Compton scattering, massless scalar QED (Redberry Sec. 1.2)" begin
     st = IndexSet("compton_spacetime", 4, upper); @indices i:j ∈ st
-    Symbolics.@syms e s12 s13 s23
+    Symbolics.@syms e s12 s13 s23                  # sᵢⱼ = kᵢ·kⱼ, scalar products
 
-    k(n, x, p) = Tensor(n, [x => p])
-    V(a, b) = -im * e * (a + b)                       # V_i[p,q] = -ie(p+q)_i
+    # kₙ is one tensor k carrying n as a label, so the code reads as the physics does
+    k(n, x, p=upper) = Tensor("k", [x => p], "$n" => lower)
+    V(a, b) = -im * e * (a + b)                    # V^i(p,p') = -ie(p+p')^i
 
     # (k₃+k₁)² = 2·s13 and (k₃-k₂)² = -2·s23 on shell
-    function M(x, y, p)                               # x,y: the two photon indices
-        m(n, z) = k(n, z, p)
-        V(m("r",x), m("r",x)+m("p",x)) * (-im/(2*s13))  * V(-m("t",y), -m("r",y)-m("p",y)) +
-        V(m("r",y), m("r",y)-m("q",y)) * (-im/(-2*s23)) * V(-m("r",x)+m("q",x), -m("t",x)) +
-        2*im*e^2*Metric([x => p, y => p])              # seagull V^ij = 2ie²g^ij
-    end
+    M = V(T"k_3^i", T"k_3^i"+T"k_1^i") * (-im/( 2*s13)) * V(-T"k_4^j", -T"k_3^j"-T"k_1^j") +
+        V(T"k_3^j", T"k_3^j"-T"k_2^j") * (-im/(-2*s23)) * V(-T"k_3^i"+T"k_2^i", -T"k_4^i") +
+        2*im*e^2*Metric([i => upper, j => upper])  # seagull V^ij = 2ie²g^ij
 
-    w = DummyPatternIndex("w", st)                     # momentum conservation k₄ = k₁ + k₃ - k₂
-    con(X, p) = replace_pattern(X, p === upper ? "t^{?w}" : "t_{?w}",
-                                k("p",w,p) + k("r",w,p) - k("q",w,p))
-    Mu, Ml = con(M(i,j,upper), upper), con(M(i,j,lower), lower)
+    Mu = replace_pattern(M, T"k_4^?w", T"k_1^?w" + T"k_3^?w" - T"k_2^?w")   # k₄ = k₁+k₃-k₂
+    Ml = lower_all(Mu)                             # M has no dummies, so this is M with i,j down
 
-    @test length(summands(M(i,j,upper))) == 13         # 6 + 6 + seagull
-    @test Mu != M(i,j,upper)                           # the substitution fired
+    @test length(summands(M)) == 13                # 6 + 6 + seagull
+    @test Mu != M                                  # the substitution fired
+    @test T"k_1^i" == k(1, i) && T"k_1^i" != T"k_2^i"     # the macro and the constructor agree
 
-    # k_i·k_i = 0, and each remaining scalar product becomes its invariant
-    RULES = vcat([("$(n)_{?x}$(n)^{?x}", zero()) for n in ("p","q","r")],
-                 [("$(n)^{?x}$(n)_{?x}", zero()) for n in ("p","q","r")],
-                 [(pat, TensorExpression(s))
-                  for (a,b,s) in (("p","q",s12), ("p","r",s13), ("q","r",s23))
-                  for pat in ("$(a)_{?x}$(b)^{?x}", "$(a)^{?x}$(b)_{?x}")])
+    # kᵢ·kᵢ = 0, and each remaining scalar product becomes its invariant. Patterns are built as
+    # objects rather than strings, so the momenta keep their physical names: a pattern string
+    # parses a tensor name as a single character, but "k1" is fine as an object pattern.
+    kp(n, p) = k(n, DummyPatternIndex("x", st), p)
+    prods = ((1,1,0), (2,2,0), (3,3,0), (1,2,s12), (1,3,s13), (2,3,s23))   # kᵢ² = 0,  kᵢ·kⱼ = sᵢⱼ
+    RULES = [(kp(a,p)*kp(b,op_pos(p)), r) for (a,b,r) in prods for p in (lower,upper)]
+    # both index orders are needed: a pattern fixes which slot is raised, so k₁_x k₂^x and
+    # k₁^x k₂_x are different patterns even though they are the same scalar product
 
     function to_invariants(x)
         for _ in 1:8
@@ -42,24 +41,26 @@ of the Redberry paper (arXiv:1302.1219, Sec. 1.2).   γ(k₁)φ(k₃) → γ(k�
             x == prev && break
         end
         isZeroTens(x) && return 0
-        is_const(x) || return nothing                  # something failed to reduce
+        is_const(x) || return nothing               # something failed to reduce
         return first_coef(x)
     end
 
-    # s + t + u = 0 for four massless legs  =>  k₁·k₂ = k₁·k₃ - k₂·k₃
+    # k₄ is eliminated by momentum conservation before the on-shell rules run, so its own condition
+    # k₄² = 0 survives only as the scalar relation s12 = s13 - s23, imposed here at the end.
     onshell(v) = Symbolics.substitute(v, Dict(s12 => s13 - s23))
     iszerosym(v) = Alakazam.coeff_equal(Symbolics.simplify(Symbolics.expand(v)), 0)
 
+    # every term of M^ij is purely imaginary, so M* = -M and |M|² = -M_ij M^ij
     squared = to_invariants(Alakazam.simplify(-(Ml * Mu)))
-    @test squared !== nothing                          # fully reduced to a scalar
-    @test iszerosym(onshell(squared) - 8 * e^4)        # |M|² = 8e⁴
+    @test squared !== nothing                       # fully reduced to a scalar
+    @test iszerosym(onshell(squared) - 8 * e^4)     # |M|² = 8e⁴, a constant
 
     # gauge invariance: k₁_i M^ij = 0 and M^ij k₂_j = 0. The sharpest check on the amplitude --
     # each diagram violates it alone, and only the seagull's normalisation restores it.
     ward = true
-    for n in ("p", "q", "r")                           # p,q,r span the momenta appearing in M
-        w1 = to_invariants(Alakazam.simplify(k("p",i,lower) * Mu * k(n,j,lower)))
-        w2 = to_invariants(Alakazam.simplify(k(n,i,lower) * Mu * k("q",j,lower)))
+    for n in 1:3                                    # k₁,k₂,k₃ span the momenta appearing in M
+        w1 = to_invariants(Alakazam.simplify(k(1,i,lower) * Mu * k(n,j,lower)))
+        w2 = to_invariants(Alakazam.simplify(k(n,i,lower) * Mu * k(2,j,lower)))
         ward &= w1 !== nothing && w2 !== nothing &&
                 iszerosym(onshell(w1)) && iszerosym(onshell(w2))
     end
@@ -67,6 +68,8 @@ of the Redberry paper (arXiv:1302.1219, Sec. 1.2).   γ(k₁)φ(k₃) → γ(k�
 
     # the expression Redberry prints, in its own variables:
     #   A = (k₂k₃) = s23,  B = (k₂k₄) = k₁·k₃ = s13,  C = (k₃k₄) = k₁·k₂ = s12
+    # It differs from ours term by term because k₄² = 0 has not been imposed there; the two agree
+    # once s12 = s13 - s23 is substituted, i.e. they are representatives modulo that relation.
     redberry = -(e^4/2) * (-18*s23*s13 + s12^2 + s23^2 + 2*(s23-s13)*s12 + s13^2) / (s23*s13)
     @test iszerosym(onshell(redberry) - 8 * e^4)
     @test iszerosym(onshell(squared) - onshell(redberry))
