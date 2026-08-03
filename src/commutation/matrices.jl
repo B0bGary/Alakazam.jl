@@ -3,14 +3,19 @@
 Basic Matrix object. Generically, is non-commuting. Commutation relations must be specified. 
 It will (anti)commute with all tensor for which an explicit com-rel is not defined.
     """
-mutable struct Matrix <: MatrixSuperType
+mutable struct Mat <: MatrixSuperType
     data::TensorData
     indices::Vector{IndexPair}
-    Matrix(d::TensorData, i::Vector{IndexPair}) = new(d, i)
-    function Matrix(name::String, args...)
+    Mat(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function Mat(name::String, args...)
         return new(build_tensor(name, args...)...)
     end
 end
+
+"""
+Back-compatible alias. Renamed to mat to avoid conflict with base
+"""
+const Matrix = Mat
 
 # mutable struct Ket <: MatrixSuperType
 #     data::TensorData

@@ -13,25 +13,25 @@
     ###############################################
     ##
     #stop double-ups of tableaux
-    labels = [1, 2]
+    index_assignment = [1, 2]
     row_lengths = [1, 1]
-    asym_tabelau = YoungTableau(row_lengths, labels)
+    asym_tabelau = YoungTableau(row_lengths, index_assignment)
     T1 = AntisymmetricTensor("T", [a => lower, b => lower, c => lower], asym_tabelau)
     @test length(tableaux(T1)) == 1
-    labels = [1, 2, 3]
+    index_assignment = [1, 2, 3]
     row_lengths = [1, 1, 1]
-    asym_tabelau = YoungTableau(row_lengths, labels)
+    asym_tabelau = YoungTableau(row_lengths, index_assignment)
     T1 = AntisymmetricTensor("T", [a => lower, b => lower, c => lower], asym_tabelau)
     @test length(tableaux(T1)) == 1
 
-    labels = [1, 2]
+    index_assignment = [1, 2]
     row_lengths = [2]
-    asym_tabelau = YoungTableau(row_lengths, labels)
+    asym_tabelau = YoungTableau(row_lengths, index_assignment)
     T1 = SymmetricTensor("T", [a => lower, b => lower, c => lower], asym_tabelau)
     @test length(tableaux(T1)) == 1
-    labels = [1, 2, 3]
+    index_assignment = [1, 2, 3]
     row_lengths = [3]
-    asym_tabelau = YoungTableau(row_lengths, labels)
+    asym_tabelau = YoungTableau(row_lengths, index_assignment)
     T1 = SymmetricTensor("T", [a => lower, b => lower, c => lower], asym_tabelau)
     @test length(tableaux(T1)) == 1
 
@@ -39,9 +39,9 @@
     ##### irreps
     ###
     #simplest nontrivial tensor symmetry, irrep of S_3
-    labels = [1, 2, 3]
+    index_assignment = [1, 2, 3]
     row_lengths = [2, 1]
-    t_tabelau = YoungTableau(row_lengths, labels)
+    t_tabelau = YoungTableau(row_lengths, index_assignment)
     T1 = Tensor("T", [a => lower, b => lower, c => lower], [t_tabelau])
     T2 = Tensor("T", [c => lower, b => lower, a => lower], [t_tabelau])
     T3 = Tensor("T", [b => lower, a => lower, c => lower], [t_tabelau])
@@ -57,9 +57,9 @@
 
     ###
     #Riemann tensor
-    labels = [1, 3, 2, 4]
+    index_assignment = [1, 3, 2, 4]
     row_lengths = [2, 2]
-    riemann_tabelau = YoungTableau(row_lengths, labels)
+    riemann_tabelau = YoungTableau(row_lengths, index_assignment)
     
 
     R1 = Tensor("R", [a => lower, b => lower, c => lower, d => lower], [riemann_tabelau])

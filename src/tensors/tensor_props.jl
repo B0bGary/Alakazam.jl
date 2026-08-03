@@ -24,7 +24,7 @@ function set_terms!(T::TensorTerm, newterms::Vector{TensorSuperType})
     return T
 end
 @inline summands(T::TensorExpression) = T.summands
-@inline function isconst(T::TensorExpression)
+@inline function is_const(T::TensorExpression)
     length(terms(T)) == 1 || return false
     tt = T.summands[1][2]              # the single TensorTerm
     n = length(terms(tt))

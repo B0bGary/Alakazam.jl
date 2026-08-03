@@ -11,6 +11,7 @@ using Combinatorics
 using SymbolicUtils
 using JSON
 import Base.:*
+import Base: zero
 import Base.:+
 import Base.:copy
 import Base.:/
@@ -44,6 +45,7 @@ export to_latex
 
 ##########################
 #base tensors
+export @DT_str
 export TensorData, TensorDataSuperType, DummyPatternTensor, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
 export SymmetricTensor, AntisymmetricTensor, RiemannTensor
 export Boson, Fermion
@@ -67,13 +69,12 @@ export GeneratorDerivSuperType
 ##########################
 export data
 #expression
-export terms, coefficients, coef, summands, isconst, first_summand, first_coef, singleterm, hasIndices, isZeroTens, isTensorTerm, isTensor
+export terms, coefficients, coef, summands, is_const, first_summand, first_coef, singleterm, hasIndices, isZeroTens, isTensorTerm, isTensor
 export name, function_of, indices, weights, tableaux, grading, labels
 export set_name!, set_indices!, set_indices_deep!, update_indices!, set_index!
 export free_indices, free_indices_nopos, get_index_sets, dummies, dummies_positional
 export isAntisymmetric, isSymmetric
 # zero() tensor expr
-export zero
 export coef_string
 
 #serialisation
@@ -101,7 +102,7 @@ export YoungTableau, generate_symmetric_tableau, generate_antisymmetric_tableau,
 ##########################
 export Metric, KroneckerDelta, EpsilonTensor, Delta
 export is_riemann_metric
-export Matrix, Pauli, Gamma, Gamma5
+export Mat, Pauli, Gamma, Gamma5
 export reduce_matrix, contract_sigma, @mrule, @matrix
 export contract_adjacent#needed for macro
 

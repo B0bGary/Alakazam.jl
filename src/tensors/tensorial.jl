@@ -481,6 +481,29 @@ end
 macro T_str(expr::String)
     esc(:(@Tensor $expr))
 end
+"""
+Validate one entry of a `{...}` group in a tensor string.
+
+`{...}` lists the coordinates a tensor is a function of. Indices are written bare after `^`/`_`,
+with no braces unlike `replace_pattern`'s own string syntax, where braces group indices.
+"""
+function _coord_arg(x, tok::AbstractString)
+    x isa Coordinate && return x
+    if x === nothing
+        error("In a tensor string, {...} lists the coordinates the tensor depends on, but no " *
+              "variable named `$tok` is defined. If `$tok` was meant to be an index, write it " *
+              "bare after ^ or _ (e.g. \"A_$tok\" or \"A^$tok\") -- index groups are not braced.")
+    end
+    if x isa IndexSuperType
+        error("In a tensor string, {...} lists the coordinates the tensor depends on, but `$tok` " *
+              "is an index, not a Coordinate. Did you mean to write it as an index, i.e. " *
+              "\"A_$tok\" (lower) or \"A^$tok\" (upper)? Index groups are not braced in " *
+              "T\"...\"/DT\"...\" strings.")
+    end
+    error("In a tensor string, {...} lists the coordinates the tensor depends on, but `$tok` is a " *
+          "$(typeof(x)), not a Coordinate.")
+end
+
 const index_suffixes = ["dot", "hat", "bar"]
 function next_index(expr, i, comma_mode)
 
@@ -531,13 +554,46 @@ function next_index(expr, i, comma_mode)
 
     return Symbol(name), pos
 end
+function slot_expr(idx::Symbol, pos)
+    name = string(idx)
+    # 'quoted' forces a label even when a variable of that name is in scope
+    startswith(name, "'") &&
+        return :($(Pair{String,IndexPosition})($(name[nextind(name, 1):end]), $pos))
+    Base.isidentifier(name) ||
+        return :($(Pair{String,IndexPosition})($name, $pos))
+    return :($(esc(:(@isdefined $idx))) ?
+             ($(esc(idx)) => $pos) :
+             $(Pair{String,IndexPosition})($name, $pos))
+end
 
-macro Tensor(expr::String)
-    length(expr) == 1 && return Tensor(expr)
+"""
+Slot builder for pattern strings (`DT"..."`).
 
-    symbol = string(first(expr))
+A leading `?` marks a wildcard, which becomes a `DummyPatternIndex` resolved at match time rather
+than a variable looked up in the caller's scope. Everything else follows `slot_expr`: a defined
+identifier is an index, anything else (digits, undefined names) is a label.
+"""
+function dummy_slot_expr(idx::Symbol, pos)
+    name = string(idx)
+    startswith(name, "?") &&
+        return :($(Pair{IndexTypes,IndexPosition})($(DummyPatternIndex)($(name[nextind(name,1):end])), $pos))
+    return slot_expr(idx, pos)
+end
+"""
+Shared body for the `@Tensor`/`T"..."` and `DT"..."` string parsers.
 
-    @assert length(expr) > 1 && contains("_^([{", expr[nextind(expr, firstindex(expr))]) "Tensor name should be one character."
+`dummy=true` emits a `DummyPatternTensor` and turns `?x` slots into `DummyPatternIndex`, so that
+patterns are built by exactly the same parser as ordinary tensors and therefore inherit labels,
+tableaux, symmetry syntax and coordinate dependence.
+"""
+function _parse_tensor_string(expr::String, dummy::Bool=false)
+    length(expr) == 1 && return dummy ? DummyPatternTensor(expr) : Tensor(expr)
+
+    nameend = firstindex(expr)
+    startswith(expr, "?") && (nameend = nextind(expr, nameend))
+    symbol = expr[firstindex(expr):nameend]
+
+    @assert length(expr) > 1 && contains("_^([{?", expr[nextind(expr, nameend)]) "Tensor name should be one character."
 
     positions = []
     indices = Vector{Symbol}()
@@ -556,7 +612,7 @@ macro Tensor(expr::String)
     i = firstindex(expr)
 
     while i <= lastindex(expr)
-        if i == firstindex(expr)
+        if i <= nameend
             i = nextind(expr, i)
             continue
         end
@@ -594,7 +650,9 @@ macro Tensor(expr::String)
         else
             if funof
                 if char == "," || char == "}"
-                    push!(functionoflist, :($(esc(Symbol(coordstring)))))
+                    push!(functionoflist, :($(_coord_arg)(
+                        $(esc(:(@isdefined $(Symbol(coordstring))))) ? $(esc(Symbol(coordstring))) : nothing,
+                        $coordstring)))
                     coordstring = ""
 
                     if char == "}"
@@ -607,12 +665,28 @@ macro Tensor(expr::String)
             else
                 slotnum += 1
 
-                idx, newi = next_index(expr, i, comma_mode)
-
-                push!(indices, special_index(idx))
-                push!(positions, currpos)
-
-                i = newi
+                if expr[i] == '''
+                    # 'quoted' -> always a label, whatever else that name might mean
+                    j = nextind(expr, i)
+                    k = j
+                    while k <= lastindex(expr) && expr[k] != '''
+                        k = nextind(expr, k)
+                    end
+                    push!(indices, Symbol("'" * expr[j:prevind(expr, k)]))
+                    push!(positions, currpos)
+                    i = k
+                elseif dummy && expr[i] == '?'
+                    # ?x -> wildcard index; consume the marker together with its name
+                    idx, newi = next_index(expr, nextind(expr, i), comma_mode)
+                    push!(indices, Symbol("?" * string(special_index(idx))))
+                    push!(positions, currpos)
+                    i = newi
+                else
+                    idx, newi = next_index(expr, i, comma_mode)
+                    push!(indices, special_index(idx))
+                    push!(positions, currpos)
+                    i = newi
+                end
 
                 if !pause && asym
                     push!(tabaccum, slotnum)
@@ -627,20 +701,37 @@ macro Tensor(expr::String)
 
     functions_expr = Expr(:vect, functionoflist...)
 
-    indplacement = quote
-        [$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]
-    end
+    # indplacement = quote
+    #     [$([:($(esc(Symbol(idx))) => $pos) for (idx, pos) in zip(indices, positions)]...)]
+    # end
+    slots = [(dummy ? dummy_slot_expr : slot_expr)(idx, pos) for (idx, pos) in zip(indices, positions)]
 
-    varname = Symbol(first(expr))
-    # return :(Tensor($symbol, [$indplacement...], [$tableaulist...], $functions_expr))
+    ctor = dummy ? DummyPatternTensor : Tensor
     return quote
-        $(esc(varname)) = Tensor(
+         $ctor(
             $symbol,
-            [$indplacement...],
+            $(slots...),
             [$tableaulist...],
             $functions_expr
         )
     end
+end
+
+macro Tensor(expr::String)
+    return _parse_tensor_string(expr, false)
+end
+
+"""
+    DT"?A_?a?b"
+
+Build a *pattern* tensor for [`replace_pattern`](@ref), using the same syntax as `T"..."`.
+
+`?` marks a wildcard: as the name it gives a `DummyPatternTensor` (any tensor), and on a slot a
+`DummyPatternIndex` (any index in that position). Because it shares the `T"..."` parser, patterns
+also get labels, tableaux and the `(...)`/`[...]` symmetry syntax.
+"""
+macro DT_str(expr::String)
+    return _parse_tensor_string(expr, true)
 end
 
 # function has_comma_outside_curly(expr::String)

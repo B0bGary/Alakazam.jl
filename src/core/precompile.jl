@@ -67,6 +67,7 @@ const _DIR = joinpath(pkgdir(Alakazam), "test")
 const TEST_FILES = [
     "test_arithmetic.jl",
     "test_basic.jl",
+    "test_indices.jl",
     "test_replacements.jl",
     "test_arithmetic_adv.jl",
     "test_derivatives.jl",
@@ -321,4 +322,58 @@ let
     precompile(reduce_tableaux, (Set{YoungTableau},))
     precompile(Base.push!, (Set{YoungTableau}, YoungTableau))
 end
+# dealing with the slowness of symbolics
+# The first call into Symbolics' rewriting system costs several seconds to compile, and Alakazam
+# reaches it from `coeff_equal` whenever two coefficients are not already `isequal` i.e. from
+# any merge involving non-trivial symbolic coefficients. 
+let
+    Symbolics.@syms pce pcs pcu
+    si = IndexSet("_pc_sym", 4, upper)
+    m = Index("_pcm", si); n = Index("_pcn", si)
+    A = Tensor("A", [m => lower]); B = Tensor("B", [m => upper]); C = Tensor("C", [n => upper])
+    Z = Tensor("Z")
+
+    # rational symbolic coefficients through the merge/simplify pipeline
+    ex = (pce / (2 * pcs)) * TensorExpression(A * B) + (pce / (2 * pcu)) * TensorExpression(A * B)
+    simplify(ex)
+    hard_simplify(ex)
+    collect_terms(ex)
+    coeff_equal(pce / (2 * pcs), pce / (2 * pcs) + 1)
+
+    # Symbolics' own rewriting, on an expression carrying a division
+    v = (2 * pce^4 * pcs^2 - 10 * pce^4 * pcs * pcu) / (-pcs * pcu)
+    Symbolics.simplify(Symbolics.expand(Symbolics.substitute(v, Dict(pcs => pcs - pcu))))
+
+    # multi-tensor patterns, and object patterns built by DT"..."
+    replace_pattern(TensorExpression(A * B * C), "A_{?x}B^{?x}", Z)
+    replace_pattern(TensorExpression(A * B * C), TensorTerm(DT"A_?x"), TensorExpression(Z))
+    op_pos(TensorExpression(A * B))
+
+    # A Feynman-amplitude shaped calculation
+    let
+        k(nm, ix, pos) = Tensor(nm, [ix => pos])
+        vert(u, v) = -im * pce * (u + v)
+        amp(ix, jx, pos) = begin
+            mm(nm, z) = k(nm, z, pos)
+            vert(mm("r", ix), mm("r", ix) + mm("p", ix)) * (-im / (2 * pcs)) *
+                vert(-mm("t", jx), -mm("r", jx) - mm("p", jx)) +
+            vert(mm("r", jx), mm("r", jx) - mm("q", jx)) * (-im / (-2 * pcu)) *
+                vert(-mm("r", ix) + mm("q", ix), -mm("t", ix)) +
+            2 * im * pce^2 * Metric([ix => pos, jx => pos])
+        end
+        ww = DummyPatternIndex("w", si)
+        cons(X, pos) = replace_pattern(X, pos === upper ? "t^{?w}" : "t_{?w}",
+                                       k("p", ww, pos) + k("r", ww, pos) - k("q", ww, pos))
+        sq = simplify(-(cons(amp(m, n, lower), lower) * cons(amp(m, n, upper), upper)))
+        sq = replace_pattern(sq, "p_{?x}p^{?x}", zero())
+        sq = replace_pattern(sq, "p_{?x}r^{?x}", TensorExpression(pcs))
+        is_const(sq) || isZeroTens(sq)
+    end
+
+    # derivatives: the partial-only path skips expand_derivative
+    xc = Coordinate("_pcx", si)
+    D = PartialDerivative("∂", xc, m => lower)
+    derive(D(Tensor("X", [n => upper], xc)))
+end
+
 clear_global!()

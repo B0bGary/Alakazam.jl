@@ -51,8 +51,34 @@
     @test (T"F_ab")^2==T"F_ab"*T"F^ab"
     #higher powers
     @test (T"F_ab")^3==T"F_ab"*T"F_cd"*T"F^cd"
-    T"K_ab"
+    K=T"K_ab"
     @test (K;true) #user scope
 
-end
 
+    ###############################################
+    ### suffixed index names (dot / bar / hat) must keep resolving as INDICES, not labels
+    ###############################################
+    abar = Index("ā", flavour_indices)
+    ahat = Index("â", flavour_indices)
+    adot = Index("̇a", flavour_indices)
+
+    @test indices(T"A_adot") == [adot => lower] && isempty(labels(T"A_adot"))
+    @test indices(T"A_abar") == [abar => lower] && isempty(labels(T"A_abar"))
+    @test indices(T"A_ahat") == [ahat => lower] && isempty(labels(T"A_ahat"))
+    # a suffixed name followed by a plain one: the suffix must be consumed with its stem
+    @test indices(T"A_adotb") == [adot => lower, b => lower]
+    @test indices(T"A^adot_b") == [adot => upper, b => lower]
+    # the pre-existing dotted index from the setup above
+    @test indices(T"A^αdot") == [αdot => upper]
+    # suffixes survive in pattern strings too
+    @test Alakazam.name(indices(DT"?A_?xdot")[1][1]) == "xdot"
+    @test indices(DT"?A_?xdot")[1][1] isa DummyPatternIndex
+
+    ###############################################
+    ### {...} is the coordinate group, not an index group
+    ###############################################
+    @test length(function_of(T"A_a{x}")) == 1              # valid: x is a Coordinate
+    @test_throws ErrorException T"A_{a}"                   # a is an Index, not a Coordinate
+    @test_throws ErrorException T"A_{qqqq}"                # no such variable at all
+
+end

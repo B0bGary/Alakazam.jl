@@ -107,11 +107,22 @@ end
 
 """Fully expand, apply derivatives and simplify"""
 function derive(TEX::Union{TensorExpression,<:CovDerivSuperType})
-    return simplify(apply_derivative(product_rule(expand_derivative(TEX))))
+    #remove prod rule here
+    return simplify(apply_derivative(expand_derivative(TEX)))
 end
 """Fully expand, apply derivatives and simplify"""
 function derive(TEX::T) where T<:GeneratorDerivSuperType
     return simplify(apply_derivative(product_rule(TEX)))
+end
+
+"""
+Apply derivatives and simplify.
+
+A partial derivative carries no covariant expansion, so `expand_derivative` has nothing to rewrite
+and is skipped.
+"""
+function derive(TEX::T) where T<:PartialSuperType
+    return simplify(apply_derivative(TEX))
 end
 
 #####

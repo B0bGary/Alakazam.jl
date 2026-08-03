@@ -20,7 +20,7 @@ transform(f, t::Tensorial) = f(t)
 
 #change to use our tabelau code!
 function ==(a::TensorSuperType, b::TensorSuperType)
-    if (name(a) == name(b) && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b))
+    if (name(a) == name(b) && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
         # println("apparnetly equl inds")
         return true
     else
@@ -2020,8 +2020,8 @@ _unwrapnum(x) = SymbolicUtils.isconst(x) ? SymbolicUtils.unwrap_const(x) : x
 function coef_string(c, T::TensorExpression)
     c = Symbolics.simplify(Symbolics.expand(c))
     c = _unwrapnum(c)  
-    isequal(c, 1) && !isconst(T) && return ""
-    isequal(c, -1) && !isconst(T) && return "-"
+    isequal(c, 1) && !is_const(T) && return ""
+    isequal(c, -1) && !is_const(T) && return "-"
     if c isa Number
 
         isreal(c) && return string(real(c))
@@ -3144,7 +3144,13 @@ end
 ##############################################################################################################################
 #more or less generic functions that either are simple or have many uses across the codebase
 
-"""The  zero() tensor expression used globally in Alakazam."""
+"""
+The zero() tensor expression used globally in Alakazam.
+
+This is a method on `Base.zero` rather than a separate function: a package-owned `zero` would clash
+with the one `Base` exports, forcing users to write `Alakazam.zero()`. `Base` has no zero-argument
+`zero`, so this signature is unambiguous.
+"""
 const _zero = TensorExpression()
 @inline zero()::TensorExpression = _zero
 const _consttensor=Tensor("")

@@ -65,14 +65,19 @@
 
     ###############################################
     #an expression with more contracted pairs than one alphabet holds
-    wide = IndexSet("gen_wide", 4, lower)
-    widx = Index(copy(Alakazam.LATIN_LOWER), wide)
-    expr = 1
-    for k in 1:12
-        p, q = widx[2k-1], widx[2k]
-        expr = expr * SymmetricTensor("A", [p => upper, q => upper]) *
-               SymmetricTensor("B", [p => lower, q => lower])
+    # `let` so the loop updates `expr` rather than shadowing it: at module top level (as when this
+    # file is used as a precompile workload) a bare `expr = 1` is a global and the for-loop body
+    # would introduce a new local instead.
+    let
+        wide = IndexSet("gen_wide", 4, lower)
+        widx = Index(copy(Alakazam.LATIN_LOWER), wide)
+        expr = 1
+        for k in 1:12
+            p, q = widx[2k-1], widx[2k]
+            expr = expr * SymmetricTensor("A", [p => upper, q => upper]) *
+                   SymmetricTensor("B", [p => lower, q => lower])
+        end
+        @test_nowarn Alakazam.simplify(expr)
     end
-    @test_nowarn Alakazam.simplify(expr)
 
 end

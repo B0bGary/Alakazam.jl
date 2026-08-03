@@ -34,7 +34,7 @@ end
 function replace_pattern(exp::TensorSuperType, pattern::String, replace::String, repeat::Bool=true)
     return substitute_terms(TensorTerm(exp), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat)
 end
-function replace_pattern(exp::TensorExpression, pattern::String, replace::String, repeat::Bool=true, excluded=nothing)
+function replace_pattern(exp::TensorExpression, pattern::String, replace::String, repeat::Bool=true, excluded::Set{TensorSuperType}=Set{TensorSuperType}())
     new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), parse_pattern2tensor(pattern), TensorExpression(parse_pattern2tensor(replace)), repeat, excluded)
@@ -51,7 +51,7 @@ function replace_pattern(exp::TensorExpression, pattern::String, replace::Tensor
     return new_exp
 end
 
-function replace_pattern(exp::TensorExpression, pattern::TensorTerm, replace::TensorExpression, repeat::Bool=true, excluded=nothing)
+function replace_pattern(exp::TensorExpression, pattern::TensorTerm, replace::TensorExpression, repeat::Bool=true, excluded::Set{TensorSuperType}=Set{TensorSuperType}())
     new_exp = zero()
     for summand in summands(exp)
         new_exp += coef(summand)*substitute_terms(term(summand), pattern, replace, repeat, excluded)
@@ -114,6 +114,55 @@ end
 
 
 """
+True when the matched factors cannot be brought together by a graded sign alone: some factor lying
+between them has a registered commutation relation, so moving past it emits extra terms rather than
+just a sign.
+"""
+function _needs_drag(allt, poss::Vector{Int})
+    length(poss) > 1 || return false
+    anchor = poss[1]
+    mset = Set(poss)
+    for p in poss
+        p == anchor && continue
+        for x in (anchor+1):(p-1)
+            x in mset && continue
+            can_swap(allt[p], allt[x]) || return true
+        end
+    end
+    return false
+end
+
+"""
+Bring the factors at `poss` together at `poss[1]`, honouring the registered commutation relations.
+
+Returns a `TensorExpression`: the summand in which the matched factors are adjacent, plus whatever
+commutator remainders the moves generated. Those remainders no longer contain all of the matched
+factors, so they are simply left for the caller's next matching pass rather than substituted into.
+
+Factors are located by object identity, because after a drag the positions have shifted and some
+summands will have lost the factor entirely to a commutator.
+"""
+function _gather_matched(allt, poss::Vector{Int})
+    targets = [allt[p] for p in poss]
+    out = TensorExpression(TensorTerm(copy(allt)))
+    for k in 2:length(targets)
+        acc = zero()
+        for (c, tt) in summands(out)
+            trms = terms(tt)
+            i = findfirst(t -> t === targets[k-1], trms)
+            j = findfirst(t -> t === targets[k], trms)
+            if i === nothing || j === nothing || j <= i + 1
+                acc += c * tt                      # adjacent already, or eaten by a commutator
+            else
+                acc += drag_to_adjacent(c, trms, i, j)
+            end
+        end
+        out = acc
+    end
+    return out
+end
+
+"""
 Find instances of a tensor term inside a larger term, and replace it with another term. 
 Uses pattern matching to find the correct replacements, and accounts for grading. 
 Repeats until no more matches are found if repeat is true.
@@ -140,26 +189,36 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
     out = patt_match(pat_hist, exp_hist, pattern, exp, Dict{String,String}(), Dict{String,IndexSuperType}(), excluded, repeat)
 
     if out.matched
+        # Non-commuting factors between the matched ones cannot be crossed with a sign: the move emits commutator terms. 
+        let allt = terms(exp), poss = sort!([v[2] for v in values(out.all_matches[1].position_matches)])
+            if _needs_drag(allt, poss)
+                gathered = _gather_matched(allt, poss)
+                return replace_pattern(gathered, pattern, replace, repeat, excluded)
+            end
+        end
+
         new_exp = zero()
 
         for match in out.all_matches
-            grade = 0
-            exp2 = copy(terms(exp))
-            vlast = 0
+            allt = terms(exp)
+            poss = sort!([v[2] for v in values(match.position_matches)])
+            matched = Set(poss)
+            anchor = poss[1]
 
-            for v in values(match.position_matches)
-                v = v[2]
-                if vlast != 0 && vlast < v
-                    v -= 1
+            # The replacement is now spliced in where the match began, not pulled to the front of the term. 
+            # Only the matched factors move: each one travels left to the anchor, 
+            # past exactly the unmatched factors lying between the anchor and itself. 
+            #That is what the graded sign counts.
+            grade = 0
+            for p in poss
+                p == anchor && continue
+                for x in (anchor+1):(p-1)
+                    x in matched && continue
+                    grade += grading(allt[p]) * grading(allt[x])
                 end
-                if v != 1
-                    for i in 1:(v-1)
-                        grade += grading(exp2[i]) * grading(exp2[v])
-                    end
-                end
-                splice!(exp2, v)
-                vlast = v
             end
+            pre = TensorSuperType[allt[i] for i in 1:(anchor-1)]
+            post = TensorSuperType[allt[i] for i in (anchor+1):length(allt) if !(i in matched)]
 
             rep2 = copy(replace)
             for summand in summands(rep2)
@@ -185,7 +244,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
                 end
             end
 
-            new_exp += ((-1)^grade) * rep2 * TensorTerm(exp2)
+            new_exp += ((-1)^grade) * TensorTerm(pre) * rep2 * TensorTerm(post)
             update_indices!(rep2)
         end
 
@@ -294,13 +353,18 @@ function patt_match(pat::OrderedDict{Int,Vector{Pair{String,Vector{Int}}}}, exp:
                             end
                             match = []
                             j = 1
+                            # Thread the index bindings through successive occurrences. Passing the
+                            # original `dummy_index_matching` to every call let a wildcard rebind
+                            # freely, so a pattern like "q_{?x}q^{?x}" matched `q^i q_j` and silently zeroed terms that do not vanish.
+                            acc = dummy_index_matching
                             for i in 1:ekey
-                                outt = check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp, dummy_index_matching)
+                                outt = check_index_match(pvalues[1][2][j], eval[2][i], tensorpatt, tensorexp, acc)
                                 if outt[1]
                                     push!(match, pvalues[1][2][j] => eval[2][i])
+                                    acc = outt[2]
                                     j += 1
                                     if j > pkeys[1]
-                                        dumindtemp = outt[2]
+                                        dumindtemp = acc
                                         break
                                     end
                                 end
@@ -431,8 +495,18 @@ function check_index_match(loc_pat::Int, loc_exp::Int, pat::TensorTerm, exp::Ten
     dummy = copy(dumind)
     # i think we dont need this if statement...
     # if typeof(terms(pat)[loc_pat]) <: DummyPatternTensor
-    pii=indices(terms(pat)[loc_pat])
-    ei = indices(terms(exp)[loc_exp])
+    ptens = terms(pat)[loc_pat]
+    etens = terms(exp)[loc_exp]
+
+    # Labels: a pattern that names none is a wildcard over labels, so every pattern written before
+    # labels existed keeps matching exactly as it did. A pattern that *does* name labels must match
+    # them exactly, which is what lets `DT"k_1^?a"` pick out k₁ without also taking k₂.
+    if !isempty(labels(ptens)) && labels(ptens) != labels(etens)
+        return (false, dumind)
+    end
+
+    pii = indices(ptens)
+    ei = indices(etens)
     if length(pii) != length(ei)
         return (false, dumind)
     end
@@ -490,12 +564,12 @@ function parse_pattern2tensor(pattern::String)
         else
             tensor = Tensor(string(char)) #A     name is important #maybe something about coord dependance
         end
-        next = peek(it)
-        if next !== nothing
+        # Parse this tensor's trailing index groups. PEEK before consuming: consuming the
+        # terminator swallows the next tensor's name, which is what broke multi-tensor patterns.
+        while true
+            nxt = peek(it)
+            (nxt === nothing || (nxt != '^' && nxt != '_')) && break
             char = iterate(it)[1]
-            #now, do indices
-            #   while string(char) == "^" ||string(char)=="_"
-            while string(char) == "^" || string(char) == "_"
                 if string(char) == "^"
                     if string(peek(it)[1]) == "{"
                         iterate(it)
@@ -560,14 +634,6 @@ function parse_pattern2tensor(pattern::String)
                         push!(indices(tensor), Index(string(iterate(it)[1])) => lower) #single upper index
                     end
                 end
-                next = peek(it)
-                if next !== nothing
-                    char = iterate(it)[1]
-                else
-                    break
-                end
-            end
-
         end
         push!(tensor_term, copy(tensor))#adds a copy
     end
