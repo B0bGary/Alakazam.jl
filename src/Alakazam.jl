@@ -130,6 +130,7 @@ export replace_pattern, solve_linear
 ###########################
 #diffgeo etc
 export isForm, ⋆, star, ⨼, ι, wedge, ∧, contraction
+export exterior_derivative, 𝖽
 
 
 ##########################
