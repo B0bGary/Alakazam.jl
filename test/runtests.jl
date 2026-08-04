@@ -26,6 +26,7 @@ if true
         "test_superspace_adv.jl",
         "test_lightcone.jl",
         "test_n02.jl",
+        "test_forms.jl",
         "test_compton.jl",
     ]
     _TESTDIR = mktempdir(cleanup=false)

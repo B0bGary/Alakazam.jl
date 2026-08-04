@@ -71,6 +71,35 @@ function ⋆(T::TensorSuperType, index_type::Union{IndexSet,Nothing}=nothing)
     return Tdual
 end
 
+"""At least `n` indices of `I` outside `used`, generating fresh ones when the declared pool runs short."""
+function _spare_indices(I::IndexSet, used, n::Integer)
+    out = IndexSuperType[x for x in I.indices if x ∉ used]
+    while length(out) < n
+        nid = generate_indices(I)
+        nid === nothing && throw(OutOfIndices(I))
+        push!(out, nid)
+    end
+    out
+end
+
+"""Copy of `T` with its `tinds` indices replaced by `newinds` in order, every other index kept."""
+function _set_form_indices(T::TensorSuperType, tinds::IndexSet, newinds)
+    out = Vector{Pair{IndexSuperType,IndexPosition}}()
+    k = 0
+    for (ind, pos) in indices(T)
+        if ind.index_set == tinds
+            k += 1
+            push!(out, newinds[k])
+        else
+            #a spinor or flavour index rides along untouched
+            push!(out, ind => pos)
+        end
+    end
+    Tc = copy(T)
+    set_indices!(Tc, out)
+    Tc
+end
+
 """Take the wedge exterior product between two forms"""
 wedge(T1::TensorSuperType, T2::TensorSuperType,index_type::Union{IndexSet,Nothing}=nothing) = ∧(T1::TensorSuperType, T2::TensorSuperType,index_type)
 
@@ -103,7 +132,7 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
     # println([y for y in combinds])
     # println([y[1] for y in combinds])
 
-    unused = [x for x in tinds.indices if x ∉ [y[1] for y in combinds]]
+    unused = _spare_indices(tinds, [y[1] for y in combinds], tinds.range)
     p = length(inds1)
     q = length(inds2)
     r = p + q
@@ -126,7 +155,7 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
     # println(epsindlist)
     eps1 = EpsilonTensor(epsindlist) #the leadings inds will not change
 
-    unused = [x for x in unused if x ∉ (y[1] for y in vcat(combinds, indices(eps1)))]
+    unused = _spare_indices(tinds, [y[1] for y in vcat(combinds, indices(eps1))], r)
     epsindlist2 = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
         vcat(
             [unused[i] => op_pos(poss) for i in 1:r],
@@ -134,10 +163,10 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
         )
     )
     eps2 = EpsilonTensor(epsindlist2)
-    T1c = copy(T1)
-    set_indices!(T1c, [epsindlist2[i][1] => poss for i in 1:p])
-    T2c = copy(T2)
-    set_indices!(T2c,[epsindlist2[i][1] => poss for i in p+1:r])
+    #only the form indices are renamed; a spinor or flavour index the factor
+    #carries stays where it is, else a gravitino bilinear comes back bosonic
+    T1c = _set_form_indices(T1, tinds, [epsindlist2[i][1] => poss for i in 1:p])
+    T2c = _set_form_indices(T2, tinds, [epsindlist2[i][1] => poss for i in p+1:r])
  
     prefact = 1 // (factorial(p) * factorial(q) * factorial(dim - r))
     return prefact * eps1 * eps2 * T1c * T2c
