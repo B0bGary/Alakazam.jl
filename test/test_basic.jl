@@ -80,4 +80,9 @@
     # and the distinction survives into expressions, so unlike kinds do not cancel
     @test !isZeroTens(Tensor("W", [a => lower]) - Boson("W", [a => lower]))
     @test isZeroTens(Boson("W", [a => lower]) - Boson("W", [a => lower]))
+
+    # the set holds the dimension its indices report, so it can be asked directly
+    @test dimension(spacetime_indices) == spacetime_indices.range
+    @test dimension(spacetime_indices) == dimension(a)
+    @test dimension(IndexSet("dimcheck", 7, lower)) == 7
 end

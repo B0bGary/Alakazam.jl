@@ -239,6 +239,9 @@ function op_pos(v::T) where {T<:AbstractSet{<:Pair{I,IndexPosition}}} where {I<:
 end
 
 
+function dimension(I::IndexSet)
+   return I.range
+end
 function dimension(I::IndexSuperType)
    return I.index_set.range
 end
