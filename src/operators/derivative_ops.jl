@@ -1045,9 +1045,10 @@ function symmetrise_partials(TT::TensorTerm)
     return new_term
 end
 
-function root_oprnd(D::PartialSuperType)
+"""Innermost operand of a nest of derivatives, partial or covariant."""
+function root_oprnd(D::DerivativeSuperType)
     opr = isTensor(operand(D))
-    if opr isa PartialSuperType
+    if opr isa DerivativeSuperType
         return root_oprnd(opr)
     else
         return operand(D)
