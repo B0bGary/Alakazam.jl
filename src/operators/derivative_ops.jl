@@ -413,14 +413,6 @@ function derivatives_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
 end
 
 
-function operators_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
-    if haskey(derivative_algebra, D1 => D2)
-        return derivative_algebra[D1=>D2][1] == 1
-    else
-        return false
-    end
-end
-
 function same_operator(D1::DerivativeSuperType, D2::DerivativeSuperType)
     name(D1) == name(D2) || return (false => _NO_MATCH)
     ind1 = op_indices(D1);
@@ -896,7 +888,7 @@ function product_rule(O::LeibnizOperatorSuperType)
 
     # out = CoeffPair[]
     out = CoeffPair[]
-    sizehint!(out, sum(length(terms(t)) for (_, t) in s))
+    sizehint!(out, sum(length(terms(t)) for (_, t) in s; init=0))   # operand may be zero
     for (coef, tterm) in s
         ts = terms(tterm)
         grad = 0
@@ -1067,7 +1059,7 @@ ADD A STEP TO REBUILD WEIGHTS ETC!!!
 """
 function symmetrise_partials(D::PartialSuperType)
     root = root_oprnd(D)
-    chn = get_operator_chain(D) #get the chain of ops
+    chn = get_operator_chain(D, PartialSuperType) #only partials may be exchanged by index
     # @show op
     # @show op_indices(op)
     inds = [op_indices(op)[1][1] for op in chn]
@@ -1108,12 +1100,20 @@ end
 
 
 
-function rebuild_nested(permuted, root)
-    expr = root
-    for op in reverse(permuted)
-        expr = set_operand!(copy(op), expr)
+"""
+    rebuild_nested(ops, root)
+
+Rebuild a nested chain of operators over `root`, `ops` given outermost-first. Inverse of
+`strip_derivatives`, and the way back from a permuted chain in `symmetrise_partials`.
+
+`root` may be a tensor or an expression.
+"""
+function rebuild_nested(ops, root)
+    out = root
+    for k in length(ops):-1:1
+        out = _with_operand(ops[k], out isa TensorExpression ? out : TensorExpression(out))
     end
-    return expr
+    return out
 end
 
 function graded_sign(perm, ops)
@@ -1146,7 +1146,7 @@ function graded_swap(ops, perm)
 end
 
 function graded_swaps(ops)
-    results = []
+    results = Tuple{typeof(ops),Int}[]
     n = length(ops)
     for p in permutations(1:n)
         permuted = ops[p]
@@ -1170,27 +1170,23 @@ function graded_swaps_opinds(ops)
     return results
 end
 
-function get_operator_chain(T::OperatorSuperType)
-    chain = []
+"""
+    get_operator_chain(T, through=OperatorSuperType)
+
+Collect the nested operators of `T`, descending only through operators that are instances of
+`through`. Used to find chains of nested partials derivs over which to symmetrise.
+"""
+function get_operator_chain(T::OperatorSuperType, through::Type=OperatorSuperType)
+    chain = Any[T]                        # the head is always included, so the chain is never empty
     current = T
-    while current isa OperatorSuperType
-        push!(chain, current)
-        current = isTensor(operand(current)) #get the operand tensor
+    while current isa through
+        nxt = isTensor(operand(current))  #get the operand tensor
+        (nxt isa OperatorSuperType && nxt isa through) || break
+        push!(chain, nxt)
+        current = nxt
     end
     return chain
 end
-
-"""
-Deep check to see if two operators are the same, by recursively checking if their operands are the same in the case of nested operators.
-"""
-function nested_opertor_equality(D1::DerivativeSuperType, D2::DerivativeSuperType)
-    if name(D1) == name(D2) && typeof(operand(D1)) == typeof(operand(D2)) && coord(D1) == coord(D2) && function_of(D1) == function_of(D2) && operator_indices(D1) == operator_indices(D2)
-        return true
-    else
-        return false
-    end
-end
-
 function update_ext_indices!(O::OperatorSuperType) #probably needs to include dummies...
     if operand(O) isa TensorSuperType || operand(O) isa TensorTerm
         set_indices!(O, vcat(operator_indices(O), indices(operand(O))))

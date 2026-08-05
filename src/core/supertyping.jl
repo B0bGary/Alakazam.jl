@@ -35,7 +35,6 @@ abstract type Gamma5SuperType <: MatrixSuperType end #new supertype for gamma ma
 
 abstract type OperatorSuperType <: TensorSuperType end
 
-
 abstract type DifferentiableFunctionSuperType <:OperatorSuperType end #differentiable functions? for chain rule?
 
 

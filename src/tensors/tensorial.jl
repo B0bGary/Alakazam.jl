@@ -5,6 +5,7 @@ const _EMPTY_FUNCTION_OF =  Coordinate[]
 const _EMPTY_TABLEAUX = Set{YoungTableau}()
 const _EMPTY_WEIGHTS = Dict{String,Number}()
 const _EMPTY_LABELS = LabelPair[]
+const _EMPTY_INDICES = IndexPair[]
 @inline coordfree() = _EMPTY_FUNCTION_OF
 @inline notableaux()::Set{YoungTableau} = _EMPTY_TABLEAUX
 @inline noweights()::Dict{String,Number} = _EMPTY_WEIGHTS
@@ -90,8 +91,6 @@ _with_name(p::TensorData, nm::String) =
     TensorData(nm, p.function_of, p.weights, p.tableaux, p.labels)
 _with_tableaux(p::TensorData, tabs::Set{YoungTableau}) =
     TensorData(p.name, p.function_of, p.weights, tabs, p.labels)
-_with_function_of(p::TensorData, fo::Vector{Coordinate}) =
-    TensorData(p.name, fo, p.weights, p.tableaux, p.labels)
 
 # Defined here rather than in young.jl because that file loads before TensorData exists.
 function _add_tableau(p::TensorData, tab::YoungTableau)

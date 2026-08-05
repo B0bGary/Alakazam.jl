@@ -18,11 +18,6 @@ Get just the TensorTerm part
 @inline coefficients(T::Vector{Pair{SymorNum,TensorTerm}}) = [t[1] for t in T]
 @inline coef(t::Pair{SymorNum,TensorTerm}) = t[1]
 @inline term(t::Pair{SymorNum,TensorTerm}) = t[2]
-
-function set_terms!(T::TensorTerm, newterms::Vector{TensorSuperType})
-    T.terms = newterms
-    return T
-end
 @inline summands(T::TensorExpression) = T.summands
 @inline function is_const(T::TensorExpression)
     length(terms(T)) == 1 || return false
@@ -57,11 +52,6 @@ Plain tensors return their shared [`TensorData`](@ref), operators return their `
 """
 data(T::TensorSuperType) = T.data
 data(T::OperatorSuperType) = T.data
-
-"""Re-bundle a tensor's shared props and its indices into a `TensorData`.
-"""
-tensor_data(T::TensorSuperType) = data(T)
-tensor_data(T::OperatorSuperType) = op_data(T)
 
 
 """Return the name String of a tensor."""
@@ -368,15 +358,6 @@ function _dummies_raw(T::Union{TensorSuperType,TensorTerm}, ::Val{positional}) w
     return dummies, seen    # return both, unsorted
 end
 """
-Gets pairs of vector position/dummy indices from tensorial objects. (try to make faster)
-"""
-function dummies_with_pos_index(T::Tensorial)
-    dp = dummies_positional(T)           # single scan
-    dset = first.(dp)                    # the dummy indices
-    return [i => idx for (i, (idx, _)) in enumerate(indices(T)) if idx in dset]
-end
-
-"""
 Gets vector of pairs, first is the vector index, second is the pair-index/position for dummy indices from tensorial objects. (try to make faster)
 """
 function dummies_with_pos_index_pos_ul(T::Tensorial)
@@ -450,15 +431,6 @@ function _ccl_exact(T1::Tensorial, T2::Tensorial)
         end
     end
     return true
-end
-
-function _uniq_first(dp)
-    out = IndexTypes[]
-    for p in dp
-        f = first(p)
-        f in out || push!(out, f)
-    end
-    out
 end
 
 function free_indices_ordered(T::Tensorial)

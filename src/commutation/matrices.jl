@@ -1,7 +1,8 @@
 
 """
-Basic Matrix object. Generically, is non-commuting. Commutation relations must be specified. 
-It will (anti)commute with all tensor for which an explicit com-rel is not defined.
+Basic Matrix object. Generically, is non-commuting: two matrices are left in the order written unless a relation between them has been registered. 
+Declaring the commutator to vanish, with `@commutator [A, B] = zero()`, is what makes a pair freely exchangeable; declaring a non-zero one
+lets them be exchanged at the cost of the remainder.
     """
 mutable struct Mat <: MatrixSuperType
     data::TensorData
@@ -16,6 +17,33 @@ end
 Back-compatible alias. Renamed to mat to avoid conflict with base
 """
 const Matrix = Mat
+
+"""
+The identity matrix. 
+Commutes with everything, and absorbs into any adjacent matrix under `contract_adjacent()`.
+"""
+mutable struct IdMatrix <: MatrixSuperType
+    data::TensorData
+    indices::Vector{IndexPair}
+    index_set::Union{IndexSet,Nothing}# The space it is the identity on
+    IdMatrix(d::TensorData, i::Vector{IndexPair}) = new(d, i, nothing)
+    IdMatrix(d::TensorData, i::Vector{IndexPair}, st::Union{IndexSet,Nothing}) = new(d, i, st)
+    IdMatrix(st::IndexSet, args...) = new(build_tensor("𝟙", args...)..., st)
+    IdMatrix(args...) = new(build_tensor("𝟙", args...)..., nothing)
+end
+
+# specialised copy with indexset
+copy(m::IdMatrix) = IdMatrix(m.data, m.indices, m.index_set)
+
+# Two identities on different spaces are different objects, even where the dims are the same
+function ==(a::IdMatrix, b::IdMatrix)
+    a.index_set == b.index_set || return false
+    return indices(a) == indices(b) && labels(a) == labels(b)
+end
+Base.hash(m::IdMatrix, h::UInt) =
+    hash(m.index_set === nothing ? "" : m.index_set.name, hash(IdMatrix, h))
+_extra_identity(m::IdMatrix) = m.index_set === nothing ? nothing : m.index_set.name
+
 
 # mutable struct Ket <: MatrixSuperType
 #     data::TensorData
@@ -76,13 +104,14 @@ mutable struct Gamma5 <: Gamma5SuperType
 
 end
 
-
 """
     @matrix MatrixType
 
 Macro to define a  new MatrixType<:MatrixSuperType, with basic constructors.
 For example,
+
     @matrix GMMatrix
+
     A = GMMatrix("A", [μ => lower])
 """
 macro matrix(name)
@@ -105,10 +134,63 @@ function contract_sigma(T::Tensorial)
     return eliminate_kronecker(contract_metrics(eliminate_epsilon(result)))
 end
 
+"""Eliminate matrices from an expression using matrix product rules."""
+eliminate_matrices(T::Tensorial,mat_type::Type=MatrixSuperType)=contract_adjacent(T,mat_type)
+
 """
-Generic reduce matrix function - can be overloaded to define new identities.
+Generic reduce matrix function, can be overloaded to define new identities.
 """
 reduce_matrix(m::MatrixSuperType, m2::MatrixSuperType, tterm::TensorTerm) = (false,  zero())
+
+# the identity absorbs either side; the Id-Id method is needed to break the ambiguity between them
+#removed because may belong to differnt spaces. fix at somepoint when relevant
+reduce_matrix(::IdMatrix, m::MatrixSuperType, ::TensorTerm) = (true, m) #careful, need to decide best way to handle
+reduce_matrix(m::MatrixSuperType, ::IdMatrix, ::TensorTerm) = (true, m)# careful, need to decide best way to handle
+reduce_matrix(i::IdMatrix, ::IdMatrix, ::TensorTerm) = (false, zero()) #makes sure bad prods dont vanish. really, need to check that theyd id on same space
+
+"""
+Largest gamma matrix product to define a rule for. 
+We can stil cancel higher products, but there just won't be explicit rules, have to recurse down
+"""
+const MAX_GAMMA_CONTRACTION = 8
+
+"""
+Reursive helper function for contracting gamma products `γ^μ γ^{ν1}...γ^{νn} γ_μ` in `d` dimensions.
+"""
+function _gamma_sandwich(mid::Vector{TensorSuperType}, d)
+    isempty(mid) && return TensorExpression(d)
+    lastg = mid[end]
+    head = TensorSuperType[mid[i] for i in 1:(length(mid)-1)]
+    lead = isempty(head) ? TensorExpression(2 * lastg) : 2 * lastg * TensorTerm(head)
+    return lead - _gamma_sandwich(head, d) * lastg
+end
+
+"""
+Reduce a run of gamma matrices whose outermost two are contracted with one another.
+
+The dimension is read from the contracted index at reduction time rather than baked in when a rule
+is registered.
+"""
+function _reduce_gamma_contraction(gs::Vector{TensorSuperType}, ::TensorTerm)
+    length(gs) >= 2 || return (false, zero())
+    all(length(indices(g)) == 1 for g in gs) || return (false, zero())
+
+    (i1, p1) = indices(gs[1])[1]
+    (i2, p2) = indices(gs[end])[1]
+    (i1 == i2 && p1 != p2) || return (false, zero())   # not a contracted pair
+
+    mid = TensorSuperType[gs[k] for k in 2:(length(gs)-1)]
+    return (true, _gamma_sandwich(mid, i1.index_set.range))
+end
+for _n in 2:MAX_GAMMA_CONTRACTION
+    _args = [:($(Symbol(:g, i))::GammaSuperType) for i in 1:_n]
+    _names = [Symbol(:g, i) for i in 1:_n]
+    @eval reduce_matrix($(_args...), tterm::TensorTerm) =
+        _reduce_gamma_contraction(TensorSuperType[$(_names...)], tterm)
+end
+
+# γ5 γ5 = 1, true in any dimension 
+reduce_matrix(::Gamma5SuperType, ::Gamma5SuperType, ::TensorTerm) = (true, 1)
 
 function reduce_matrix(σ1::PauliSuperType, σ2::PauliSuperType, tterm::TensorTerm)
     if length(indices(σ2)) == length(indices(σ1))#same #inds for contraction.
@@ -134,92 +216,12 @@ function reduce_matrix(σ1::PauliSuperType, σ2::PauliSuperType, tterm::TensorTe
     end
 end
 
-
-"""
-Moves Matrices of the given type to be adjacent, then contracts them when possible using simplification rules.
-"""
-# function contract_adjacent(To::Tensorial, target_type::Type)
-
-#     T = 1 * To
-#     T = copy(T)
-
-#     resultout =  zero()
-#     any_contraction = false
-#     changed = true
-
-#     while changed
-#         # T = pop_metric(T)
-#         changed = false
-#         new_resultout =  zero()
-
-#         for k in eachindex(summands(T))
-#             summand = summands(T)[k]
-#             all_terms = summand[2].terms
-#             contracted = false
-#             target_indices = findall(t -> t isa target_type, all_terms)
-#             if length(target_indices) >= 2
-#                 anchor = target_indices[1]
-#                 n = length(target_indices)
-#                 dragged_terms = drag_to_adjacent_n(summand[1], all_terms, target_indices)
-#                 # @show dragged_terms
-#                 for (c, trms) in summands(dragged_terms)
-#                     contracted=false
-#                     t = terms(trms)
-#                     if all(t[anchor+m-1] isa target_type for m in 1:n)
-#                         for r in n:-1:2
-#                             try
-                             
-                                
-#                                 (elim, result) = reduce_matrix(t[anchor:(anchor+r-1)]..., trms)
-#                                 # @show result
-#                                 if elim
-#                                     new_resultout += c *
-#                                                      TensorTerm(t[1:(anchor-1)]) *
-#                                                      result *
-#                                                      TensorTerm(t[(anchor+r):end])
-#                                     contracted = true
-#                                     any_contraction = true
-#                                     changed = true
-#                                     break
-#                                 end
-
-#                             catch e
-#                                 # @show e
-#                                 e isa MethodError || rethrow(e)
-#                                 continue
-#                             end
-#                         end
-#                     end
-
-#                     # ONLY fallback if NOTHING in THIS summand contracted
-#                     if !contracted
-#                         new_resultout += c * trms
-#                     end
-#                 end
-
-#             else
-#                 new_resultout += summand[1] * TensorTerm(all_terms)
-#             end
-#         end
-
-#         T = new_resultout
-#         resultout = new_resultout
-#     end
-#     if !any_contraction
-#         return To
-#     end
-#     return eliminate_kronecker(
-#         contract_metrics(
-#             eliminate_epsilon(resultout)
-#         )
-#     )
-# end
 """
 Moves matrices of the given type to be adjacent, then contracts them when possible
 using simplification rules. When no identity applies to the full set of target
 matrices, progressively smaller subsets are dragged adjacent and tried instead.
 """
-function contract_adjacent(To::Tensorial, target_type::Type)
+function contract_adjacent(To::Tensorial, target_type::Type=MatrixSuperType)
     T = copy(1 * To)
 
     resultout =  zero()
@@ -239,10 +241,8 @@ function contract_adjacent(To::Tensorial, target_type::Type)
                 new_resultout += summand[1] * TensorTerm(all_terms)
                 continue
             end
-
             summand_contracted = false
-
-            # Largest subsets first; the full set is tried before any fallback.
+            # Largest subsets first
             for subset in subsets_decreasing(target_indices)
                 anchor = subset[1]
                 m = length(subset)
@@ -274,9 +274,7 @@ function contract_adjacent(To::Tensorial, target_type::Type)
                         end
                     end
 
-                    # commutator side-terms (or a failed reduction on this
-                    # particular summand) pass through unchanged; they get
-                    # re-scanned on the next `while changed` pass
+                    # commutator side-terms
                     if !reduced_here
                         candidate += c * trms
                     end
@@ -290,19 +288,15 @@ function contract_adjacent(To::Tensorial, target_type::Type)
                     changed = true
                     break
                 end
-                # on failure: discard `candidate` entirely and try the next
-                # subset starting from the ORIGINAL all_terms
             end
 
             if !summand_contracted
                 new_resultout += summand[1] * TensorTerm(all_terms)
             end
         end
-
         T = new_resultout
         resultout = new_resultout
     end
-
     any_contraction || return To
     return eliminate_kronecker(
         contract_metrics(
@@ -312,27 +306,17 @@ function contract_adjacent(To::Tensorial, target_type::Type)
 end
 
 """
-    drag_subset_adjacent(summand_coeff, all_terms, subset, target_type)
-
 Generalization of `drag_to_adjacent_n` to an arbitrary (sorted, ascending) subset
 of target positions. Drags each subset element, in order, to sit directly after
 the first subset element (the anchor), accumulating commutator terms.
-
-Elements are relocated inside each summand by their occurrence *rank* among
-terms of `target_type`. Because the subset is sorted ascending, dragging an
-element leftward only shifts the ranks of occurrences to its left, so the ranks
-computed on the original `all_terms` remain valid for all later subset elements.
 """
 function drag_subset_adjacent(summand_coeff, all_terms, subset::Vector{Int}, target_type::Type)
     anchor = subset[1]
     n = length(subset)
-
     all_occ = findall(t -> t isa target_type, all_terms)
     ranks = [findfirst(==(i), all_occ) for i in subset]
-
     term_list = summand_coeff * TensorTerm(all_terms)
     n == 1 && return term_list
-
     for k in 2:n
         target_pos = anchor + k - 1
         new_term_list =  zero()
@@ -349,7 +333,9 @@ function drag_subset_adjacent(summand_coeff, all_terms, subset::Vector{Int}, tar
                 new_term_list += c * tterm
                 continue
             end
-            new_term_list += drag_to_adjacent(c, trms, target_pos - 1, current_pos)
+            dragged = drag_to_adjacent(c, trms, target_pos - 1, current_pos)
+            # a drag blocked by a non-commuting pair leaves its term as it stood
+            new_term_list += dragged === nothing ? c * tterm : dragged
         end
         term_list = new_term_list
     end
@@ -358,8 +344,6 @@ function drag_subset_adjacent(summand_coeff, all_terms, subset::Vector{Int}, tar
 end
 
 """
-    subsets_decreasing(v)
-
 All subsets of `v` of size >= 2, largest first. Within a size class, subsets are
 ordered by span (fewest interleaved non-subset elements first), so cheaper drags
 that generate fewer commutator terms are attempted before long-range ones.
@@ -396,15 +380,14 @@ end
 #######
 """
 In a vector of tensorterms, move j to i+1, keeping track of grading and accumulated tensors from commutation relations
+
+Returns `nothing` when the move would have to cross a pair of matrices that neither commute nor
+carry a registered relation. Such a pair cannot be exchanged at any price, so the factors can never
+be brought together and the caller should leave its term alone.
 """
 function drag_to_adjacent(summand_coeff, all_terms, i, j)
-    # Returns a list of (coeff, terms) pairs representing the result
-    # of dragging all_terms[j] left to position i+1
-
-    results = []
     target = all_terms[j]
     current_terms = copy(all_terms)
-
     # drag target from position j to i+1 one step at a time
     pos = j
     coeff = summand_coeff
@@ -412,20 +395,25 @@ function drag_to_adjacent(summand_coeff, all_terms, i, j)
     if j == i + 1
         return term_list
     end
-
     while pos > i + 1
         new_term_list =  zero()
         for (c, tterm) in summands(term_list)
             trms = terms(tterm)
+            # Remainders generated on the way have lost the target to a commutator, so there is nothing left to drag in them.
+            # they are carried through untouched and left for the caller's next pass. only summands still holding the target are moved.
+            if pos > length(trms) || trms[pos] !== target
+                new_term_list += c * tterm
+                continue
+            end
             left = trms[pos-1]
             right = trms[pos]  # this is target
             # check if they have non-trivial commutation
             if can_swap(left, right)
-                # @show "canswap",left,right
                 grade = 0
                 extra = nothing
+            elseif !has_commutation_rel(left, right)
+                return nothing        # non-commuting and unrelated: the drag cannot be made
             else
-                # @show "need commuator",get_commutator(left, right),left,right
                 (grade, extra) = get_commutator(left, right)  # returns (sign*swap, extra commutator terms)
             end
             # simple swap term
@@ -436,7 +424,6 @@ function drag_to_adjacent(summand_coeff, all_terms, i, j)
             new_term_list += (c * (-1)^(swaps) * TensorTerm(new_terms))
             # extra commutator terms if any
             if extra !== nothing
-                # @show "adding extra",extra
                 extra_terms = TensorTerm(trms[1:(pos-2)]) * (extra) * TensorTerm(trms[(pos+1):end])
                 new_term_list += (c * extra_terms)
             end
@@ -444,17 +431,14 @@ function drag_to_adjacent(summand_coeff, all_terms, i, j)
         term_list = new_term_list
         pos -= 1
     end
-
     return term_list
 end
 
 function drag_to_adjacent_n(summand_coeff, all_terms, indices::Vector{Int})
     anchor = indices[1]
     n = length(indices)
-
     # start with a single summand
     term_list = summand_coeff * TensorTerm(all_terms)
-
     for k in 2:n
         target_pos = anchor + k - 1
         new_term_list =  zero()
@@ -468,7 +452,8 @@ function drag_to_adjacent_n(summand_coeff, all_terms, indices::Vector{Int})
                 continue
             end
             current_pos = occurrences[k]
-            new_term_list += drag_to_adjacent(c, trms, target_pos - 1, current_pos)
+            dragged = drag_to_adjacent(c, trms, target_pos - 1, current_pos)
+            new_term_list += dragged === nothing ? c * tterm : dragged
         end
         term_list = new_term_list
     end
@@ -476,13 +461,10 @@ function drag_to_adjacent_n(summand_coeff, all_terms, indices::Vector{Int})
     return term_list
 end
 
-
 """
 If there is a simplification rule found, manipulate by raising and lowering indicies until the layout matches
 """
 function match_and_apply_rule(pattern_terms, actual_terms, rhs_template, full_term)
-    # @show actual_terms
-    # @show full_term
     if length(free_indices_ordered(TensorTerm(pattern_terms))) != length(free_indices_ordered(TensorTerm(actual_terms)))
         return (false,  zero())
     end
@@ -524,13 +506,8 @@ function match_and_apply_rule(pattern_terms, actual_terms, rhs_template, full_te
         rhs_template = copy(rhs_template)
         for clash_idx in clashing
             fresh = get_unused_indices(full_term, clash_idx.index_set)
-            # @show full_term
-            # @show indices(full_term)
-            # @show fresh
             filter!(x -> !(x in actual_free), fresh)
-            # @show fresh
             replacement = safe_pop!(fresh,clash_idx.index_set)
-            # @show replacement
             push!(used_dummies, replacement)
             substitution[clash_idx=>upper] = replacement => upper
             substitution[clash_idx=>lower] = replacement => lower
@@ -539,29 +516,29 @@ function match_and_apply_rule(pattern_terms, actual_terms, rhs_template, full_te
     rhs = set_from_pattern(rhs_template, substitution)
     target_indices = findall(x -> x isa typeof(actual_terms[1]), corrected_terms)
     dragged = drag_to_adjacent_n(1, corrected_terms, target_indices)
-    # @show dragged
     # replace adjacent block with rhs, keeping surrounding metrics
     result =  zero()
     n = length(actual_terms)
     for (c, tterm) in summands(dragged)
         t = terms(tterm)
         new_anchor = findfirst(x -> x isa typeof(actual_terms[1]), t)
-        # @show new_anchor
         result += c * TensorTerm(t[1:(new_anchor-1)]) * rhs * TensorTerm(t[(new_anchor+n):end])
     end
     return (true, result)
 end
 
-
-
 """
-Generate a function reduce_matrix that reduces a product of matrices.
+Macro to generate a function reduce_matrix that reduces a product of matrices.
+This also defines rules for reducing traces.
 """
 macro mrule(expr)
     @assert expr.head == :(=)
 
     lhs = expr.args[1]
     rhs = expr.args[2]
+    is_trace = lhs isa Expr && lhs.head == :call && lhs.args[1] === :Trace
+    is_trace && (lhs = length(lhs.args) == 2 ? lhs.args[2] :
+                 error("@mrule: a Trace on the left must wrap a single product of matrices"))
 
     function extract_terms(ex)
         if ex isa Expr && ex.head == :call && ex.args[1] == :*
@@ -574,7 +551,6 @@ macro mrule(expr)
             return [ex]
         end
     end
-
     lhs_terms = extract_terms(lhs)
     n = length(lhs_terms)
 
@@ -586,8 +562,9 @@ macro mrule(expr)
         for i in 1:n
     ]
 
+    fname = is_trace ? :(Alakazam.reduce_trace) : :(Alakazam.reduce_matrix)
     return quote
-        function Alakazam.reduce_matrix($(args_with_types...), tterm::Alakazam.TensorTerm)
+        function $fname($(args_with_types...), tterm::Alakazam.TensorTerm)
             pattern_terms = TensorSuperType[$(map(esc, lhs_terms)...)]
             actual_terms = TensorSuperType[$(arg_names...)]
             rhs_template = TensorExpression($(esc(rhs)))
@@ -598,12 +575,8 @@ macro mrule(expr)
                 tterm
             )
         end
-
-        # Force this specialization into the pkgimage. The method is reached
-        # by runtime dispatch from contract_adjacent, so without an explicit
-        # directive its native code is compiled during precompilation but
-        # dropped from the image (no static backedge to root it).
-        precompile(Alakazam.reduce_matrix,
+        # Force this specialisation into the pkgimage.
+        precompile($fname,
                    ($(type_exprs...), Alakazam.TensorTerm))
     end
 end

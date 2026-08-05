@@ -62,4 +62,33 @@
 
     @test (1*Tensor("A", [i=>upper, j => upper, k=>upper, l=>upper], x, YoungTableau([1, 1, 1, 1], [1, 2, 3, 4]))≅-Tensor("A", [j=>upper, i => upper, k=>upper, l=>upper], x, YoungTableau([1, 1, 1, 1], [1, 2, 3, 4])))
 
+
+    ###############################################
+    ### type is a discriminator on every "same tensor" path, not only ==
+    ###############################################
+    # A Boson, a Fermion, a Gamma and a plain Tensor of the same name and indices are different by type
+    let ty = IndexSet("ttype", 4, upper), a = Index("ttya", ty), y = Coordinate("ttyy", ty),
+        Tn = Tensor("Q", [a => lower], y), Bo = Boson("Q", [a => lower], y),
+        Fe = Fermion("Q", [a => lower], y)
+
+        @test typeof(Tn) != typeof(Bo) != typeof(Fe)
+        @test Tn != Bo && Tn != Fe && Bo != Fe
+        @test hash(Tn) != hash(Bo)
+        @test Alakazam.same_tensor_mod_syms(Tn, Bo) == (false, 0)
+        @test Alakazam.same_tensor_mod_syms(Tn, Tn)[1]
+        @test !Alakazam.same_tensorterm_mod_syms(TensorTerm(Tn), TensorTerm(Bo))
+        @test Alakazam._graph_vertex_name(Tn) != Alakazam._graph_vertex_name(Bo)
+        # the merge paths: a difference of two different types is not zero
+        @test length(summands(Alakazam.simplify(TensorExpression(Tn) + TensorExpression(Bo)))) == 2
+        @test !isZeroTens(Alakazam.simplify(TensorExpression(Tn) - TensorExpression(Bo)))
+        @test !isZeroTens(Alakazam.hard_simplify(TensorExpression(Tn) - TensorExpression(Bo)))
+        # while the same type still merges, so nothing has been made over-cautious
+        @test Alakazam.simplify(TensorExpression(Tn) + TensorExpression(Tn)) == 2 * Tn
+        @test isZeroTens(Alakazam.simplify(TensorExpression(Bo) - TensorExpression(Bo)))
+        # a Gamma is not a tensor that happens to be called γ
+        let g = Gamma(a => lower), tg = Tensor("γ", [a => lower])
+            @test !isZeroTens(Alakazam.hard_simplify(TensorExpression(g) - TensorExpression(tg)))
+        end
+    end
+
 end

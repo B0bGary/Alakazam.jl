@@ -41,8 +41,7 @@ macro test_warn(msg, ex)
     esc(ex);
 end
 macro test_logs(args...)
-    ;
-    esc(args[end]);
+    esc(:(Base.CoreLogging.with_logger(() -> $(args[end]), Base.CoreLogging.NullLogger())))
 end
 macro test_broken(ex)
     ;
@@ -71,11 +70,12 @@ const TEST_FILES = [
     "test_replacements.jl",
     "test_arithmetic_adv.jl",
     "test_derivatives.jl",
+    "test_parts.jl",
     "test_tableaux.jl",
     "test_tterm_equivs.jl",
     "test_commuting.jl",
     "test_epsdelta.jl",
-    "test_matrices.jl",
+    # test_matrices.jl now not included, could override userfacing commutators and reduce methods etc
     "test_lie.jl",
     "test_serialise.jl",
     "test_serialise_load.jl",

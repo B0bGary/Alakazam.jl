@@ -31,14 +31,33 @@ the matched tensor's name while `??A` supplies the matched object itself.
 """
 function replace_pattern(exp::Tensorial, pattern::Union{Tensorial,String},
                          replace::Union{Tensorial,String,SymorNum}, repeat::Bool=true,
-                         excluded::Set{TensorSuperType}=Set{TensorSuperType}())
+                         excluded::Set{TensorSuperType}=Set{TensorSuperType}(),
+                         descend::Bool=true)
     pat = _as_pattern(pattern)
     rep = _as_expression(replace)
     new_exp = zero()
     for summand in summands(_as_expression(exp))
-        new_exp += coef(summand) * substitute_terms(term(summand), pat, rep, repeat, excluded)
+        tt = descend ? _substitute_in_operands(term(summand), pat, rep, repeat, excluded) : term(summand)
+        new_exp += coef(summand) * substitute_terms(tt, pat, rep, repeat, excluded)
     end
     return new_exp
+end
+
+"""
+Rewrite inside the operand of every operator factor of a term, leaving the factors themselves to
+`substitute_terms`.
+
+Operands are descended into once, on the way in. The `repeat` pass of `substitute_terms` passes
+`descend = false`, since by then the only operators left are those the replacement introduced
+"""
+function _substitute_in_operands(tt::TensorTerm, pattern::TensorTerm, replace::TensorExpression,
+                                 repeat::Bool, excluded::Set{T}) where {T<:TensorSuperType}
+    fs = terms(tt)
+    any(f isa OperatorSuperType for f in fs) || return tt
+    return TensorTerm(TensorSuperType[
+        f isa OperatorSuperType ?
+            _with_operand(f, replace_pattern(operand(f), pattern, replace, repeat, excluded)) : f
+        for f in fs])
 end
 
 
@@ -132,7 +151,8 @@ function _gather_matched(allt, poss::Vector{Int})
             if i === nothing || j === nothing || j <= i + 1
                 acc += c * tt                      # adjacent already, or eaten by a commutator
             else
-                acc += drag_to_adjacent(c, trms, i, j)
+                dragged = drag_to_adjacent(c, trms, i, j)
+                acc += dragged === nothing ? c * tt : dragged
             end
         end
         out = acc
@@ -153,13 +173,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
     isempty(terms(pattern)) && throw(InvalidReplacementPattern(
         "the pattern is empty", "a pattern must name at least one tensor"))
 
-    #call recursviely on the oeprand...
-    if isTensor(exp) isa OperatorSuperType
-        # println("did this")
-        # @show exp
-        set_operand!(isTensor(exp), replace_pattern(operand(isTensor(exp)), pattern, replace, repeat, excluded))
-        # @show exp
-    end
+    # operands are rewritten by `_substitute_in_operands` before this is called
     flg=isTensorTerm(exp)
     if (flg === nothing)
         return exp
@@ -176,6 +190,9 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
         let allt = terms(exp), poss = sort!([v[2] for v in values(out.all_matches[1].position_matches)])
             if _needs_drag(allt, poss)
                 gathered = _gather_matched(allt, poss)
+                # A drag blocked by a non-commuting pair hands the term back untouched. The matched factors can then never be brought together, 
+                # so the pattern does not apply here and recursing on an unchanged term would not terminate.
+                gathered == TensorExpression(exp) && return exp
                 return replace_pattern(gathered, pattern, replace, repeat, excluded)
             end
         end
@@ -242,7 +259,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
         end
 
         if repeat
-            tex = replace_pattern(new_exp, pattern, replace, repeat, excluded)
+            tex = replace_pattern(new_exp, pattern, replace, repeat, excluded, false)
             typeof(tex) != TensorExpression && (tex = TensorExpression(tex))
             return tex
         end
@@ -357,7 +374,7 @@ Assign every pattern slot of one name class to a distinct expression position.
 Each slot is tried against every free position rather than scanned forward, because a forward scan
 is order-dependent: it cannot match a pattern whose slots occur in the expression in the opposite
 order. That case arises as soon as several factors share a name and are told apart by their labels
-or index positions --- `k_1` and `k_2`, say --- which is precisely what labels are for.
+or index positions (`k_1` and `k_2`, say) which is precisely what labels are for.
 
 Returns `(matched, [pattern position => expression position], bindings)`. The search is bounded by
 the size of the name class, which the histogram has already cut down.
@@ -538,7 +555,29 @@ end
 
 
 """
-Checks if the indices of a pattern tensor and expression tensor match, accounting for dummy indices. Returns true if they match, false otherwise. 
+The labels of a factor, seen through any operators standing over it. An operator does not carry
+its operand's labels, so would otherwise match. A chain over something that is not a single tensor
+reports nothing, which leaves it a wildcard over labels exactly as before.
+"""
+_labels_through_operators(t::Tensorial) = labels(t)
+function _labels_through_operators(O::OperatorSuperType)
+    ls = labels(O)
+    isempty(ls) || return ls
+    inner = isTensor(operand(O))
+    return inner === nothing ? ls : _labels_through_operators(inner)
+end
+
+"""
+The name of the tensor a factor, seen through any operators over it. 
+"""
+_operand_name_through_operators(t::Tensorial) = name(t)
+function _operand_name_through_operators(O::OperatorSuperType)
+    inner = isTensor(operand(O))
+    return inner === nothing ? "" : _operand_name_through_operators(inner)
+end
+
+"""
+Checks if the indices of a pattern tensor and expression tensor match, accounting for dummy indices. Returns true if they match, false otherwise.
     Also returns a mapping of pattern dummy indices to expression indices if they match.
 """
 function check_index_match(loc_pat::Int, loc_exp::Int, pat::TensorTerm, exp::TensorTerm, dumind::Dict{String,IndexSuperType})
@@ -546,11 +585,12 @@ function check_index_match(loc_pat::Int, loc_exp::Int, pat::TensorTerm, exp::Ten
     # i think we dont need this if statement...
     ptens = terms(pat)[loc_pat]
     etens = terms(exp)[loc_exp]
-
-    # Labels: a pattern that names none is a wildcard over labels, so every pattern written before
-    # labels existed keeps matching exactly as it did. A pattern that *does* name labels must match
-    # them exactly, which is what lets `T"k_1^?a"` pick out k₁ without also taking k₂.
-    if !isempty(labels(ptens)) && labels(ptens) != labels(etens)
+    plabs = _labels_through_operators(ptens)
+    if !isempty(plabs) && plabs != _labels_through_operators(etens)
+        return (false, dumind)
+    end
+    pname = _operand_name_through_operators(ptens)
+    if !isempty(pname) && pname[1] != '?' && pname != _operand_name_through_operators(etens)
         return (false, dumind)
     end
 
@@ -699,3 +739,31 @@ function parse_pattern2tensor(pattern::String)
     return TensorTerm(tensor_term) #should construct a term out of our set of patterns
 
 end
+
+"""
+    solve_linear(eqn, target) -> (target, value) | (nothing, eqn)
+
+Basic function to olve the linear equation `eqn = 0` for `target`.
+`target` may be any single factor, an operator included, so `∂_μ[A]` can be solve_lineard as readily as `A`.
+
+    solve_linear(2*A + B, A)              # (A, -1//2 B)
+    solve_linear(∂(A) - B, ∂(A))          # (∂[A], B)
+    solve_linear(TensorExpression(B), A)   # (nothing, B)
+"""
+function solve_linear(eqn::TensorExpression, target::Tensorial)
+    coef = 0
+    rest = zero()
+    for (k, tt) in summands(eqn)
+        fs = terms(tt)
+        if length(fs) == 1 && fs[1] == target
+            coef += k
+        elseif any(f -> f == target, fs)
+            return (nothing, eqn)        # multiplied by something else, so not linear in `target`
+        else
+            rest = rest + TensorExpression(CoeffPair[CoeffPair(k, tt)])
+        end
+    end
+    coef == 0 && return (nothing, eqn)   # `target` does not appear at all
+    return (target, simplify((-(1 // 1) / coef) * rest))
+end
+solve_linear(eqn::Tensorial, target::Tensorial) = solve_linear(TensorExpression(eqn), target)

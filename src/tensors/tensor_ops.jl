@@ -20,12 +20,8 @@ transform(f, t::Tensorial) = f(t)
 
 #change to use our tabelau code!
 """
-Two tensors are equal when they are the same *kind* of object carrying the same name, indices,
+Two tensors are equal when they are the same type carrying the same name, indices,
 coordinate dependence, tableaux and labels.
-
-The type check is not incidental. A `Boson`, a `Fermion` and a plain `Tensor` of the same name
-differ in grading, and a `Mat` in whether it commutes, so treating them as equal would let objects
-with different algebraic behaviour merge in a sum.
 """
 function ==(a::TensorSuperType, b::TensorSuperType)#name first since easiest discriminator
     if ( name(a) == name(b) && typeof(a) == typeof(b)  && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
@@ -37,17 +33,15 @@ function ==(a::TensorSuperType, b::TensorSuperType)#name first since easiest dis
     end
 end
 
-# Base.hash(d::TensorSuperType, h::UInt) = hash(
-#     (
-#         name(d), indices(d), function_of(d), tableaux(d)
-#     ),
-#     h
-# )
 function Base.hash(d::TensorSuperType, h::UInt)::UInt
-    h = hash(typeof(d), h)     # kept in step with `==`, which distinguishes Boson/Fermion/Tensor/Mat
+    h = hash(typeof(d), h)  
     h = hash(name(d), h)
     @inbounds for p in indices(d)
         h = hash(p[1].uid, hash(p[2].position, h))
+    end
+    # labels are ordered and are compared as vectors by `==`, so they are hashed in order too.
+    @inbounds for l in labels(d)
+        h = hash(l[1], hash(l[2].position, h))
     end
     x = UInt(0)
     for c in function_of(d)
@@ -92,20 +86,10 @@ function Base.hash(t::TensorTerm, h::UInt)::UInt
     end
     return h
 end
-# _hash_tensor(term, h::UInt)::UInt = hash(term, h)#specialises per concrete type, optimises, TTerm hash
-# function Base.hash(t::TensorTerm, h::UInt)::UInt
-#     for term in terms(t)
-#         h = _hash_tensor(term, h)
-#     end
-#     return h
-# end
+
 function ==(a::TensorExpression, b::TensorExpression)
     if length(a.summands) != length(b.summands)
-        # @show "wrong leng"
-        # @show coeff_equal(first_coef(b),0)
-
         (length(a.summands)==0 && length(b.summands)==1 && coeff_equal(first_coef(b), 0)) || (length(b.summands)==0 && length(a.summands)==1 && coeff_equal(first_coef(a), 0)) ? (return true) : (return false)
-        # return false
     end
     aa = a.summands
     bb = b.summands
@@ -118,22 +102,7 @@ end
 
 ==(N::SymorNum, T::Tensorial) = (T == N)
 ==(T::Tensorial, N::SymorNum) = TensorExpression(T) == TensorExpression(N)
-# #add single term check to make things less expensive
-# ==(a::TensorExpression, b::TensorTerm) = a == TensorExpression(b)
-# ==(a::TensorTerm, b::TensorExpression) = TensorExpression(a) == b
-# ==(a::TensorSuperType, b::TensorExpression) = TensorExpression(a) == b
-# ==(a::TensorExpression, b::TensorSuperType) = a == TensorExpression(b)
-# ==(a::TensorSuperType, b::TensorTerm) = ==(TensorTerm(a), b)
-# ==(a::TensorTerm, b::TensorSuperType) = ==(a, TensorTerm(b))
-# ==(a::TensorTerm, b::TensorTerm) = terms(a) == terms(b)
 
-
-
-# """Stronger coef checking for symbolics nastiness."""
-# function coeff_equal(a::SymorNum, b::SymorNum)
-#     isequal(a, b) && return true
-#     return Symbolics.simplify(Symbolics.expand(a - b))===0
-# end
 coeff_equal(a::Number, b::Number) = a == b            # no Symbolics path at all
 coeff_equal(a, b) = isequal(a, b) || _sym_equal(a, b)   # symbolic fallback
 # @noinline _sym_equal(a, b) = Symbolics.simplify(Symbolics.expand(a - b)) === 0 #1.11 version
@@ -201,18 +170,6 @@ end
 ≅(a::TensorExpression, b::TensorSuperType) = a ≅ TensorExpression(b)
 
 
-# function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
-#     if length(a) != length(b)
-#         return false
-#     end
-#     for i = eachindex(a)
-#         if !(a[i] == b[i])
-#             return false
-#         end
-#     end
-#     return true
-# end
-
 _eq_one(x, y) = x == y      # specialises on concrete typeof(x)
 function ==(a::Vector{T} where {T<:TensorSuperType}, b::Vector{T} where {T<:TensorSuperType})
     length(a) == length(b) || return false
@@ -239,9 +196,6 @@ function ≅(a::TensorExpression, b::TensorExpression)
     a = hard_merge(a)
     b = hard_merge(b)
     C=merge_sum_syms(a-b)
-    # only the final test opts into the projector: it is a zero test on the difference, which is
-    # exactly the case multi-term reduction settles, and projecting a and b separately would cost
-    # more while deciding nothing extra
     m = hard_merge(symmetrise_partials(C); multiterm=true)
     return m == zero()
 end
@@ -593,14 +547,8 @@ function rename_dummies(T::TensorSuperType)
     return T
 end
 """
-Map the position of every *free* index through `f`, leaving dummy pairs untouched.
-
-Dummies are skipped deliberately. A summed pair needs one raised and one lowered member, so a rule
-that moved both to the same level would not produce a valid expression; and under an antisymmetric
-metric reversing a pair is not even a no-op, since
-``\\psi^{\\alpha}\\chi_{\\alpha} = -\\psi_{\\alpha}\\chi^{\\alpha}``, so it would silently change a
-sign. Free indices occur once, so moving them can never create a coincidence.
-
+Map the position of every free index through f, leaving dummy pairs untouched.
+Dummies are skipped deliberately.
 Which indices are dummies is a property of the whole term, not of any one tensor, so the set is
 computed here and passed down.
 """
@@ -637,17 +585,10 @@ lower_all(T::Tensorial) = _map_free_positions(T, _ -> lower)
 
 Return a copy of `T` with every free index position reversed, upper becoming lower and lower upper.
 Dummy pairs are left untouched, as for [`raise_all`](@ref) and [`lower_all`](@ref).
-
-This is the operation that builds ``M_{ij}`` from ``M^{ij}`` so the two can be contracted together.
 """
 flip_all(T::Tensorial) = _map_free_positions(T, op_pos)
 
-"""Reverse the positions of the free indices of an expression; an alias for [`flip_all`](@ref).
-
-`op_pos` remains the primitive that reverses a bare `IndexPosition`, an index/position pair, or a
-vector of them. On a whole expression it defers to `flip_all`, so that dummy pairs are preserved
-rather than reversed.
-"""
+"""Reverse the positions of the free indices of an expression; an alias for [`flip_all`](@ref)."""
 op_pos(tt::Tensorial) = flip_all(tt)
 
 
@@ -666,7 +607,6 @@ function update_ext_indices!(T::TensorExpression)
     end
     T = new_exp
 end
-
 
 function update_ext_indices!(T::TensorTerm)
     inds = Vector{Pair{IndexTypes,IndexPosition}}()
@@ -692,7 +632,6 @@ function update_ext_indices!(T::TensorTerm)
 
 end
 
-
 #rename dummies function
 """Rename dummy Einstein summation indices to be more lexigraphically uniform across expressions."""
 function rename_dummies(T::TensorTerm)
@@ -710,7 +649,6 @@ function rename_dummies(T::TensorTerm)
         i[1] in all_indices || push!(all_indices, i[1])
     end
 
-    # membership sets: `a in dumms` was a linear scan run once per index of the term, i.e. O(k²)
     dumm_uids = Set{UInt64}()
     for d in dumms
         push!(dumm_uids, d.uid)
@@ -726,7 +664,6 @@ function rename_dummies(T::TensorTerm)
             a.uid in dumm_uids && continue
             push!(inset_uids, a.uid)
         end
-
         # candidates: this set's non-wildcard indices not already in use
         empty!(remain)
         for x in set.indices
@@ -734,7 +671,6 @@ function rename_dummies(T::TensorTerm)
             x.uid in inset_uids && continue
             push!(remain, x)
         end
-
         # keyed by uid: an abstract key type makes every hash a dynamic dispatch
         replacements = Dict{UInt64,IndexSuperType}()
         cursor = 1                     # walk `remain` rather than popfirst!, which shifts it
@@ -765,13 +701,6 @@ function rename_recursive!(T::TensorExpression,replacements)
     isempty(out) && return zero()
     return TensorExpression(out)
 end
-# function rename_recursive!(T::TensorExpression,replacements)
-#     for summand in summands(T)
-#         rename_recursive!(summand[2], replacements)
-#     end
-#     return T
-# end
-
 
 function rename_recursive!(T::TensorTerm, replacements)
     for term in terms(T)
@@ -817,12 +746,7 @@ function rename_dummies!(T::TensorExpression)
     end
     return T
 end
-# function rename_dummies(T::TensorExpression)
-#     for summand in summands(T)
-#         rename_dummies(summand[2])
-#     end
-#     return T
-# end
+
 
 function update_dummies(T::TensorSuperType, reps::Pair{I,I}) where {I<:IndexSuperType}
     if typeof(T) <: OperatorSuperType
@@ -848,8 +772,6 @@ function update_dummies(TEX::TensorExpression, reps::Pair{I,I}) where {I<:IndexS
         end
     end
 end
-
-
 
 """
 Relabel indices of term so they don't use anything from extra_inds.
@@ -886,134 +808,14 @@ function rep_distance(canon::Vector, config::Vector)
     return inv
 end
 
-
-
-
-"""Look through the symmetries of the tensor, and find the configuration of indices that is closest to the lexo-canonical order, as measured by the rep_distance function.
-Returns the sign and the new configuration of indices. If the cost is  zero(), we can return immediately, as we have found the lexo-canonical representation."""
-# function find_canonical_rep(T::TensorSuperType)
-#     # sort indices into canonical order, serving as a baseline of cost  zero().
-#     lexo = indices(T)[sortperm(indices(T))]#this will automatically put in alphabetical
-#     best_inds = indices(T)
-#     sign = 1
-#     best_cost = Inf
-#     for tableau in tableaux(T)
-#         syms = tableau.symmetries
-#         for perm in syms
-#             new_inds = apply_permutation_cycle(indices(T), perm)
-#             cost = rep_distance(lexo, new_inds)
-#             if cost == 0
-#                 return (1, new_inds)
-#             end
-#             if cost < best_cost || (cost == best_cost && new_inds < best_inds)
-#                 best_inds = new_inds
-#                 best_cost = cost
-#             end
-#         end
-#         asyms = tableau.antisymmetries
-#         for perm in asyms
-#             new_inds = apply_permutation_cycle(indices(T), perm)
-#             cost = rep_distance(lexo, new_inds)
-#             if cost == 0
-#                 return (-1, new_inds)
-#             end
-#             if cost < best_cost || (cost == best_cost && new_inds < best_inds)
-#                 best_inds = new_inds
-#                 best_cost = cost
-#                 sign = -1
-#             end
-#         end
-
-#     end
-#     # apply symmetries to the tensor, and measure the cost by the difference from the baseline.
-#     return (sign, best_inds)
-# end
-# function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
-#     inds=indices(T)
-#     lexo = indices(T)[sortperm(indices(T))]
-#     if isSymmetric(T)
-#         return (1, lexo)
-#     end
-
-#     if isAntisymmetric(T)
-#         p = sortperm(inds)
-#         return (permutation_sign(p), lexo)
-#     end
-#     start_inds = indices(T)
-#     best_inds = start_inds
-#     best_cost = rep_distance(lexo, start_inds)
-#     best_sign = 1
-
-#     queue = [(start_inds, 1)]
-#     head = 1
-
-#     # permutation => signs already seen (+1 and/or -1)
-#     seen = Dict{Tuple,Set{Int}}()
-#     # seen = Dict{typeof(start_inds),Set{Int}}()
-#     # seen[start_inds] = Set([1])
-#     seen[Tuple(start_inds)] = Set([1])
-
-#     while head <= length(queue)
-#         inds, sign = queue[head]
-#         head += 1
-
-#         cost = rep_distance(lexo, inds)
-
-#         if cost == 0
-#             return (sign, inds)
-#         end
-
-#         if cost < best_cost || (cost == best_cost && inds < best_inds)
-#             best_cost = cost
-#             best_inds = inds
-#             best_sign = sign
-#         end
-
-#         for tab in tableaux(T)
-
-#             row_gens = row_generators(tab.tableau)
-#             col_gens = column_generators(tab.tableau)
-
-#             # symmetric generators
-#             for g in row_gens
-#                 cycle = cycles_to_string(dict_to_cycles(g))
-#                 new_inds = apply_permutation_cycle(inds, cycle)
-
-#                 signs = get!(seen, Tuple(new_inds), Set{Int}())
-#                 if !(sign in signs)
-#                     push!(signs, sign)
-#                     push!(queue, (new_inds, sign))
-#                 end
-#             end
-
-#             # antisymmetric generators
-#             for g in col_gens
-#                 cycle = cycles_to_string(dict_to_cycles(g))
-#                 new_inds = apply_permutation_cycle(inds, cycle)
-
-#                 new_sign = -sign
-#                 signs = get!(seen, Tuple(new_inds), Set{Int}())
-#                 if !(new_sign in signs)
-#                     push!(signs, new_sign)
-#                     push!(queue, (new_inds, new_sign))
-#                 end
-#             end
-#         end
-#     end
-
-#     return (best_sign, best_inds)
-# end
 @inline _signbit(s::Int) = s > 0 ? 0x01 : 0x02
 """
     find_canonical_rep(T::TensorSuperType) -> (sign, indices)
 
-Find the canonical index ordering for `T` under the symmetries described by its
-Young tableaux, together with the sign picked up in reaching it.
+Find the canonical index ordering for `T` under the symmetries described by its Young tableaux, together with the sign picked up in reaching it.
 
-Canonical form is the lexicographic ordering. Shortcut for fully
-symmetric or fully antisymmetric tensor using perm.
-Otherwise the tableaux generate a group of allowed index permutations, and the function searches it
-breadth-first for a representative matching the lexicographic target.
+Canonical form is the lexicographic ordering. Shortcut for fully symmetric or fully antisymmetric tensor using perm.
+Otherwise the tableaux generate a group of allowed index permutations, and the function searches it breadth-first for a representative matching the lexicographic target.
 """
 function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
     inds = indices(T)
@@ -1029,7 +831,6 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
     best_inds = start_inds
     best_cost = rep_distance(lexo, start_inds)
     best_sign = 1
-
     # generators depend only on T's tableaux, so they are cached on each YoungTableau on first use
     tabs = tableaux(T)
     if length(tabs) == 1
@@ -1045,27 +846,21 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
             append!(col_cycles, tab.col_cycles)
         end
     end
-
     queue = Tuple{Vector{IndexPair},Int}[(start_inds, 1)]
     head = 1
-
     # index pattern => bitmask of signs already seen (0x01 = +1, 0x02 = -1)
     seen = Dict{Vector{IndexPair},UInt8}()
     seen[copy(start_inds)] = 0x01
-
     while head <= length(queue)
         curr, sign = queue[head]
         head += 1
-
         cost = rep_distance(lexo, curr)
         cost == 0 && return (sign, curr)
-
         if cost < best_cost || (cost == best_cost && curr < best_inds)
             best_cost = cost
             best_inds = curr
             best_sign = sign
         end
-
         for cycle in row_cycles
             new_inds = apply_permutation_cycles(curr, cycle)
             b = _signbit(sign)
@@ -1075,7 +870,6 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
                 push!(queue, (new_inds, sign))
             end
         end
-
         for cycle in col_cycles
             new_inds = apply_permutation_cycles(curr, cycle)
             new_sign = -sign
@@ -1090,33 +884,7 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
 
     return (best_sign, best_inds)
 end
-# function find_canonical_rep(T::TensorSuperType)
-#     lexo = indices(T)[sortperm(indices(T))]
-#     inds = indices(T)
-#     best_inds = inds
-#     sign = 1
-#     best_cost = rep_distance(lexo, inds)
 
-#     for tab in tableaux(T)
-#         row_inds = sorted_by_blocks(inds, tab.tableau)
-#         row_cost = rep_distance(lexo, row_inds)
-#         if row_cost == 0
-#             return (1, row_inds)
-#         elseif row_cost < best_cost || (row_cost == best_cost && row_inds < best_inds)
-#             best_inds, best_cost, sign = row_inds, row_cost, 1
-#         end
-
-#         col_inds = sorted_by_blocks(inds, get_columns(tab))
-#         col_cost = rep_distance(lexo, col_inds)
-#         if col_cost == 0
-#             return (-1, col_inds)
-#         elseif col_cost < best_cost || (col_cost == best_cost && col_inds < best_inds)
-#             best_inds, best_cost, sign = col_inds, col_cost, -1
-#         end
-#     end
-
-#     return (sign, best_inds)
-# end
 function permutation_sign(p)
 
     inv = 0
@@ -1200,24 +968,14 @@ end
 
 
 function simplify(TEx::TensorExpression)
-    # Collect first: every stage below is superlinear in the number of summands, so merging
-    # duplicates up front (cheap, and exact up to dummy naming) is worth far more here than at the end.
+    # Collect first
     exp=symmetrise_partials(collect_terms(TEx))
-    # exp = rename_dummies(exp)
-    # exp = contract_metrics(exp, EpsilonTensor)
-    # @show exp,"start"
-    # @show TEx
     exp = pop_metric(exp)
-    # @show exp,"popped"
     exp = sort(exp)
-    # @show exp,"sorted"
     exp = eliminate_epsilon(exp)
-    # @show exp,"elim"
-    # exp = rename_dummies(exp)
     new_exp = simp_ops_n_sym(exp)
     new_exp = contract_metrics(new_exp, Metric)
     new_exp = eliminate_kronecker(new_exp)
-    # new_exp = sort(new_exp)
     new_exp = rename_dummies!(new_exp)
     new_exp = sort(new_exp)
     return new_exp
@@ -1230,13 +988,7 @@ function canonicalise(TEx::TensorExpression,cp=false)
     return sort(TEx)
 end
 canonicalize(T) = canonicalise(T)
-# println(rename_dummies(oo2))
-# println(merge_sum(rename_dummies(oo2)))
-# outexp = hard_merge(new_exp)
-# new_exp=symmetrise_partials(new_exp)
-# println("ouput symmetrised partials: ",new_exp)
 
-# println(new_exp)
 
 function simp_ops_n_sym(exp::TensorExpression)
     out = CoeffPair[]
@@ -1272,7 +1024,6 @@ function simp_ops_n_sym(exp::TensorExpression)
 end
 
 
-
 hard_simplify(T::TensorTerm; kw...) = hard_simplify(TensorExpression(T); kw...)
 hard_simplify(T::TensorSuperType; kw...) = hard_simplify(TensorExpression(T); kw...)
 
@@ -1288,53 +1039,8 @@ so it is opt-in and bounded by `multiterm_budget`; see [`multiterm_equal`](@ref)
 """
 function hard_simplify(TEx::TensorExpression; multiterm::Bool=false,
                        multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
-    # `collect_terms` is a linear pre-pass; `hard_merge` merges strictly more but costs far more
-    # per pair, so shrinking its input first is always worth it.
     return hard_merge(sort(collect_terms(TEx)); multiterm, multiterm_budget)
 end
-
-
-
-####################################################################
-#merging terms with same tensor content
-# default is merge_sum, naive merging of coeffs
-# hard: full aggressive simplification
-# syms: use basic syms of tensors to canonicalise
-#_merge2,_insert_merge: helpers for Texpr construction to save time
-## need to add functionality for symmetric and antisym tensors
-
-
-# function hard_merge(TEx::TensorExpression)
-#     if TEx == zero()
-#         return zero()
-#     end
-#     ##println(" zero() ma:", zero())
-#     out = filter!(x -> !isZero(x[1]), TEx.summands) #removes 0 coefficnets
-#     if isempty(out)
-#         return zero()
-#     end
-#     TEx.summands = out
-#     new_merged = CoeffPair[]
-#     for summand in TEx.summands
-#         find_weighted_square(construct_tensorterm_graph(summand[2])) && continue #drop if  zero()
-#         found = false
-#         for i in eachindex(new_merged)
-#             isZero(new_merged[i][1]) && continue #skip comparing against zeros
-#             (eq, gr) = hard_equals_graded(summand[2], new_merged[i][2])
-#             if eq
-#                 new_merged[i] = (gr * new_merged[i][1] + summand[1] => summand[2])
-#                 found = true
-#                 break
-#             end
-#         end
-#         if !found
-#             push!(new_merged, summand)
-#         end
-#     end
-#     TEx.summands = new_merged
-#     TEx.summands = filter!(x -> !isZero(x[1]), TEx.summands)
-#     return isempty(TEx.summands) ? zero() : TEx
-# end
 
 """
 Cheap test to see of terms are definitely different to avoid hard merge
@@ -1395,8 +1101,7 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
     m == 0 && return zero()
     m < n && resize!(out, m)
     TEx.summands = out
-    # multi-term symmetries relate whole sums rather than pairs of summands, so the projector runs
-    # once over the merged result rather than inside the loop above
+    # multi-term symmetries relate whole sums rather than pairs of summands, so the projector runs once over the merged result rather than inside the loop above
     multiterm && return multiterm_reduce(TEx; budget=multiterm_budget)
     return TEx
 end
@@ -1435,8 +1140,7 @@ function _contraction_colours(T::TensorTerm)
         col[i] = h
     end
 
-    # Refine until the induced *partition* stops splitting. Comparing raw colour values would
-    # never terminate early, since every round rehashes them into new values.
+    # refinement
     newcol = Vector{UInt}(undef, n)
     seen = Set{UInt}()
     for c in col
@@ -1471,8 +1175,7 @@ end
 Sign from permuting graded factors: `(-1)^(odd-graded inversions)`.
 
 Only odd-graded factors can contribute, so those are gathered first and the inversion count runs
-over just them. The naive form is O(n²) over *all* factor pairs with a `grading` call — which
-itself walks a tensor's indices — inside the inner loop, and for an all-bosonic term every one of
+over just them. The naive form is O(n²) over *all* factor pairs with a `grading` call inside the inner loop, and for an all-bosonic term every one of
 those iterations is wasted.
 """
 function _graded_perm_sign(ts, perm)
@@ -1496,9 +1199,9 @@ end
 """
 Can the factors of this term be freely permuted?
 
-False as soon as any pair is subject to a commutation relation — matrices with a registered
+False as soon as any pair is subject to a commutation relation - matrices with a registered
 commutator do not simply reorder, they generate extra terms, which is `bubble_sort_with_grading!`'s
-job rather than ours. Such terms are left in their given order.
+job rather than ours.
 """
 function _freely_reorderable(ts)
     nmat = 0
@@ -1517,14 +1220,6 @@ end
 
 Normalise `T` by reordering commuting factors and renaming dummy indices, such that
 `sign * term == T`.
-
-Two terms with `==` canonical forms are therefore genuinely equal, which makes this a **sound**
-key to merge on. It is not complete: the ordering comes from [`_contraction_colours`](@ref),
-which is a refinement rather than a full graph canonicalisation, and terms whose factors do not
-freely commute are left alone entirely — so equal terms can normalise differently. That only
-costs collection opportunities; it can never merge terms that are not equal.
-
-Expects each tensor's own indices to already be in canonical slot order, i.e. run after `sort`.
 """
 function canonical_form(T::TensorTerm)
     ts = terms(T)
@@ -1543,63 +1238,21 @@ function canonical_form(T::TensorTerm)
 end
 
 """
-Rejection key for [`collect_terms`](@ref): a stronger relative of [`term_fingerprint`](@ref) that
-also encodes the *contraction pattern*, not just the factor and free-index multisets.
+Whatever a factor is told apart by that its shared `TensorData` does not hold.
 
-Each contraction contributes the `(name, slot, position)` of both of its ends, so terms built from
-the same tensors but wired together differently get different keys. Still invariant under factor
-reordering and dummy renaming — a differing key is a sound rejection, an equal key proves nothing.
-Costs one pass and no term copying, unlike building a canonical form.
+`TensorData` is interned, so two factors of the same name and type share one object. Some matricies have other identifying properties
 """
-function _collect_prekey(T::TensorTerm)
-    ts = terms(T)
-    nt = length(ts)
-    h = UInt(0)
-    ind = Vector{Vector{IndexPair}}(undef, nt)
-    @inbounds for i in 1:nt
-        ind[i] = indices(ts[i])
-        h ⊻= hash(length(ind[i]), hash(name(ts[i])))
-    end
-
-    slots = Dict{UInt64,Vector{Tuple{Int,Int,Bool}}}()
-    @inbounds for i in 1:nt, sl in eachindex(ind[i])
-        idx, pos = ind[i][sl]
-        isLightcone(idx) && continue
-        push!(get!(() -> Tuple{Int,Int,Bool}[], slots, idx.uid), (i, sl, pos.position))
-    end
-
-    x = UInt(0)   # free indices, by identity
-    y = UInt(0)   # contraction pattern, by endpoint description
-    for (uid, v) in slots
-        if length(v) == 2
-            a = hash(v[1][3], hash(v[1][2], hash(name(ts[v[1][1]]))))
-            b = hash(v[2][3], hash(v[2][2], hash(name(ts[v[2][1]]))))
-            lo, hi = minmax(a, b)
-            y ⊻= hash(hi, lo)
-        else
-            for e in v
-                x ⊻= hash(e[3], hash(uid))
-            end
-        end
-    end
-    return hash(y, hash(x, hash(nt, h)))
-end
+_extra_identity(::TensorSuperType) = nothing
 
 """
 Identity of a factor for signature purposes: everything about it except its indices.
-
-Tensors share an immutable `TensorData`, so object identity settles name, `function_of`, weights,
-tableaux and labels in one comparison. Distinct-but-equal data objects simply fail to match, which
-under-collects rather than over-collects.
 """
-_factor_identity(t::TensorSuperType) = t isa OperatorSuperType ? hash(name(t)) : objectid(data(t))
+_factor_identity(t::TensorSuperType) =
+    t isa OperatorSuperType ? hash(name(t)) :
+    hash(_extra_identity(t), hash(typeof(t), objectid(data(t))))
 
 """
 Emit the slot codes for one index vector.
-
-Split out as a function barrier: the factors arrive as `TensorSuperType`, so `indices(t)` is a
-dynamic call — doing it once per factor and handing a concretely typed vector to this loop keeps
-the per-index work inferred.
 """
 function _sig_slots!(key::Vector{UInt64}, ti::Vector{IndexPair},
     dummyno::Dict{UInt64,Int}, dums::Set{UInt64})
@@ -1645,11 +1298,6 @@ end
 
 A key such that two terms share it exactly when they are equal up to dummy renaming and the
 ordering of commuting factors, with `sign * (term with key) == T`.
-
-Unlike [`canonical_form`](@ref) this never materialises a renamed term — it walks the factors once
-and emits integers — which is what makes collecting cheap enough to be worth doing. Terms whose
-factors do not freely commute keep their given order, so they only merge with identically ordered
-terms.
 """
 function canonical_signature(T::TensorTerm)
     ts = terms(T)
@@ -1741,99 +1389,6 @@ function _insert_merged(v::Vector{CoeffPair}, c, t::TensorTerm)
     return TensorExpression(_RAW, v)
 end
 
-# function merge_sum(TEx::TensorExpression)
-#     out = filter!(x -> !isZero(x[1]), TEx.summands)
-#     isempty(out) && return  zero()
-#     n = length(out)
-#     new_merged = CoeffPair[]
-#     if n <= 8 #for small sums, do direclty. for large, use a hashing
-#         for summand in out
-#             found = false
-#             for i in eachindex(new_merged)
-#                 if summand[2] == new_merged[i][2]
-#                     new_merged[i] = (new_merged[i][1] + summand[1]) => summand[2]
-#                     found = true;
-#                     break
-#                 end
-#             end
-#             found || push!(new_merged, summand)
-#         end
-#         TEx.summands = filter!(x -> !isZero(x[1]), new_merged)
-#         return isempty(TEx.summands) ?  zero() : TEx
-#     else
-#         buckets = Dict{UInt,Vector{Int}}()
-#         for summand in out
-#             h = hash(summand[2])
-#             found = false
-#             for i in get(buckets, h, Int[])
-#                 if summand[2] == new_merged[i][2]
-#                     new_merged[i] = (new_merged[i][1] + summand[1]) => summand[2]
-#                     found = true;
-#                     break
-#                 end
-#             end
-#             found || (push!(new_merged, summand); push!(get!(buckets, h, Int[]), length(new_merged)))
-#         end
-#     end
-#     TEx.summands = filter!(x -> !isZero(x[1]), new_merged)
-#     return isempty(TEx.summands) ?  zero() : TEx
-# end
-# function merge_sum(TEx::TensorExpression)
-#     src = TEx.summands
-#     n = length(src)
-#     n == 0 && return zero()
-
-#     new_merged = CoeffPair[]
-#     sizehint!(new_merged, n)
-
-#     if n <= 8
-#         ##for small sums, do direclty. for large, use a hashing
-#         @inbounds for s in src
-#             isZero(s[1]) && continue
-#             found = false
-#             for i in eachindex(new_merged)
-#                 if s[2] == new_merged[i][2]
-#                     c = new_merged[i][1] + s[1]
-#                     if isZero(c)
-#                         deleteat!(new_merged, i)
-#                     else
-#                         new_merged[i] = CoeffPair(c, s[2])
-#                     end
-#                     found = true
-#                     break
-#                 end
-#             end
-#             found || push!(new_merged, s)
-#         end
-#     else
-#         # large hash, mark cancellations
-#         buckets = Dict{UInt,Vector{Int}}()
-#         ncancelled = 0
-#         @inbounds for s in src
-#             isZero(s[1]) && continue
-#             h = hash(s[2])
-#             found = false
-#             for i in get(buckets, h, Int[])
-#                 if s[2] == new_merged[i][2]
-#                     c = new_merged[i][1] + s[1]
-#                     new_merged[i] = CoeffPair(c, s[2])
-#                     isZero(c) && (ncancelled += 1)
-#                     found = true
-#                     break
-#                 end
-#             end
-#             if !found
-#                 push!(new_merged, s)
-#                 push!(get!(buckets, h, Int[]), length(new_merged))
-#             end
-#         end
-#         ncancelled > 0 && filter!(x -> !isZero(x[1]), new_merged)
-#     end
-
-#     isempty(new_merged) && return zero()
-#     TEx.summands = new_merged
-#     return TEx
-# end
 const _EMPTY_IDX = Int[]
 """Above this many summands `merge_sum` hashes terms instead of comparing all pairs."""
 const _MERGE_HASH_CUTOFF = 16
@@ -2025,65 +1580,6 @@ function merge_sum_syms(TEx::TensorExpression)
     return isempty(TEx.summands) ? zero() : TEx
 end
 
-# function merge_sum_syms(TEx::TensorExpression)
-#     src = TEx.summands
-#     n = length(src)
-#     n == 0 && return zero()
-#     if n == 1
-#         @inbounds return isZero(src[1][1]) ? zero() : TEx
-#     end
-
-#     out = Vector{CoeffPair}(undef, n)
-#     m = 0
-
-#     @inbounds for i in 1:n
-#         s = src[i]
-#         isZero(s[1]) && continue
-#         t = s[2]
-#         found = false
-
-#         # cheap pass: exact term equality
-#         for k in 1:m
-#             if out[k][2] == t
-#                 c = out[k][1] + s[1]
-#                 if isZero(c)
-#                     for q in k:m-1; out[q] = out[q+1]; end
-#                     m -= 1
-#                 else
-#                     out[k] = CoeffPair(c, t)
-#                 end
-#                 found = true; break
-#             end
-#         end
-
-#         # expensive pass: symmetry-equivalence, single-tensor terms only
-#         if !found && length(terms(t)) == 1
-#             t1 = terms(t)[1]
-#             for k in 1:m
-#                 ok = out[k][2]
-#                 length(terms(ok)) == 1 || continue
-#                 same, sgn = same_tensor_mod_syms(terms(ok)[1], t1)
-#                 same || continue
-#                 c = sgn * out[k][1] + s[1]
-#                 if isZero(c)
-#                     for q in k:m-1; out[q] = out[q+1]; end
-#                     m -= 1
-#                 else
-#                     out[k] = CoeffPair(c, out[k][2])
-#                 end
-#                 found = true; break
-#             end
-#         end
-
-#         found || (m += 1; out[m] = s)
-#     end
-
-#     m == 0 && return zero()
-#     m < n && resize!(out, m)
-#     TEx.summands = out
-#     return TEx
-# end
-
 
 ##############################################################################################################################
 ##############################################################################################################################
@@ -2171,18 +1667,6 @@ end
 
 # sorting
 
-# function sort_exp(TEx::TensorExpression, Order::Vector{T} where {T<:TensorSuperType})
-#     for summand in TEx.summands
-
-
-
-#     end
-#     return TEx
-# end
-
-# function Base.sort(T::TensorTerm)
-#     return sort(TensorExpression(T))
-# end
 
 Base.sort(T::TensorSuperType) = sort(TensorExpression(T))
 function Base.sort(TEx::TensorExpression)::TensorExpression
@@ -2225,13 +1709,10 @@ function Base.sort(term::TensorTerm)::TensorExpression
 end
 
 
-
-
 """
 Dummy indices of a term as a set of uids, for O(1) membership during sorting.
 
-`bubble_sort_with_grading!` consults this once per comparison, so a `Vector` here costs a linear
-scan every time — the dominant cost of sorting a long product.
+`bubble_sort_with_grading!` consults this once per comparison, so a `Vector` here costs a linear scan every time
 """
 function dummy_uids(T::Tensorial)
     s = Set{UInt64}()
@@ -2302,35 +1783,6 @@ function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
     end
 end
 
-# function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
-#     i1 = indices(T1)
-#     i2 = indices(T2)
-
-#     # helper: unified "is default position?"
-#     is_default(idx) = idx[2] == idx[1].index_set.default_position
-
-#     for i in eachindex(i1)
-
-#         a = i1[i][1]
-#         b = i2[i][1]
-
-#         # unified dummy/default priority
-#         pa = (dummies !== nothing && a in dummies) || !is_default(i1[i]) ? 1 : 0
-#         pb = (dummies !== nothing && b in dummies) || !is_default(i2[i]) ? 1 : 0
-
-#         # 1. primary rule: default < non-default
-#         if pa != pb
-#             return pa < pb
-#         end
-
-#         # 2. tie-breaker: structural equality
-#         if a != b
-#             return a < b
-#         end
-#     end
-
-#     return false
-# end
 
 function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType, dummies=nothing)
     # tensors cloned from a common source share their (immutable) data, so this settles name
@@ -2356,19 +1808,33 @@ function custom_order_isless(T1::TensorSuperType, T2::TensorSuperType, dummies=n
 end
 
 """
-Check to see if tensors are matrices, and if they can commute.
+Whether two factors may be exchanged for free, contributing at most a grading sign and never an
+extra term.
+
+Anything that is not a pair of matrices reorders freely. Two matrices do so only when they are
+known explicitly to commute. See `has_commutation_rel` for the third case, a registered
+relation that does not vanish, where the exchange is allowed but costs a remainder.
 """
 function can_swap(a::TensorSuperType, b::TensorSuperType)
-    (a isa MatrixSuperType && b isa MatrixSuperType) && return !haskey(commutators, minmax(name(a), name(b)))
-    return true
+    (a isa MatrixSuperType && b isa MatrixSuperType) || return true
+    c = get(commutators, minmax(name(a), name(b)), nothing)
+    c === nothing && return false
+    return c.grading == 1 && isZeroTens(c.C)
+end
+
+"""
+Whether a commutation relation has been registered for `a` and `b`. When `can_swap` is false this
+separates a pair that may be exchanged at the cost of a remainder from one that may not be
+exchanged at all.
+"""
+function has_commutation_rel(a::TensorSuperType, b::TensorSuperType)
+    (a isa MatrixSuperType && b isa MatrixSuperType) || return false
+    return haskey(commutators, minmax(name(a), name(b)))
 end
 
 """
 True when no two factors carry a registered commutation relation, so reordering them can only ever
 contribute a sign and never an extra term.
-
-Only matrices can fail this, and only in pairs, so the scan runs over the matrix factors alone --
-for an expression with none (the common case) it is a single linear pass.
 """
 function _all_freely_commuting(v)
     mats = Int[]
@@ -2389,9 +1855,7 @@ function bubble_sort_with_grading!(T::TensorTerm)::Tuple{Int,TensorExpression}
 
     # Adjacent-swap sorting is only forced when a swap can emit a commutator remainder, since an
     # algorithm that moves factors over long distances cannot account for the terms generated at
-    # each intermediate transposition. When no factor pair carries a relation, no remainder can
-    # arise: the target ordering is reachable directly, and the graded sign is a property of the
-    # permutation, recoverable by counting inversions among the odd-graded factors.
+    # each intermediate transposition. 
     if n > 1 && _all_freely_commuting(v)
         perm = sortperm(1:n; lt=(i, j) -> custom_order_isless(v[i], v[j], dums), alg=MergeSort)
         sgn = _graded_perm_sign(v, perm)
@@ -2406,26 +1870,24 @@ function bubble_sort_with_grading!(T::TensorTerm)::Tuple{Int,TensorExpression}
     while swapped
         swapped = false
         for i in 1:(n-1)
-            if !isempty(sort_order)
-                if can_swap(v[i], v[i+1]) && custom_order_isless(v[i+1], v[i], dums) #i want to add an ignore dummy names in sort order
-                    v[i], v[i+1] = v[i+1], v[i]
-                    swaps += grading(v[i]) * grading(v[i+1])
-                    swapped = true
-                elseif custom_order_isless(v[i+1], v[i], dums) #need to apply the commutator and generate a new term
-                    first_half = v[1:(i-1)] #should be same
-                    final_half = v[(i+2):end]
-                    (grade, comm) = get_commutator(v[i], v[i+1])#should get the commutator
-
-                    # @show (-1)^(swaps)*TensorTerm(first_half) * comm * TensorTerm(final_half) #need actually to consider the current num swaps
-                    out_expression += (-1)^(swaps)*sort(TensorTerm(first_half) * comm * TensorTerm(final_half))#recursively sort the rest
-                    # @show out_expression
-                    v[i], v[i+1] = v[i+1], v[i]
-                    swaps += grading(v[i]) * grading(v[i+1]) + (grade < 0) #extra grade from operators
-                    swapped = true
-                end
-            elseif can_swap(v[i], v[i+1]) && custom_order_isless(v[i+1], v[i], dums)###make always
+            # custom_order_isless already falls back to alphabetical when no custom order is registered
+            custom_order_isless(v[i+1], v[i], dums) || continue
+            if can_swap(v[i], v[i+1])
                 v[i], v[i+1] = v[i+1], v[i]
                 swaps += grading(v[i]) * grading(v[i+1])
+                swapped = true
+            elseif !has_commutation_rel(v[i], v[i+1])
+                # two matrices with no relation registered do not commute, so this pair is simply
+                # left as written. The sort is a partial one: everything else still moves.
+                continue
+            else #need to apply the commutator and generate a new term
+                first_half = v[1:(i-1)] #should be same
+                final_half = v[(i+2):end]
+                (grade, comm) = get_commutator(v[i], v[i+1])#should get the commutator
+
+                out_expression += (-1)^(swaps)*sort(TensorTerm(first_half) * comm * TensorTerm(final_half))#recursively sort the rest
+                v[i], v[i+1] = v[i+1], v[i]
+                swaps += grading(v[i]) * grading(v[i+1]) + (grade < 0) #extra grade from operators
                 swapped = true
             end
         end
@@ -2436,7 +1898,6 @@ function bubble_sort_with_grading!(T::TensorTerm)::Tuple{Int,TensorExpression}
 end
 
 function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
-
     n = length(mapping)
     # println(n)
     # println(mapping)
@@ -2447,7 +1908,6 @@ function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
         for i in 1:(n-1)
             # println(i)
             if mapping[i+1] < mapping[i]
-
                 #compute grading
                 for tab in tableaux(T)
                     if tab.adj_matrix[i, i+1] != 0
@@ -2460,7 +1920,6 @@ function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
             end
         end
     end
-
     return swaps, mapping
 
 end
@@ -2526,48 +1985,6 @@ function uni_to_TeX(charr::String)
         return Base.replace(latexify(charr), "#\"L" => "")
     end
 end
-
-# function to_latex_basic(T::TensorSuperType)
-#     out = ""
-#     out *= (T.name) * " "
-#     if !isempty(indices(T))
-#         lowers = ""
-#         uppers = ""
-#         lowersempt::Bool = 1
-#         uppersempt::Bool = 1
-#         for (ind, pos) in indices(T)
-#             if ind.name == "±"
-#                 ntemp = "\\pm"
-#             elseif ind.name == "∓"
-#                 ntemp = "\\mp"
-#             else
-#                 ntemp = (ind.name)
-#             end
-#             if pos.position == 0
-#                 if typeof(ind) == DummyPatternIndex
-#                     uppers *= "?"
-#                 end
-
-#                 uppers = uppers * (ntemp) * " "
-#                 uppersempt = 0
-
-#             else
-#                 lowersempt = 0
-#                 if typeof(ind) == DummyPatternIndex
-#                     lowers *= "?"
-#                 end
-#                 lowers = lowers * (ntemp) * " "
-#             end
-#         end
-#         if !uppersempt
-#             out *= "^{" * uppers * "}"
-#         end
-#         if !lowersempt
-#             out *= "_{" * lowers * "}"
-#         end
-#     end
-#     return Base.replace(out * " ", "\$" => "")
-# end
 
 function to_latex(T::TensorSuperType)
     out = ""
@@ -2769,15 +2186,6 @@ end
 #complicated logic to convert a youngtab to a projection operator of permuations, and apply to a tensor
 #this was quite sensitive to get working for generic tableaux
 ##############################################################################################
-# Multi-term symmetry: deciding equality with the Young projector
-#
-# `hard_merge`'s graph isomorphism decides *mono-term* symmetry -- equality up to a signed
-# permutation of one monomial's slots, the same problem Butler-Portugal solves. Identities that
-# span several monomials, each separately non-zero and separately canonical (the first Bianchi
-# identity R_a[bcd] = 0 being the standard example), are invisible to it. Those need the Young
-# projector, which is exponential, so it is offered as an opt-in decision procedure rather than a
-# rewriting step: the projected form is discarded and the caller's original representation kept.
-##############################################################################################
 
 const _PROJ_CAP = typemax(Int) ÷ 4
 
@@ -2794,14 +2202,6 @@ end
 
 """
     young_projector_size(x) -> Int
-
-The number of signed permutations the Young symmetriser of `x` expands into: for one tableau,
-the product of the row-group and column-group orders, `∏ᵢ rᵢ! · ∏ⱼ cⱼ!` over row lengths `rᵢ`
-and column lengths `cⱼ`. Sizes add over a tensor's tableaux and multiply over a term's factors.
-
-This depends only on tableau *shape*, so it can be evaluated before any projection is performed
-and used to refuse one that would be too expensive. Saturates at `_PROJ_CAP` rather than
-overflowing.
 """
 function young_projector_size(tab::YoungTableau)
     rows = tab.row_lengths
@@ -2845,25 +2245,6 @@ const DEFAULT_MULTITERM_BUDGET = 1024
 
 """
     multiterm_reduce(TEx; budget=DEFAULT_MULTITERM_BUDGET) -> TensorExpression
-
-Try to reduce `TEx` using multi-term symmetries, by projecting every term onto its Young
-symmetriser and merging the result.
-
-Unlike mono-term canonicalisation this is inherently a *global* operation on the sum and cannot be
-expressed as a pairwise merge: a multi-term identity need not relate any two summands by a sign.
-The first Bianchi identity relates three monomials at once, and
-`R_{abcd}R^{acbd} = ½ R_{abcd}R^{abcd}` relates two by a rational factor -- neither is a `t == ±u`
-comparison of the kind `hard_equals_graded` performs.
-
-The projected expression is kept only when it is strictly smaller than the input, and discarded
-otherwise, since projection generally *expands* a term (a single Riemann tensor becomes 16
-summands) and the projected form is not the form the user wrote. A result of zero is therefore
-always kept, which is the case that matters most: it is what makes `≅` decide Bianchi-type
-identities.
-
-Projection is exponential in the number of symmetric factors, so it is skipped unless
-`young_projector_size` -- which is computable from tableau shape alone, before any work is done --
-lies between `2` and `budget`.
 """
 function multiterm_reduce(TEx::TensorExpression; budget::Int=DEFAULT_MULTITERM_BUDGET)
     sz = young_projector_size(TEx)
@@ -2914,11 +2295,6 @@ function factor_weight(factor::String)
         weight += abs(coef)
     end
     return weight
-end
-
-function compute_normalization_weighted(factors::Vector{String})
-    total_weight = prod(factor_weight(f) for f in factors)
-    return 1 // total_weight
 end
 
 function factor_abs_sum(factor::String)
@@ -3092,23 +2468,6 @@ function apply_string_factor(terms, factor::String)
     return new_terms
 end
 
-
-function apply_factorized_projector(factors::Vector{String}, tensor::String)
-    terms = [(one(Rational{Int}), collect(tensor))]
-
-    for f in reverse(factors)
-        terms = apply_string_factor(terms, f)
-    end
-
-    result = Dict{Vector{Char},Float64}()
-    for (s, t) in terms
-        result[t] = get(result, t, 0.0) + s
-    end
-
-    return [(s, t) for (t, s) in result if abs(s) > 1e-12]
-end
-
-
 # permutation to cycle-list string
 function perm_str(perm::Vector{<:Integer}, labels::Vector{<:Integer})
     cycles = perm_to_cycles(perm, labels)
@@ -3239,13 +2598,6 @@ function compute_young_projector(tab::YoungTableau)
         end
         push!(columns, col)
     end
-
-    # -------------------------
-    # TRUE Young symmetriser:
-    # product of:
-    #   column antisym sums
-    #   row sym sums
-    # -------------------------
     factors = String[]
 
     # columns first (antisym)

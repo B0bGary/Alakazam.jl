@@ -23,6 +23,7 @@ generate_superfield_naive(name::String, grassmann_basis::Vector{T}, xc::Coordina
 """
 Generates a superfield expansion over the specified superspace, without performing any reductions based on symmetries.
 User can supply external indices that the superfield carries. One can also construct using an explicit superspace.
+The Grassmanns are written before the component field.
 """
 function generate_superfield_naive(name::String, extra_inds::Vector{Pair{I,IndexPosition}}, grassmann_basis::Vector{T}, xc::Coordinate) where T<:TensorSuperType where I<:IndexSuperType
     gdict=Dict()
@@ -32,7 +33,7 @@ function generate_superfield_naive(name::String, extra_inds::Vector{Pair{I,Index
     length(grassmann_basis) <= 2 || error("Basis should be a single real Grassmann, or two complex conjugate Grassmann.")
     for i in 1:length(grassmann_basis)
         g=grassmann_basis[i]
-        spinor_dim = !isLightcone(indices(g)[1]) ? dimension(indices(g)[1][1]) : indices(g)[1][1].name=="±" || indices(g)[1][1].name=="∓" ? 2 : 1
+        spinor_dim = grassmann_dimension(indices(g)[1])
 
         flavour_dim=length(indices(g))==2 ? dimension(indices(g)[2][1]) : 1 #needs to work for flav or no flav
         max_order=spinor_dim*flavour_dim
@@ -76,7 +77,7 @@ function generate_superfield_naive(name::String, extra_inds::Vector{Pair{I,Index
 
                         combined_inds = Pair{IndexSuperType,IndexPosition}[vcat(extra_inds, sp1inds, sp2inds, fl1inds, fl2inds)...]
                         ψ=Tensor(name, combined_inds, xc, "("*string(o1)*","*string(o2)*")"=>lower)
-                        tex+=ψ*newterm
+                        tex += newterm * ψ
                     end
                 end
             else
@@ -95,7 +96,7 @@ function generate_superfield_naive(name::String, extra_inds::Vector{Pair{I,Index
                     vcat(extra_inds, sp1inds, fl1inds)...
                 ]
                 ψ = Tensor(name, combined_inds, xc, "("*string(o1)*")"=>lower)
-                tex += ψ * newterm
+                tex += newterm * ψ
             end
         end
 
@@ -169,7 +170,7 @@ function generate_superfield(name::String, extra_inds::Vector{Pair{I,IndexPositi
                         append_offset!(new_tab, fl1; base=nextra)
                         append_offset!(new_tab, fl2; base=nextra)
                         ψ = Tensor(name, combined_inds, new_tab, xc, "(" * string(o1) * "," * string(o2) * ")" => lower)
-                        tex += ψ * newterm
+                        tex += newterm * ψ
                     end
                 end
             else
@@ -184,7 +185,7 @@ function generate_superfield(name::String, extra_inds::Vector{Pair{I,IndexPositi
                 append_offset!(new_tab, sp1; base=nextra)
                 append_offset!(new_tab, fl1; base=nextra)
                 ψ = Tensor(name, combined_inds, new_tab, xc, "(" * string(o1) * ")" => lower)
-                tex += ψ * newterm
+                tex += newterm * ψ
             end
         end
     end

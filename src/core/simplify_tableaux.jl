@@ -261,6 +261,26 @@ function find_weighted_square(g::LabeledMultiGraph)
 end
 
 """
+True when a permutation of a term's factors only exchanges factors that are free to commute.
+Only matrices can fail `can_swap`, so this costs nothing for ordinary tensor expressions.
+"""
+function perm_respects_commutation(perm_dict::Dict{Int,Int}, tt::TensorTerm)
+    ts = terms(tt)
+    n = length(ts)
+    @inbounds for i in 1:(n-1)
+        ts[i] isa MatrixSuperType || continue
+        for j in (i+1):n
+            ts[j] isa MatrixSuperType || continue
+            # the pair is exchanged exactly when the permutation inverts their relative order
+            if perm_dict[i] > perm_dict[j] && !can_swap(ts[i], ts[j])
+                return false
+            end
+        end
+    end
+    return true
+end
+
+"""
 Finds the overall sign change when permuting graded tensors with a particular perm.
 Returns 0 if even number fermionic exchanges, 1 if odd number
 """
@@ -354,15 +374,9 @@ function same_tensor_mod_syms(O1::OperatorSuperType, O2::OperatorSuperType)
     return signed_equals(O1, O2)
 end
 
-function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType) #shouldnt this stop mixed types?
-    #names don't match
-    if !(typeof(T1) <: OperatorSuperType && typeof(T2) <: OperatorSuperType) && (name(T1) != name(T2) || function_of(T1) != function_of(T2) || tableaux(T1) != tableaux(T2))
+function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType)
+    if !(typeof(T1) <: OperatorSuperType && typeof(T2) <: OperatorSuperType) && (typeof(T1) != typeof(T2) || name(T1) != name(T2) || function_of(T1) != function_of(T2) || tableaux(T1) != tableaux(T2) || labels(T1) != labels(T2) || _extra_identity(T1) != _extra_identity(T2))
         return (false, 0)
-        #dirty fix to stop the operator from being a problem... not fully general
-        #removed since above function should steal
-        # elseif T1 isa OperatorSuperType && T2 isa OperatorSuperType #types don't match
-        #     # println("checking derivative commute")
-        #     return signed_equals(T1, T2)
     end
     dums1 = dummies(T1)
     dums2 = dummies(T2)
@@ -380,6 +394,18 @@ function same_tensor_mod_syms(T1::TensorSuperType, T2::TensorSuperType) #shouldn
         end
     end
     return (false, 0)
+end
+
+"""
+Vertex colour for a tensor node in the isomorphism graph (encodes distinguishing properties)
+"""
+function _graph_vertex_name(t)
+    base = string(nameof(typeof(t)), ":", name(t))
+    ex = _extra_identity(t)
+    ex === nothing || (base = string(base, "|", ex))
+    ls = labels(t)
+    isempty(ls) && return base
+    return string(base, "|", join((string(l[1], l[2] === upper ? "^" : "_") for l in ls), ","))
 end
 
 """
@@ -419,7 +445,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
                 oprnd = operand(chn[ch])
                 singl = isTensor(oprnd)
                 if !(singl === nothing)
-                    opr_name = name(singl)
+                    opr_name = _graph_vertex_name(singl)
                     if ch == length(chn)   # last operator in chain: add operand node
                         add_node!(g1, 2 * t1pl, name=opr_name)
                         for bk in 1:ch
@@ -447,7 +473,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
                 end
             end
         else
-            add_node!(g1, 2 * t1pl, name=name(tens1))
+            add_node!(g1, 2 * t1pl, name=_graph_vertex_name(tens1))
         end
 
         if tens1 isa OperatorSuperType
@@ -558,7 +584,13 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=fa
                 treeswaps[perm_pair[1][1]] = perm_pair[2][1]
             end
 
-            chain = get_operator_chain(TT2.terms[perm_pair[1][1]])
+            # only a chain of partial derivatives can be reordered by operator index: a trace has
+            # no operator indices, and a Lie bracket does not commute with a derivative
+            chain = get_operator_chain(TT2.terms[perm_pair[1][1]], PartialSuperType)
+            if !(chain[1] isa PartialSuperType)
+                flag = true
+                break
+            end
             rt = root_oprnd(chain[1])
             swp = graded_swap(chain, [perm_pair[1][2], perm_pair[2][2]])
             rb = rebuild_nested(swp[1], rt)
@@ -603,6 +635,8 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=fa
         end
         update_indices!(TT2)
         filtered_even = merge!(filtered_even, treeswaps)
+        # the graph does not record commutation relations, reject invalid swaps
+        perm_respects_commutation(filtered_even, TT2) || continue
         tens_grad = perm_grading(filtered_even, TT2)
         newts = Vector{TensorSuperType}(undef, length(TT2.terms))
         for perm_pair in filtered_even
@@ -651,7 +685,10 @@ end
 
 
 function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
+    typeof(T1) != typeof(T2) && return 0
     name(T1) != name(T2) && return 0   # early exit
+    length(indices(T1)) != length(indices(T2)) && return 0
+    labels(T1) != labels(T2) && return 0
     dums11 = dummies_with_pos_index_pos_ul(T1)
     contractions1 = [(x, y) for x in dums11 for y in dums11
                                                 if x[2][1] == y[2][1] && x != y]

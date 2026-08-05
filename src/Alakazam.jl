@@ -33,6 +33,7 @@ export SymorNum
 #global properties
 export SET_REGISTRY, COORD_REGISTRY, sort_order, get_sort_order, custom_sort_order!
 export add_global_property!, get_global_values
+export load_defaults!, load_gamma_defaults!
 export clear_global!, clear_commutators!, clear_sort_order!, clear_covariant!, clear_coords!, clear_indexsets!
 export lower, upper, bosonic, fermionic, ↑, ↓
 export show_function_of, function_of_on
@@ -103,8 +104,8 @@ export young_projector_size, multiterm_reduce
 ##########################
 export Metric, KroneckerDelta, EpsilonTensor, Delta
 export is_riemann_metric
-export Mat, Pauli, Gamma, Gamma5
-export reduce_matrix, contract_sigma, @mrule, @matrix
+export Mat, IdMatrix, Pauli, Gamma, Gamma5, spinor_dimension, spinor_indexset
+export reduce_matrix, contract_sigma, @mrule, @matrix, has_commutation_rel
 export contract_adjacent#needed for macro
 
 export SymplecticForm
@@ -112,7 +113,7 @@ export SymplecticForm
 ##########################
 #basic ops
 ##########################
-export pop_metric, contract_metrics, eliminate_kronecker, eliminate_epsilon
+export pop_metric, contract_metrics, eliminate_kronecker, eliminate_epsilon,eliminate_matrices,eliminate_trace
 export ≅, cong, get_weighted_terms, term_weight, drop_weight_above, drop_weight_below, ×, append, rename_dummies, rename_dummies!
 export get_unused_indices
 export simplify, hard_simplify, simp_ops_n_sym, canonicalise, canonicalize,collect_terms
@@ -124,7 +125,7 @@ export add_commutator!#needed for macro
 
 ##########################
 #replacements
-export replace_pattern
+export replace_pattern, solve_linear
 
 ###########################
 #diffgeo etc
@@ -144,6 +145,7 @@ export commute_right
 ##########################
 #liebracket
 export Lie, @Lie, first, second, swap, expand_commutators
+export Trace, factor_trace, reduce_trace
 
 ##########################
 #variational
@@ -155,9 +157,10 @@ export EL, VariationalDerivative
 ##########################
 #superspace
 export Superspace, generate_grassmann_product, GrassmannStructure, independent_structures, explain_structure, render_expression, generate_independant_structure
-export generate_superfield, generate_superfield_naive, project_to_component
+export generate_superfield, generate_superfield_naive, project_to_component, grassmann_coefficient
+export grassmann_order, drop_nilpotent
 
-export measure, integrate
+export measure, integrate, ∫
 
 export render_compact
 
@@ -178,6 +181,10 @@ export epsilon, metric
 
 
 export symmetrise_partials#fix this!!!!
+
+#integration by parts
+export drop_total_derivatives, reduce_bp_with, strip_derivatives, rebuild_nested
+export drop_total_derivatives_general
 
 
 export CoeffPair, fresh_indices
@@ -229,9 +236,14 @@ include("operators/derivative.jl")
 include("operators/derivative_ops.jl")
 include("core/tensor_replacements.jl")
 include("core/simplify_tableaux.jl")
+include("operators/parts.jl")
 include("operators/variations.jl")
 #lie bracketss
 include("operators/lie.jl")
+#traces
+include("operators/trace.jl")
+# identities
+include("core/identities.jl")
 #superspace
 include("superspace/superspace.jl")
 include("superspace/superfield.jl")
@@ -262,12 +274,15 @@ const global_values=Dict("sort_order"=>sort_order, "coordinates"=>COORD_REGISTRY
 
 """
 Clears all global registrations, like commutators, sort order, index sets...
+
+Note that this includes the gamma anticommutators.Gammas commute until `load_gamma_defaults!()` is called again.
 """
 function clear_global!()
     global global_values
     for (k, v) in global_values
         empty!(v)
     end
+    load_defaults!()
 end
 
 function get_global_values()
@@ -332,10 +347,9 @@ function show_banner()
 
 end
 function __init__()
-
+    load_defaults!()#make sure identities are registers into workspace
     if isinteractive()
         show_banner()
     end
-
 end
 end

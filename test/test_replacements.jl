@@ -205,8 +205,9 @@
     @test replace_pattern(TensorExpression(Ax*Bx*Cx),    "C",  Xx) == Ax*Bx*Xx
     # a contiguous multi-tensor match collapses to the anchor, in place
     @test replace_pattern(TensorExpression(Ax*Bx*Cx*Dx), "BC", Xx) == Ax*Xx*Dx
-    # a split match: both factors are consumed, the one between them stays put
-    @test replace_pattern(TensorExpression(Ax*Bx*Cx*Dx), "BD", Xx) == Ax*Xx*Cx
+    # a split match cannot be gathered across C, which does not commute with B or D, so the
+    # pattern does not apply and the term stands
+    @test replace_pattern(TensorExpression(Ax*Bx*Cx*Dx), "BD", Xx) == Ax*Bx*Cx*Dx
 
     # the shape a spin sum takes: u(p1) ubar(p1) -> projector, inside a Dirac chain.
     # the projector must land between the gamma matrices, not at the front of the term.
@@ -231,10 +232,17 @@
     @test replace_pattern(TensorExpression(Ad * Bd * Cd), "AB", Xd) == Xd * Cd
     # separated by C:  A C B = A(BC + [C,B]) = ABC + h A E,  and only the first part matches
     @test replace_pattern(TensorExpression(Ad * Cd * Bd), "AB", Xd) == Xd * Cd + hh * Ad * Ed
-    # a factor that DOES commute is still crossed for free, with no remainder
+    # a factor with no relation registered is not assumed to commute, so it cannot be crossed
+    # at all and the match is never gathered
     Fd = DragMx("F")
-    @test Alakazam.can_swap(Bd, Fd)
-    @test replace_pattern(TensorExpression(Ad * Fd * Bd), "AB", Xd) == Xd * Fd
+    @test !Alakazam.can_swap(Bd, Fd)
+    @test replace_pattern(TensorExpression(Ad * Fd * Bd), "AB", Xd) == Ad * Fd * Bd
+    # declaring it to commute restores the free crossing
+    Gd = DragMx("G")
+    @commutator [Ad, Gd] = zero()
+    @commutator [Bd, Gd] = zero()
+    @test Alakazam.can_swap(Bd, Gd)
+    @test replace_pattern(TensorExpression(Ad * Gd * Bd), "AB", Xd) == Xd * Gd
 
 
     ###############################################
@@ -326,14 +334,17 @@
     @test !Alakazam.can_swap(Qm, Rm)
     @test replace_pattern(TensorExpression(Pm * Qm * Rm), "PQ", Xm) == Xm * Rm          # adjacent
     @test replace_pattern(TensorExpression(Pm * Rm * Qm), "PQ", Xm) == Xm * Rm + hs * Pm * Sm
-    # two crossings give two remainders
+    # two crossings give two remainders. They do not merge: S lands where each commutator was
+    # formed, giving P S R from the outer crossing and P R S from the inner, and nothing licenses
+    # reordering S past R
     @test replace_pattern(TensorExpression(Pm * Rm * Rm * Qm), "PQ", Xm) ==
-          Xm * Rm * Rm + 2 * hs * Pm * Sm * Rm
+          Xm * Rm * Rm + hs * Pm * Sm * Rm + hs * Pm * Rm * Sm
     # factors after the match are untouched
     @test replace_pattern(TensorExpression(Pm * Rm * Qm * EdgeMx("T")), "PQ", Xm) ==
           Xm * Rm * EdgeMx("T") + hs * Pm * Sm * EdgeMx("T")
-    # a matrix with no registered relation is crossed for free
-    @test replace_pattern(TensorExpression(Pm * EdgeMx("U") * Qm), "PQ", Xm) == Xm * EdgeMx("U")
+    # a matrix with no registered relation cannot be crossed, so the match is not gathered
+    @test replace_pattern(TensorExpression(Pm * EdgeMx("U") * Qm), "PQ", Xm) ==
+          Pm * EdgeMx("U") * Qm
 
     ### --- operators --------------------------------------------------------------------------------
     gs = DummyPatternIndex("g", spacetime_indices)
@@ -560,6 +571,120 @@
         done = replace_pattern(many, "A_{?g}", Tensor("Z"))
         @test length(terms(first_summand(done))) == 40
         @test all(Alakazam.name(t) == "Z" for t in terms(first_summand(done)))
+    end
+
+    ###############################################
+    ### solve_linear
+    ###############################################
+    let y = Coordinate("slv_y", spacetime_indices),
+        p = Index("slva", spacetime_indices), q = Index("slvb", spacetime_indices),
+        A = Tensor("A", [p => lower], y), B = Tensor("B", [p => lower], y),
+        C = Tensor("C", [p => lower, q => lower], y), E = Tensor("E", [q => lower], y),
+        ∂ = PD("∂", [y], [q => lower])
+
+        @test solve_linear(2 * A + B, A) == (A, -1//2 * B)
+        @test solve_linear(TensorExpression(A - B), A) == (A, TensorExpression(B))
+        # coefficients of the target are gathered from wherever they occur
+        @test solve_linear(A + A + B, A) == (A, -1//2 * B)
+        # a complex coefficient stays exact rather than falling to floating point
+        @test solve_linear(im//2 * A + B, A) == (A, Alakazam.simplify(2im * B))
+        # an operator is as good a target as a tensor, and the two are distinct
+        @test solve_linear(∂(A) - C, ∂(A)) == (∂(A), TensorExpression(C))
+
+        # failure is reported, not raised, so a caller can sweep a list of candidates. The
+        # equation comes back untouched alongside the `nothing`.
+        @test solve_linear(∂(A) - C, A)[1] === nothing              # only ∂⟦A⟧ occurs, not A
+        let (t, back) = solve_linear(TensorExpression(B), A)                        # absent
+            @test t === nothing && back == TensorExpression(B)
+        end
+        @test solve_linear(TensorExpression(A * E), A)[1] === nothing # nonlinear
+        @test solve_linear(TensorExpression(A * E), A)[2] == TensorExpression(A * E)
+
+        # which is what makes a search over candidates work: the first that comes out wins
+        eqn = 2 * A + B
+        @test first(r for r in (solve_linear(eqn, t) for t in (E, A, B)) if r[1] !== nothing) ==
+              (A, -1//2 * B)
+    end
+
+    ###############################################
+    ### rewriting inside an operator's operand
+    ###############################################
+    # A rule has to reach into an operand wherever the operator sits.
+    let w = Coordinate("opd_w", spacetime_indices),
+        p = Index("opda", spacetime_indices), q = Index("opdb", spacetime_indices),
+        ∂ = PD("∂", [w], [q => lower]),
+        A = Tensor("A", [p => lower], w), Z = Tensor("Z", [p => lower], w),
+        Q = Tensor("Q", w)
+
+        @test replace_pattern(TensorExpression(∂(A)), TensorTerm(A), Z) == TensorExpression(∂(Z))
+        # an operator sharing its term with another factor
+        @test replace_pattern(TensorExpression(Q * ∂(A)), TensorTerm(A), Z) == Q * ∂(Z)
+        #  nested chains
+        @test replace_pattern(TensorExpression(Q * ∂(∂(A))), TensorTerm(A), Z) == Q * ∂(∂(Z))
+        # a replacement introducing its own operators must not be descended into forever
+        @test replace_pattern(TensorExpression(Q * A), TensorTerm(A), ∂(Z)) == Q * ∂(Z)
+        # labels discriminate inside an operand
+        let L1 = Tensor("A", [p => lower], w, ["1" => lower]),
+            L2 = Tensor("A", [p => lower], w, ["2" => lower])
+
+            @test replace_pattern(TensorExpression(Q * ∂(L1)), TensorTerm(L1), Z) == Q * ∂(Z)
+            @test replace_pattern(TensorExpression(Q * ∂(L2)), TensorTerm(L1), Z) == Q * ∂(L2)
+            # pattern naming no label is still a wildcard over them
+            @test replace_pattern(TensorExpression(Q * ∂(L2)), TensorTerm(A), Z) == Q * ∂(Z)
+        end
+    end
+
+    ###############################################
+    ### labels are a discriminator everywhere, not only at the top level
+    ###############################################
+    # two components of one superfield share a name, a coordinate and an index structure, and are told apart by their label alone. 
+    let y = Coordinate("lbl_y", spacetime_indices),
+        ∂ = PD("∂", [y], [Index("lblm", spacetime_indices) => lower]),
+        L10 = Tensor("Q", [Index("lbla", spacetime_indices) => lower], y, ["(1,0)" => lower]),
+        L01 = Tensor("Q", [Index("lbla", spacetime_indices) => lower], y, ["(0,1)" => lower]),
+        Z = Tensor("Z", [Index("lbla", spacetime_indices) => lower], y)
+        @test labels(L10) != labels(L01)
+        @test L10 != L01
+        @test TensorTerm(L10) != TensorTerm(L01)
+        # expression equality runs through `same_tensor_mod_syms`, which must also see the label
+        @test TensorExpression(L10) != TensorExpression(L01)
+        # `==` is only usable as a Dict key if the hash agrees with it
+        @test hash(L10) != hash(L01)
+        # sum of two components must not collapse to one
+        @test length(summands(Alakazam.simplify(TensorExpression(L10) + TensorExpression(L01)))) == 2
+        # an operator carries none of its operand's labels, so equality has to look through it
+        @test ∂(L10) != ∂(L01)
+        # same for pattern matching, or a rule for one component fires on the other
+        @test replace_pattern(TensorExpression(∂(L01)), TensorTerm(∂(L10)), Z) ==
+              TensorExpression(∂(L01))
+        @test replace_pattern(TensorExpression(∂(L10)), TensorTerm(∂(L10)), Z) ==
+              TensorExpression(Z)
+        # a pattern naming no labels stays a wildcard over them, as it was before labels existed
+        let U = Tensor("Q", [Index("lbla", spacetime_indices) => lower], y)
+            @test replace_pattern(TensorExpression(∂(L01)), TensorTerm(∂(U)), Z) ==
+                  TensorExpression(Z)
+        end
+
+        # operand's name needs the same treatment. The histogram classes factors by `name`,
+        # which for ∂_μ⟦R⟧ is the operator's, so without a further check every derivative sits in
+        # one class and a rule written for one field fires on any other of the same shape.
+        let R = Tensor("R", [Index("lbla", spacetime_indices) => lower], y),
+            r = Tensor("r", [Index("lbla", spacetime_indices) => lower], y)
+
+            @test replace_pattern(TensorExpression(∂(r)), TensorTerm(∂(R)), Z) ==
+                  TensorExpression(∂(r))
+            @test replace_pattern(TensorExpression(∂(R)), TensorTerm(∂(R)), Z) == TensorExpression(Z)
+            # nested chains too
+            @test replace_pattern(TensorExpression(∂(∂(r))), TensorTerm(∂(∂(R))), Z) ==
+                  TensorExpression(∂(∂(r)))
+            # but a wildcard operand stays a wildcard: ∂⟦?A⟧ still takes any derivative.
+            let wild = Tensor("?A", [Index("lbla", spacetime_indices) => lower], y)
+                @test replace_pattern(TensorExpression(∂(r)), TensorTerm(∂(wild)), Z) ==
+                      TensorExpression(Z)
+                @test replace_pattern(TensorExpression(∂(R)), TensorTerm(∂(wild)), Z) ==
+                      TensorExpression(Z)
+            end
+        end
     end
 
 end

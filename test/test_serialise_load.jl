@@ -6,8 +6,13 @@
     end
     # @test !isempty(get_global_values())
     clear_global!()
+    # `clear_global!` reloads the package defaults
     for (k, v) in get_global_values()
-        @test isempty(v)
+        if k == "commutators"
+            @test !isempty(v)
+        else
+            @test isempty(v)
+        end
     end
     @test isempty(SET_REGISTRY)
     for (k, v) in aa

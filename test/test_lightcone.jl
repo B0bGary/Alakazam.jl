@@ -33,6 +33,13 @@
     W=generate_superfield_naive("w", [ℓ⁻=>lower], [Tensor("θ", [ℓ⁺=>upper], θ), Tensor("Θ", [ℓ⁺ => upper], θbar)], x)
     Wbar=generate_superfield_naive("̄w", [ℓ⁻=>lower], [Tensor("θ", [ℓ⁺=>upper], θ), Tensor("Θ", [ℓ⁺ => upper], θbar)], x)
 
+    # convention: the Grassmanns are written before the component field, Φ = φ_00 + θ⁺φ_10 + ...
+    for sfield in (S, T, W, Wbar), (_, tt) in summands(sfield)
+        fs = terms(tt)
+        length(fs) == 1 && continue                       # the θ^0θ^0 component stands alone
+        @test Alakazam.name(fs[1]) in ("θ", "Θ")
+    end
+
 
     ∇=PD("∇", [x], [ℓ⁺=>lower,ℓ⁺=>lower])
     ∂=PD("∂", [θ], [ℓ⁺=>lower])
@@ -59,6 +66,16 @@
     @commutator {covar,covar_bar}=im*∇
     @commutator [covar,∇]=0
     @commutator [covar_bar,∇]=0
+    let e = TensorExpression(T * S)
+        fwd = integrate(e, [covar, covar_bar], false)
+        rev = integrate(e, [covar_bar, covar], false)
+        @test !isZeroTens(drop_total_derivatives(fwd))
+        @test isZeroTens(drop_total_derivatives(fwd + rev))
+        # neither order may leave a stray Grassmann behind
+        for (_, tt) in vcat(summands(fwd), summands(rev)), f in terms(tt)
+            @test !(Alakazam.name(f) in ("θ", "Θ"))
+        end
+    end
     T=Tensor("T",x)
     nest=covar(covar_bar(T))
     @test commute(nest)==-covar_bar(covar(T))+im*∇(T)

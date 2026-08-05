@@ -5,7 +5,7 @@ const PermCycles = Vector{Vector{Int}}
 Young Tableau diagram that stores information about symmetries and irreducible representations.
 
 `row_cycles` and `col_cycles` are the row-symmetry and column-antisymmetry generators in
-disjoint-cycle form. They depend only on `tableau`, so they are computed once and cached.
+disjoint-cycle form. They depend only on `tableau`, so they are computed once when needed and cached.
 """
 mutable struct YoungTableau
     row_lengths::Vector{Int64}
@@ -15,8 +15,6 @@ mutable struct YoungTableau
     row_cycles::Vector{PermCycles}
     col_cycles::Vector{PermCycles}
     cycles_ready::Bool
-    # symmetries::Vector{String}
-    # antisymmetries::Vector{String}
 end
 
 """
@@ -420,9 +418,6 @@ function append_offset!(tabs, tab; base::Int=0)
 end
 
 
-
-
-
 function row_col_lookup(tab::YoungTableau)
     lookup = Dict{Int,Tuple{Int,Int}}()
     for (r, row) in enumerate(tab.tableau), (c, pos) in enumerate(row)
@@ -494,48 +489,6 @@ function orbit_transversal(base_pt::Int, gens::Vector{Vector{Int}}, N::Int)
     orbit, transversal
 end
 
-# --- Schreier-Sims: build a base + strong generating set ---
-struct BSGSNode
-    base_pt::Int
-    orbit::Vector{Int}
-    transversal::Dict{Int,Vector{Int}}
-end
-
-function build_bsgs(gens::Vector{Vector{Int}}, N::Int)
-    chain = BSGSNode[]
-    current_gens = gens
-    remaining = collect(1:N)
-    id = collect(1:N)
-
-    while !isempty(current_gens) && any(g -> g != id, current_gens)
-        base_pt = findfirst(pt -> any(g -> g[pt] != pt, current_gens), remaining)
-        base_pt === nothing && break
-        bp = remaining[base_pt]
-
-        orbit, transversal = orbit_transversal(bp, current_gens, N)
-        push!(chain, BSGSNode(bp, orbit, transversal))
-
-        # Schreier generators of the stabilizer of bp
-        seen = Set{Vector{Int}}()
-        new_gens = Vector{Int}[]
-        for y in orbit
-            u_y = transversal[y]
-            for g in current_gens
-                yg = g[y]
-                u_yg = transversal[yg]
-                sg = compose(inverse(u_yg), compose(g, u_y))   # fixes bp
-                if sg != id && !(sg in seen)
-                    push!(seen, sg);
-                    push!(new_gens, sg)
-                end
-            end
-        end
-        current_gens = new_gens
-        remaining = filter(!=(bp), remaining)
-    end
-    chain
-end
-
 function permutation_orbit_pairs(gens, a, b)
 
     seen = Set{Tuple{Int,Int}}()
@@ -565,7 +518,7 @@ function symcopy(s::Set{YoungTableau})
     return out
 end
 
-
+#custom pretty print for tableau
 function Base.show(io::IO, t::YoungTableau)
     rows = t.row_lengths
     isempty(rows) && return print(io, "∅")
