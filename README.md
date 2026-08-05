@@ -1,8 +1,8 @@
 # Alakazam
 
-<div align="center">
-  <img src="newlogo3.png" width="400" height="400">
-</div>
+<p align="center">
+  <img src="https://gitlab.com/B0bGary/alakazam.jl/-/raw/main/newlogoalakazamtest.png" width="400" height="400" alt="Alakazam">
+</p>
 
 Alakazam is a Julia-based solution to performing symbolic algebraic manipulations of tensors and tensor equations.
 It was designed primarily for studying field theories in physics.
