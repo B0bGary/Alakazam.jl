@@ -29,17 +29,15 @@ generated, and what it does when it runs dry.
 ## Reading the index supply
 
 That section prints what it measures, since the answer depends on how
-`generate_indices` searches `ORDERED_POOLS`. Two outcomes are expected:
+`generate_indices` searches `ORDERED_POOLS`. It reports **all 1425 names of
+`ORDERED_POOLS`, across 55 pools**, because generation falls through to the
+remaining pools once one is exhausted, and raises `OutOfIndices` when every
+pool is used up. A template name belonging to no pool is served from the
+start of the order, so `"i1"` yields `"a"`.
 
-- **one alphabet, 26.** `generate_indices` takes the pool holding the first
-  declared index and draws from that one only, so a set whose names fill an
-  alphabet cannot hand out another dummy even with the other pools untouched.
-  Declaring more indices buys nothing.
-- **the whole of `ORDERED_POOLS`, 1425 names across 55 pools.** Generation falls
-  through to the remaining pools.
-
-The note printed under the table follows the measurement, so this file does not
-go stale if that behaviour changes.
+The script prints the other outcome, **one alphabet, 26**, whenever a set stops
+at the pool holding its first declared index. Both notes follow the
+measurement, so read the printed one.
 
 ## Where the expected values come from
 

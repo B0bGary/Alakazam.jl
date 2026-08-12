@@ -71,6 +71,35 @@ function ⋆(T::TensorSuperType, index_type::Union{IndexSet,Nothing}=nothing)
     return Tdual
 end
 
+"""At least `n` indices of `I` outside `used`, generating fresh ones when the declared pool runs short."""
+function _spare_indices(I::IndexSet, used, n::Integer)
+    out = IndexSuperType[x for x in I.indices if x ∉ used]
+    while length(out) < n
+        nid = generate_indices(I)
+        nid === nothing && throw(OutOfIndices(I))
+        push!(out, nid)
+    end
+    out
+end
+
+"""Copy of `T` with its `tinds` indices replaced by `newinds` in order, every other index kept."""
+function _set_form_indices(T::TensorSuperType, tinds::IndexSet, newinds)
+    out = Vector{Pair{IndexSuperType,IndexPosition}}()
+    k = 0
+    for (ind, pos) in indices(T)
+        if ind.index_set == tinds
+            k += 1
+            push!(out, newinds[k])
+        else
+            #a spinor or flavour index rides along untouched
+            push!(out, ind => pos)
+        end
+    end
+    Tc = copy(T)
+    set_indices!(Tc, out)
+    Tc
+end
+
 """Take the wedge exterior product between two forms"""
 wedge(T1::TensorSuperType, T2::TensorSuperType,index_type::Union{IndexSet,Nothing}=nothing) = ∧(T1::TensorSuperType, T2::TensorSuperType,index_type)
 
@@ -103,7 +132,7 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
     # println([y for y in combinds])
     # println([y[1] for y in combinds])
 
-    unused = [x for x in tinds.indices if x ∉ [y[1] for y in combinds]]
+    unused = _spare_indices(tinds, [y[1] for y in combinds], tinds.range)
     p = length(inds1)
     q = length(inds2)
     r = p + q
@@ -126,7 +155,7 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
     # println(epsindlist)
     eps1 = EpsilonTensor(epsindlist) #the leadings inds will not change
 
-    unused = [x for x in unused if x ∉ (y[1] for y in vcat(combinds, indices(eps1)))]
+    unused = _spare_indices(tinds, [y[1] for y in vcat(combinds, indices(eps1))], r)
     epsindlist2 = Vector{Pair{IndexSuperType,Alakazam.IndexPosition}}(
         vcat(
             [unused[i] => op_pos(poss) for i in 1:r],
@@ -134,14 +163,129 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
         )
     )
     eps2 = EpsilonTensor(epsindlist2)
-    T1c = copy(T1)
-    set_indices!(T1c, [epsindlist2[i][1] => poss for i in 1:p])
-    T2c = copy(T2)
-    set_indices!(T2c,[epsindlist2[i][1] => poss for i in p+1:r])
+    #only the form indices are renamed; a spinor or flavour index the factor
+    #carries stays where it is, else a gravitino bilinear comes back bosonic
+    T1c = _set_form_indices(T1, tinds, [epsindlist2[i][1] => poss for i in 1:p])
+    T2c = _set_form_indices(T2, tinds, [epsindlist2[i][1] => poss for i in p+1:r])
  
     prefact = 1 // (factorial(p) * factorial(q) * factorial(dim - r))
     return prefact * eps1 * eps2 * T1c * T2c
 end
+
+"""The index set a form's slots belong to, from the tensor or from the coordinate."""
+function _form_index_set(T::TensorSuperType, x::Coordinate, index_type::Union{IndexSet,Nothing})
+    index_type === nothing || return index_type
+    for (ind, _) in indices(T)
+        return ind.index_set
+    end
+    #a zero-form carries no slot to read the set from, so the coordinate says
+    first(x.index_set)
+end
+
+"""Exterior derivative of a form."""
+𝖽(T::TensorSuperType, x::Coordinate, args...; kwargs...) = exterior_derivative(T, x, args...; kwargs...)
+
+"""
+Exterior derivative of a p-form, as the antisymmetrised partial derivative
+
+    (dω)_{a₀a₁…a_p} = Σᵢ (-1)ⁱ ∂_{aᵢ} ω_{a₀…âᵢ…a_p}
+
+The new slot is the first. Its index is generated unless one is given, and the
+derivative is named `dname` so several may coexist.
+"""
+function exterior_derivative(T::TensorSuperType, x::Coordinate,
+                             newidx::Union{IndexSuperType,Nothing}=nothing,
+                             index_type::Union{IndexSet,Nothing}=nothing;
+                             dname::String="∂")
+    tinds = _form_index_set(T, x, index_type)
+    isForm(T, tinds) || throw(InvalidDifferentialForm(
+        "The tensor " * tens2str(T) * " should be totally antisymmetric."))
+
+    formpairs = [pr for pr in indices(T) if pr[1].index_set == tinds]
+    p = length(formpairs)
+    pos = p == 0 ? tinds.default_position : formpairs[1][2]
+    p + 1 > tinds.range && return zero()   #no form of degree above the dimension
+
+    if newidx === nothing
+        newidx = _spare_indices(tinds, [pr[1] for pr in indices(T)], 1)[1]
+    end
+
+    slots = vcat(Pair{IndexSuperType,IndexPosition}[newidx => pos], formpairs)
+    out = zero()
+    for i in 1:(p+1)
+        #drop the slot the derivative carries, the rest stay on the form in order
+        remaining = [slots[k] for k in 1:(p+1) if k != i]
+        Tc = _set_form_indices(T, tinds, remaining)
+        out += (-1)^(i - 1) * PartialDerivative(dname, x, slots[i])(Tc)
+    end
+    out
+end
+
+"""Copy of `T` with its `tinds` slots relabelled from `from` to `to`, in order."""
+function _relabel_slots(T::Tensorial, from, to)
+    ref = Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
+    for (f, t) in zip(from, to)
+        ref[f] = t
+    end
+    Tc = copy(T)
+    set_indices_deep!(Tc, ref)
+    Tc
+end
+
+"""Copy of an expression with its slots relabelled, every term at once."""
+function _relabel_expression(T::TensorExpression, ref::Dict)
+    out = zero()
+    for (coef, term) in summands(T)
+        new_term = 1
+        for t in terms(term)
+            tc = copy(t)
+            set_indices_deep!(tc, ref)
+            new_term *= tc
+        end
+        out += coef * new_term
+    end
+    out
+end
+
+"""
+Exterior derivative of a form carried by an expression, so that d∘d composes.
+
+The slots are the expression's free indices, fixed once and used for every
+term. Reading them off each term separately would order them differently in
+∂_a⟦A_b⟧ and ∂_b⟦A_a⟧, and the antisymmetrisation would not close.
+"""
+function exterior_derivative(T::TensorExpression, x::Coordinate,
+                             newidx::Union{IndexSuperType,Nothing}=nothing,
+                             index_type::Union{IndexSet,Nothing}=nothing;
+                             dname::String="∂")
+    #free_indices is a multiset, so take its keys
+    free = Pair{IndexSuperType,IndexPosition}[k for (k, _) in collect(free_indices(T))]
+    tinds = index_type === nothing ?
+        (isempty(free) ? first(x.index_set) : free[1][1].index_set) : index_type
+    formpairs = sort([pr for pr in free if pr[1].index_set == tinds], by=pr -> name(pr[1]))
+    p = length(formpairs)
+    pos = p == 0 ? tinds.default_position : formpairs[1][2]
+    p + 1 > tinds.range && return zero()
+
+    if newidx === nothing
+        newidx = _spare_indices(tinds, [pr[1] for pr in free], 1)[1]
+    end
+
+    slots = vcat(Pair{IndexSuperType,IndexPosition}[newidx => pos], formpairs)
+    out = zero()
+    for i in 1:(p+1)
+        remaining = [slots[k] for k in 1:(p+1) if k != i]
+        ref = Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
+        for (f, t) in zip(formpairs, remaining)
+            ref[f] = t
+        end
+        out += (-1)^(i - 1) * PartialDerivative(dname, x, slots[i])(_relabel_expression(T, ref))
+    end
+    out
+end
+
+exterior_derivative(T::TensorTerm, x::Coordinate, args...; kwargs...) =
+    exterior_derivative(TensorExpression(T), x, args...; kwargs...)
 
 """
 Interior product (contraction) of a vector with a differential form.
