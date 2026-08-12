@@ -223,6 +223,8 @@ function _flat_tensor_dict(x)
         "weights" => weights(x),
         "tableaux" => [to_dict(t) for t in tableaux(x)],
         "labels" => labels(x),
+        # by type name, not by instance: NumberSets are singletons, so the name is the whole value
+        "numberfield" => string(nameof(typeof(numberfield(x)))),
     )
 end
 
@@ -490,6 +492,14 @@ function from_field(::Type{T}, ::Val{:index_set}, v, into::Module=Main) where T
     return SET_REGISTRY[v]
 end
 
+"""A `NumberSet` round-trips as its type name; rebuild the singleton from it."""
+function from_field(::Type{T}, ::Val{:numberfield}, v, into::Module=Main) where T
+    v isa NumberSet && return v
+    nm = v isa AbstractString ? String(v) : string(v)
+    nm = last(split(nm, '.'))                    
+    return getfield(Alakazam, Symbol(nm))()
+end
+
 function from_field(::Type{T}, ::Val{:function_of}, v, into::Module=Main) where T
     return [
         reconstruct(Coordinate, x, into)
@@ -526,13 +536,17 @@ function _tensor_parts(d, into::Module=Main)
     w    = from_field(TensorData, Val(:weights), d["weights"], into)
     tabs = from_field(TensorData, Val(:tableaux), d["tableaux"], into)
     labs = from_field(TensorData, Val(:labels), d["labels"], into)
+    # absent in files written before the field existed, which are all real by construction
+    nf   = haskey(d, "numberfield") ?
+           from_field(TensorData, Val(:numberfield), d["numberfield"], into) : realfield()
     # route through the argument parser so each piece lands in its declared field type
     return build_tensor(nm,
         Vector{IndexPair}(inds),
         Vector{Coordinate}(fo),
         Dict{String,Number}(w),
         Vector{YoungTableau}(tabs),
-        _as_labels(labs))
+        _as_labels(labs),
+        nf)
 end
 
 """Tensors serialise as one "data" block; split it back into data and indices."""

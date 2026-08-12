@@ -1,6 +1,7 @@
 
 
 struct RealNumberSet <: NumberSet end
+struct ImNumberSet <: NumberSet end
 struct RationalNumberSet <: NumberSet end
 struct ComplexNumberSet <: NumberSet end
 struct QuaternionNumberSet <: NumberSet end
@@ -10,11 +11,13 @@ struct OctonionNumberSet <: NumberSet end
 Base.show(io::IO, ::NumberSet)=print(io, "𝔽")
 Base.show(io::IO, ::RationalNumberSet)=print(io, "ℚ")
 Base.show(io::IO, ::RealNumberSet)=print(io, "ℝ")
+Base.show(io::IO, ::ImNumberSet)=print(io, "iℝ")
 Base.show(io::IO, ::ComplexNumberSet)=print(io, "ℂ")
 Base.show(io::IO, ::QuaternionNumberSet)=print(io, "ℍ")
 Base.show(io::IO, ::OctonionNumberSet)=print(io, "𝕆")
 
 const ℝ=RealNumberSet
+const iℝ=ImNumberSet
 const ℚ=RationalNumberSet
 const ℂ=ComplexNumberSet
 const ℍ=QuaternionNumberSet

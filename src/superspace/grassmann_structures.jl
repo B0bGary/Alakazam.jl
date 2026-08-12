@@ -1,36 +1,57 @@
 ############################################################
-# Splits a product of n Grassmann numbers θ^i_α (spinor index α, flavour
-# index i) into independent group-invariant structures, so a superfield
-# expansion can use a set of cefficient tensors with a maximally reduced 
-#number of indices.
+# Author: Jesse Woods
+# Please cite ... if you use this script in your work.
+
+
+############################################################
+# This script splits a product of n Grassmann numbers θ^i_α (spinor index α, flavour
+# index i) into independent group-invariant structures, essentially so that a superfield
+# expansion can be expressed in terms of coefficient fields with a maximally reduced number
+# of indices.
+#############################################################
+# Usage:
 #
-# Starting from the space of antisymmetric grassmanns Λ^n(V⊗W), we split
-# into Young-diagram blocks (Cauchy
-# identity). For :Sp/:O/:SO each block is further split into that group's
-# actual irreducible pieces. Those branchings are computed by comparing
-# characters in exact rational arithmetic and are re-checked on every call
-# (the result must reproduce the character exactly, be whole numbers, and
-# have dimensions that add up); on any failure the code stops with an error
-# rather than guess. Explicit example contractions (ε, ω, δ) are attached
-# wherever a simple one exists; anything genuinely non-elementary is
-# reported honestly as "composite".
+# One entry point is via the function 'independent_structures(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symbol)'
+# Here:
+#       'n' is the monomial order (length of the product of Grassmanns),
+#       'd_S' the dimension of the spin group
+#       'd_F' the dimension of the flavour group
+#       'S_type' a symbol :none, :GL, :U, :SL, :SU, :O, :SO, :Sp determining the spin group
+#       'F_type' a symbol :none, :GL, :U, :SL, :SU, :O, :SO, :Sp determining the flavour group
+# 
+# This function returns a vector of custom `GrassmannStructure` objects containing all relevant information, 
+# which can be passed to another function if needed. These objects can also be passed to `explain_structure` to
+# obtain an explicit printout.
+#
+# Alternatively, one could use 'render_compact(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symbol)'
+# to directly print to the console the decomposition in a somewhat readable form.
+#
+###############################################################################
+#
+# The procedure follows as in the paper.
+#
+# Starting from the space of antisymmetric grassmanns Λ^n(V⊗W), we split into Young-diagram 
+# blocks using the Cauchy identity. For :Sp/:O/:SO each block is further split into that group's
+# actual irreducible pieces. Those branchings are computed by comparing  characters in exact 
+# rational arithmetic and are re-checked on every call (the result must reproduce the character exactly, 
+# be whole numbers, and have dimensions that add up); on any failure the code stops with an error.
+# Explicit example witness contractions (ε, ω, η) are attached in the printout wherever a simple one exists;
+# if none can be found, it is reported as "composite".
 #
 # Worth knowing:
-# * Odd SO(N): the candidate list spans both parities of the trace count,
-#   because contracting with the odd-rank ε changes a diagram's size by an
-#   odd amount (e.g. Λ²C³ ≅ C³).
-# * :O is computed on the identity component, so it really gives SO
-#   content; ε is excluded for :O (it flips sign under reflections).
-# * ε contractions serve :SL/:SU, :Sp (where ε ∝ ω∧...∧ω), and :SO.
+# * Odd SO(N): the candidate list spans both parities of the trace count, because contracting with the
+#   odd-rank ε changes a diagram's size by an odd amount (e.g. Λ²C³ ≅ C³).
+# * :O is computed on the identity component, so it really gives SO  content; 
+#   ε is excluded for :O (it flips sign under reflections).
+# * Totally antisymmetric contractions serve :SL/:SU, :Sp and :SO. For :SL/:SO they are always the full-rank ε.
+#   For :Sp the invariant on 2k antisymmetrised slots is ω^∧k, which is ε only at full valence 2k = dim (ε ∝ ω∧...∧ω);
+#   at lower valence it prints as ω or ω^∧k, not ε.
 #
-# Needs a `YoungTableau` type from elsewhere (fields `tableau`,
-# `row_lengths`; constructor `YoungTableau(shape, labels, n)`).
 ############################################################
 
-# using LinearAlgebra
 
-# ---------- partitions & dimension formulas ----------
 
+############## partitions & dimension formulas ###################
 function integer_partitions(n::Int, max_part::Int=n)
     n == 0 && return [Int[]]
     out = Vector{Vector{Int}}()
@@ -41,12 +62,10 @@ function integer_partitions(n::Int, max_part::Int=n)
     end
     return out
 end
-
 function conjugate(p::Vector{Int})
     isempty(p) && return Int[]
     return [count(x -> x > j, p) for j in 0:(p[1]-1)]
 end
-
 "Dimension of the GL(m) irrep with Young diagram `lam`."
 function gl_dim(lam::Vector{Int}, m::Int)
     isempty(lam) && return 1
@@ -62,7 +81,6 @@ function gl_dim(lam::Vector{Int}, m::Int)
     end
     return num ÷ den
 end
-
 # Shared core of the Weyl dimension formulas:
 # Π_{i<j} (l_i²-l_j²)/(m_i²-m_j²), optionally times Π_i l_i/m_i.
 function weyl_dim_ratio(l, m, with_singles::Bool)
@@ -80,7 +98,6 @@ function weyl_dim_ratio(l, m, with_singles::Bool)
     end
     return num / den
 end
-
 "Dimension of the Sp(2r) irrep labelled by `mu`."
 function sp_dim(mu::Vector{Int}, r::Int)
     mupad = vcat(mu, zeros(Int, r - length(mu)))
@@ -93,7 +110,7 @@ end
     o_dim(mu, dim)
 
 Dimension of the O(dim)/SO(dim) irrep labelled by `mu`. For even dim, a
-label with dim÷2 rows describes a self-dual/anti-self-dual pair and counts
+label with dim/2 rows describes a self-dual/anti-self-dual pair and counts
 both (hence the factor 2).
 """
 function o_dim(mu::Vector{Int}, dim::Int)
@@ -115,12 +132,12 @@ end
 fits_in_box(p::Vector{Int}, rows::Int, cols::Int) =
     length(p) <= rows && (isempty(p) || p[1] <= cols)
 
-# ---------- Cauchy-block tableaux ----------
+# Cauchy-block tableaux
 
 """
     dual_tableaux(lam)
 
-A matched pair of tableaux -- spinor shape `lam` and flavour shape `lam'` --
+A matched pair of tableaux (spinor shape `lam` and flavour shape `lam'`)
 sharing the labels 1..n, one label per θ copy. `(nothing, nothing)` at n=0.
 """
 function dual_tableaux(lam::Vector{Int})
@@ -148,11 +165,10 @@ function column_groups_rows(rows::Vector{Vector{Int}})
 end
 column_groups(tab::YoungTableau) = column_groups_rows(tab.tableau)
 
-# ---------- branching by exact character comparison ----------
+############## branching by exact character comparison ####################
 #
 # Everything below runs in exact rational arithmetic at deterministic prime
-# sample points: no floating point, no randomness, so numerical error is
-# impossible by construction.
+# sample points. Numerical error is impossible by construction.
 
 "First `count` primes, via a sieve."
 function primes_upto_count(count::Int)
@@ -174,7 +190,7 @@ function primes_upto_count(count::Int)
     end
 end
 
-"`num` sample points in Rational{BigInt}^r built from consecutive primes;
+"`num` sample points in Rational{BigInt}^r built from consecutive primes.
 `offset` shifts which primes are used so separate calls never overlap."
 function prime_sample_points(num::Int, r::Int, offset::Int=0)
     primes = primes_upto_count(num * r + offset + 5)
@@ -250,9 +266,6 @@ so no fractional arithmetic is ever needed. Same DivideError contract as
 function o_character_exact(mu::Vector{Int}, xs::Vector{Rational{BigInt}}, dim::Int)
     r = length(xs)
     mupad = vcat(mu, zeros(Int, r - length(mu)))
-    # The two branches deliberately use DIFFERENT helper names: defining a
-    # local function with the same name in both branches of an `if` is not
-    # supported by Julia and silently miscompiles (this bit us once).
     if dim % 2 == 0
         entry_even = (x, k) -> k == 0 ? Rational{BigInt}(2) : x^k + x^(-k)
         A = Rational{BigInt}[entry_even(xs[i], mupad[j] + r - j) for i in 1:r, j in 1:r]
@@ -311,8 +324,7 @@ Shared engine for the two branchings. Fits the Schur function of `lam`
 (evaluated on `full_eigs(xs)`) against the candidate characters at exact
 sample points, then verifies everything: the fit must be exact at every
 point used AND at one independent extra point, the multiplicities must be
-whole numbers, and their dimensions must sum to gl_dim. Errors on any
-failure rather than return a questionable result.
+whole numbers, and their dimensions must sum to gl_dim. Errors on any failure.
 """
 function branch_via_characters(name::String, lam::Vector{Int}, dim::Int, r::Int,
                                candidates::Vector{Vector{Int}}, charfn, full_eigs, dimfn;
@@ -339,22 +351,19 @@ function branch_via_characters(name::String, lam::Vector{Int}, dim::Int, r::Int,
         end
         ok && break
         attempt += 1
-        attempt > 50 && error("$name: could not find non-degenerate sample points after 50 attempts for lam=$lam, dim=$dim -- this should not happen mathematically; please report.")
+        attempt > 50 && error("$name: could not find non-degenerate sample points after 50 attempts for lam=$lam, dim=$dim - this should not happen mathematically; please report.")
     end
     coeffs = exact_normal_equations_solve(A, b)
-
     for (si, xs) in enumerate(samples)
         rhs = sum(coeffs[ci] * charfn(mu, xs) for (ci, mu) in enumerate(candidates))
-        rhs != b[si] && error("$name: exact fit failed at a sample point for lam=$lam, dim=$dim -- refusing to trust result")
+        rhs != b[si] && error("$name: exact fit failed at a sample point for lam=$lam, dim=$dim: refusing to trust result")
     end
-
     result = Dict{Vector{Int},Int}()
     for (mu, c) in zip(candidates, coeffs)
-        c.den != 1 && error("$name: non-integer coefficient $c for mu=$mu, lam=$lam, dim=$dim -- refusing to trust result")
+        c.den != 1 && error("$name: non-integer coefficient $c for mu=$mu, lam=$lam, dim=$dim: refusing to trust result")
         rc = Int(c.num)
         rc != 0 && (result[mu] = rc)
     end
-
     check_attempt = 0
     lhs = Rational{BigInt}(0)
     rhs = Rational{BigInt}(0)
@@ -370,13 +379,12 @@ function branch_via_characters(name::String, lam::Vector{Int}, dim::Int, r::Int,
         end
         ok && break
         check_attempt += 1
-        check_attempt > 50 && error("$name: could not find a non-degenerate verification point for lam=$lam, dim=$dim -- please report.")
+        check_attempt > 50 && error("$name: could not find a non-degenerate verification point for lam=$lam, dim=$dim: please report.")
     end
-    lhs != rhs && error("$name: independent verification point failed for lam=$lam, dim=$dim -- refusing to trust result")
-
+    lhs != rhs && error("$name: independent verification point failed for lam=$lam, dim=$dim: refusing to trust result")
     total_dim = sum(mult * dimfn(mu) for (mu, mult) in result; init=0)
     true_dim = gl_dim(lam, dim)
-    total_dim != true_dim && error("$name: DIMENSION CHECK FAILED for lam=$lam, dim=$dim -- branch dims sum to $total_dim, expected $true_dim. Refusing to trust result.")
+    total_dim != true_dim && error("$name: DIMENSION CHECK FAILED for lam=$lam, dim=$dim: branch dims sum to $total_dim, expected $true_dim. Refusing to trust result.")
     return result
 end
 
@@ -415,8 +423,7 @@ function branch_gl_to_o(lam::Vector{Int}, dim::Int)
         mu -> o_dim(mu, dim); base_offset=100_000)
 end
 
-# ---------- explicit contraction witnesses ----------
-
+################# explicit contraction witnesses ####################
 function skew_cells(lam::Vector{Int}, mu::Vector{Int})
     cells = Tuple{Int,Int}[]
     for i in 0:(length(lam)-1)
@@ -427,14 +434,13 @@ function skew_cells(lam::Vector{Int}, mu::Vector{Int})
     end
     return cells
 end
-
 """
     lr_witnesses(lam, mu, delta, max_count)
 
 Up to `max_count` Littlewood-Richardson fillings of the skew shape
 `lam/mu` with content `delta`. Only used to produce EXAMPLE contractions
 for branches whose existence and multiplicity are already certified by the
-character fit -- a failed search here can never change any count.
+character fit. A failed search here can never change any count.
 """
 function lr_witnesses(lam::Vector{Int}, mu::Vector{Int}, delta::Vector{Int}, max_count::Int)
     if length(mu) > length(lam) || any(mu[i] > lam[i] for i in 1:length(mu))
@@ -519,19 +525,53 @@ function decode_elementary_antisymmetric_pairs(filled::Dict{Tuple{Int,Int},Int},
     return pairs
 end
 
-"Reads a witness filling with content (2,...,2) as δ-pairs: cells sharing
-a value form a pair."
+"""
+Reads a witness filling as η-pairs: cells sharing a value are contracted.
+"""
 function decode_elementary_symmetric_pairs(filled::Dict{Tuple{Int,Int},Int},
         tab_rows::Vector{Vector{Int}}, j::Int)
     pairs = Vector{Vector{Int}}()
-    for v in 1:j
-        cells = [c for (c, val) in filled if val == v]
-        push!(pairs, sort([tab_rows[i+1][jx+1] for (i, jx) in cells]))
+    isempty(filled) && return pairs
+    for v in 1:maximum(values(filled))                    
+        cells = sort([c for (c, val) in filled if val == v])  # (row, col) order
+        isempty(cells) && continue
+        for t in 1:2:(length(cells) - 1)                   
+            i1, c1 = cells[t]
+            i2, c2 = cells[t+1]
+            push!(pairs, sort([tab_rows[i1+1][c1+1], tab_rows[i2+1][c2+1]]))
+        end
     end
     return pairs
 end
 
-"Every way to remove `f` boxes from `mu`, at most one per row -- the places
+"""true iff every label of `filled` occupies a single row.
+A δ-row of length 2a confined to one row of λ/μ sits on mutually
+symmetrised boxes, so the symmetrised η^{⊗a} collapses to a bare product
+of a metrics and the filling is a legitimate witness."""
+function filling_row_confined(filled::Dict{Tuple{Int,Int},Int})
+    seen = Dict{Int,Int}()
+    for ((i, _), v) in filled
+        haskey(seen, v) && seen[v] != i && return false
+        seen[v] = i
+    end
+    return true
+end
+"""the δ partitions the η search may use. Littlewood's rule
+sums over all δ with even rows; the pairwise (2,...,2) is only one of them
+and is the only one that encodes a pairing directly, so it is tried first.
+The others are admitted only through the row-confined test above."""
+function symmetric_delta_candidates(j::Int)
+    j == 0 && return Vector{Int}[Int[]]
+    pairwise = fill(2, j)
+    out = Vector{Int}[pairwise]
+    for d in integer_partitions(2 * j)
+        (all(iseven, d) && d != pairwise) || continue
+        push!(out, d)
+    end
+    return out
+end
+
+"Every way to remove `f` boxes from `mu`, at most one per row. The places
 where an ε's leftover free slots can sit inside the coefficient."
 function vertical_strips_removed(mu::Vector{Int}, f::Int)
     f == 0 && return [copy(mu)]
@@ -562,7 +602,7 @@ function vertical_strips_removed(mu::Vector{Int}, f::Int)
     return results
 end
 
-# ---------- Grassmann structures ----------
+########### Grassmann structures ###################
 
 """
     SideData(dim, kind, tableau, residual_rows, residual_shape, pair_groups, is_composite[, eps_groups])
@@ -570,8 +610,8 @@ end
 One explicit term for one side (spinor or flavour) of a Cauchy block:
 which θ copies its ε's and pairs consume, and which labels the coefficient
 keeps (`residual_rows`, shape `residual_shape`). `residual_rows === nothing`
-marks a composite: the piece is certified to exist with the given shape and
-dimension, but no simple explicit contraction was found for it. NEGATIVE
+marks a composite (the piece is certified to exist with the given shape and
+dimension, but no simple explicit contraction was found for it). NEGATIVE
 labels are ε free slots carried by the coefficient (rendered β on the
 spinor side, m on the flavour side; each pairs up with the matching ε).
 The 7-argument constructor leaves `eps_groups` empty.
@@ -613,7 +653,7 @@ every even valence 2k <= dim, and each such factor must act inside ONE
 antisymmetrised column (that antisymmetry is what makes the contraction
 nonzero). A strategy therefore assigns each original column c an even
 bottom-strip size x_c <= min(height_c, dim), fed to one ω^(x_c/2), subject
-to the leftover heights being weakly decreasing -- exactly the condition
+to the leftover heights being weakly decreasing, exactly the condition
 for the leftover cells to form a genuine sub-tableau whose columns are the
 top parts of original columns, so the remaining ω-pair search stays
 faithful to the symmetry structure. This covers full column strips
@@ -629,7 +669,6 @@ function sp_elementary_terms(lam::Vector{Int}, mu::Vector{Int}, tab, dim::Int, m
     ncols = lam[1]
     heights = conjugate(lam)
     budget = n - sum(mu; init=0)
-
     # enumerate strip vectors: x_c even, <= min(height, dim, budget),
     # leftover heights weakly decreasing
     xs_list = Vector{Vector{Int}}()
@@ -650,13 +689,11 @@ function sp_elementary_terms(lam::Vector{Int}, mu::Vector{Int}, tab, dim::Int, m
     rec(1, typemax(Int), 0)
     # pure pairs first, then fewer/larger strips
     sort!(xs_list, by = s -> (count(!=(0), s), [-v for v in s]))
-
     for xv in xs_list
         length(terms) >= mult && break
         two_j = n - sum(xv) - sum(mu; init=0)
         (two_j < 0 || isodd(two_j)) && continue
         j = two_j ÷ 2
-
         eps_groups = Vector{Int}[]
         for c in 1:ncols
             xv[c] == 0 && continue
@@ -671,7 +708,6 @@ function sp_elementary_terms(lam::Vector{Int}, mu::Vector{Int}, tab, dim::Int, m
             push!(lam_a, len)
             push!(rows_a, Int[rows0[i][c] for c in 1:len])
         end
-
         need = mult - length(terms)
         delta = j == 0 ? Int[] : [j, j]
         for filled in lr_witnesses(lam_a, mu, delta, need)
@@ -690,11 +726,16 @@ end
 Explicit example contractions for one certified branch `lam -> mu`, never
 more than `mult` of them (so this search can never change any count).
 :Sp delegates to `sp_elementary_terms` (per-column ω^k strips plus ω-pair
-fillings). :O/:SO use δ-pair fillings; :SO additionally uses ε, which has
+fillings). :O/:SO use η-pair fillings; :SO additionally uses ε, which has
 one FIXED valence, dim: a full column of height dim strips entirely, and a
 shorter column may borrow ε partially, leaving the unused slots as extra
 antisymmetric indices on the coefficient. Whatever the search cannot
 resolve falls through to a composite term.
+
+The η search also tries every even-row δ of Littlewood's rule, not
+only the pairwise (2,...,2). Non-pairwise δ are accepted only when
+row-confined (see `filling_row_confined`), which is exactly when the
+symmetrised metrics collapse to a bare product.
 """
 function elementary_invariant_terms(lam::Vector{Int}, mu::Vector{Int}, tab,
                                     dim::Int, kind::Symbol, mult::Int)
@@ -702,7 +743,6 @@ function elementary_invariant_terms(lam::Vector{Int}, mu::Vector{Int}, tab,
     n = sum(lam; init=0)
     rows0 = tab.tableau
     terms = SideData[]
-
     strategies = Tuple{Int,Int}[(0, 0)]   # (full ε strips, partial-ε flag)
     if kind == :SO
         max_full = (!isempty(lam) && length(lam) == dim) ? lam[end] : 0
@@ -712,7 +752,6 @@ function elementary_invariant_terms(lam::Vector{Int}, mu::Vector{Int}, tab,
         end
         sort!(strategies, by = t -> (t[1] + t[2], t[2]))
     end
-
     for (a, x) in strategies
         length(terms) >= mult && break
 
@@ -720,7 +759,6 @@ function elementary_invariant_terms(lam::Vector{Int}, mu::Vector{Int}, tab,
         rows_a = [row[(a+1):end] for row in rows0 if length(row) > a]
         eps_groups = Vector{Int}[Int[rows0[i][c] for i in 1:length(lam) if lam[i] >= c] for c in 1:a]
         consumed = a * length(lam)
-
         f = 0
         partial_labels = Int[]
         if x == 1
@@ -742,23 +780,32 @@ function elementary_invariant_terms(lam::Vector{Int}, mu::Vector{Int}, tab,
         for sigma in (f > 0 ? vertical_strips_removed(mu, f) : [copy(mu)])
             need = mult - length(terms)
             need <= 0 && break
-            for filled in lr_witnesses(lam_a, sigma, fill(2, j), need)
-                pairs = j == 0 ? Vector{Int}[] :
-                    decode_elementary_symmetric_pairs(filled, rows_a, j)
-                sigpad = vcat(sigma, zeros(Int, max(length(mu) - length(sigma), 0)))
-                res = Vector{Int}[]
-                sent = 0
-                for i in 1:length(mu)
-                    row = i <= length(rows_a) ? copy(rows_a[i][1:sigpad[i]]) : Int[]
-                    if f > 0 && mu[i] == sigpad[i] + 1
-                        sent -= 1
-                        push!(row, sent)
+            # loop over every admissible δ, not just the pairwise (2,...,2)
+            for delta in symmetric_delta_candidates(j)
+                need = mult - length(terms)
+                need <= 0 && break
+                pairwise = (delta == fill(2, j))
+                for filled in lr_witnesses(lam_a, sigma, delta, need)
+                    # a non-pairwise δ only yields a bare product of metrics when its labels are row-confined, otherwise would give a sum of invariants
+                    (pairwise || filling_row_confined(filled)) || continue
+                    pairs = j == 0 ? Vector{Int}[] :
+                        decode_elementary_symmetric_pairs(filled, rows_a, j)
+                    sigpad = vcat(sigma, zeros(Int, max(length(mu) - length(sigma), 0)))
+                    res = Vector{Int}[]
+                    sent = 0
+                    for i in 1:length(mu)
+                        row = i <= length(rows_a) ? copy(rows_a[i][1:sigpad[i]]) : Int[]
+                        if f > 0 && mu[i] == sigpad[i] + 1
+                            sent -= 1
+                            push!(row, sent)
+                        end
+                        push!(res, row)
                     end
-                    push!(res, row)
+                    alleps = copy(eps_groups)
+                    f > 0 && push!(alleps, vcat(partial_labels, collect(-1:-1:-f)))
+                    push!(terms, SideData(dim, kind, tab, res, mu, pairs, false, alleps))
+                    length(terms) >= mult && break
                 end
-                alleps = copy(eps_groups)
-                f > 0 && push!(alleps, vcat(partial_labels, collect(-1:-1:-f)))
-                push!(terms, SideData(dim, kind, tab, res, mu, pairs, false, alleps))
             end
         end
     end
@@ -769,27 +816,24 @@ end
     side_terms(lam, tab, dim, kind)
 
 One or more `SideData` for shape `lam` under `kind`:
-- `:none`/`:GL`/`:U` -> one term, no contraction (`:U` behaves as `:GL`:
+* `:none`/`:GL`/`:U` -> one term, no contraction (`:U` behaves as `:GL`:
   its central phase forbids any invariant here).
-- `:SL`/`:SU` -> one term, ε on every full-height column (`:SU` behaves as
+* `:SL`/`:SU` -> one term, ε on every full-height column (`:SU` behaves as
   `:SL`: same complexified group).
-- `:Sp`/`:O`/`:SO` -> one term per certified branch of the group's
-  branching, with an explicit ω/δ/ε contraction where one exists, else a
+* `:Sp`/`:O`/`:SO` -> one term per certified branch of the group's
+  branching, with an explicit ω/η/ε contraction where one exists, else a
   composite. `:Sp` at dim 2 delegates to `:SL`.
 Assumes θ carries a single holomorphic index (no barred partner).
 """
 function side_terms(lam::Vector{Int}, tab, dim::Int, kind::Symbol)
     kind = kind == :U ? :GL : kind == :SU ? :SL : kind
     kind = (kind == :Sp && dim == 2) ? :SL : kind
-
     if tab === nothing
         return [SideData(dim, kind, nothing, Vector{Int}[], Int[], Vector{Int}[], false)]
     end
-
     if kind in (:none, :GL)
         return [SideData(dim, kind, tab, tab.tableau, tab.row_lengths, Vector{Int}[], false)]
     end
-
     if kind == :SL
         eps_cols = [c for c in column_groups(tab) if length(c) == dim]
         consumed = Set{Int}()
@@ -803,7 +847,6 @@ function side_terms(lam::Vector{Int}, tab, dim::Int, kind::Symbol)
         end
         return [SideData(dim, kind, tab, residual, length.(residual), Vector{Int}[], false)]
     end
-
     if kind in (:Sp, :O, :SO)
         branch = kind == :Sp ? branch_gl_to_sp(lam, dim) : branch_gl_to_o(lam, dim)
         terms = SideData[]
@@ -825,20 +868,19 @@ function side_terms(lam::Vector{Int}, tab, dim::Int, kind::Symbol)
         end
         return terms
     end
-
     error("side_terms: :$(kind) is not a supported group type.")
 end
 
 """
-    independent_structures(n, d_S, N, S_type, F_type)
+    independent_structures(n, d_S, d_F, S_type, F_type)
 
 All independent Grassmann structures at degree n: for every Cauchy-block
-shape fitting the d_S × N box, every combination of a spinor term and a
+shape fitting the d_S*d_F box, every combination of a spinor term and a
 flavour term. Types per side: :none, :GL, :U, :SL, :SU, :O, :SO, :Sp.
 """
-function independent_structures(n::Int, d_S::Int, N::Int, S_type::Symbol, F_type::Symbol)
+function independent_structures(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symbol)
     out = GrassmannStructure[]
-    if N == 0
+    if d_F == 0
         lam = fill(1, n)
         fits_in_box(lam, d_S, typemax(Int)) || return out
         spinor_tab, _ = dual_tableaux(lam)
@@ -848,10 +890,10 @@ function independent_structures(n::Int, d_S::Int, N::Int, S_type::Symbol, F_type
         return out
     end
     for lam in integer_partitions(n)
-        fits_in_box(lam, d_S, N) || continue
+        fits_in_box(lam, d_S, d_F) || continue
         spinor_tab, flavour_tab = dual_tableaux(lam)
         sterms = side_terms(lam, spinor_tab, d_S, S_type)
-        fterms = side_terms(conjugate(lam), flavour_tab, N, F_type)
+        fterms = side_terms(conjugate(lam), flavour_tab, d_F, F_type)
         for sside in sterms, fside in fterms
             push!(out, GrassmannStructure(sside, fside))
         end
@@ -865,8 +907,8 @@ independent_structures(n::Int, d_S::Int, S_type::Symbol) = independent_structure
 
 True dimension of this term's coefficient. For :Sp/:O/:SO the coefficient
 is the group's own traceless tensor of the residual shape, so its
-dimension comes from `sp_dim`/`o_dim` -- generally smaller than the plain
-`gl_dim` of the same shape.
+dimension comes from `sp_dim`/`o_dim` (generally smaller than the plain
+`gl_dim` of the same shape).
 """
 function side_dimension(side::Union{SideData,Nothing})
     side === nothing && return 1
@@ -875,29 +917,47 @@ function side_dimension(side::Union{SideData,Nothing})
     return gl_dim(side.residual_shape, side.dim)
 end
 
-# ---------- rendering ----------
+######################## rendering #####################
 
 """
 Positive labels are θ-copy indices (`prefix * k`). Negative labels are ε
 free slots on the coefficient, drawn with a side-specific dummy letter so
 the two sides never collide: spinor (α) slots become β1, β2, ...; flavour
-(i) slots become m1, m2, ... Each appears twice -- on C and inside its ε.
+(i) slots become m1, m2, ... Each appears twice, on C and inside its ε.
 """
 const SLOT_PREFIX = Dict("α" => "β", "i" => "m")
 idx_label(prefix::AbstractString, k::Int) =
     k > 0 ? string(prefix, k) : string(get(SLOT_PREFIX, prefix, "m" * prefix), -k)
 
-function epsilon_symbol(indices, prefix, upper=true)
-    body = join([idx_label(prefix, k) for k in indices], "")
-    return upper ? "ε^{$body}" : "ε_{$body}"
+"""
+    antisym_invariant_name(len, kind, dim)
+
+Name of the totally antisymmetric invariant consuming `len` antisymmetrised
+slots. For :Sp that invariant is ω^∧(len/2). It is totally antisymmetric at
+any valence, but it equals the volume form ε ONLY at full valence
+len == dim, where ε ∝ ω^∧(dim/2); at len < dim it is ω (len=2) or a lower
+wedge power, and naming it ε would misstate its rank. :SL and :SO groups are
+always full length dim (an :SO partial ε carries its unused slots as
+negative labels), so those are genuine ε.
+"""
+function antisym_invariant_name(len::Int, kind::Symbol, dim::Int)
+    (kind == :Sp && len != dim) || return "ε"
+    return len == 2 ? "ω" : "ω^{∧$(len ÷ 2)}"
 end
 
-"ω (:Sp) or δ (:O/:SO) pair; Ω for a fully-contracted composite, where
+function epsilon_symbol(indices, prefix, upper=true, kind::Symbol=:SL, dim::Int=length(indices))
+    body = join([idx_label(prefix, k) for k in indices], "")
+    sym = antisym_invariant_name(length(indices), kind, dim)
+    occursin('^', sym) && (sym = "($sym)")   # avoid a double superscript
+    return upper ? "$(sym)^{$body}" : "$(sym)_{$body}"
+end
+
+"ω (:Sp) or η (:O/:SO) pair; Ω for a fully-contracted composite, where
 `pair` lists every consumed label."
 function pair_symbol(pair::Vector{Int}, prefix::String, kind::Symbol, composite::Bool=false)
     body = join([idx_label(prefix, k) for k in pair], "")
     composite && return "Ω_{$body}"
-    return (kind == :Sp ? "ω" : "δ") * "_{" * body * "}"
+    return (kind == :Sp ? "ω" : "η") * "_{" * body * "}"
 end
 
 "Labels the coefficient still carries (negatives are ε slots); `nothing`
@@ -921,10 +981,11 @@ function symmetrized_str(side::Union{SideData,Nothing}, prefix::String)
     return join(["(" * join([idx_label(prefix, k) for k in row], "") * ")" for row in rows], "")
 end
 
-"All invariant-tensor factors on one side: ε groups, then ω/δ/Ω."
+"All invariant-tensor factors on one side: ε groups, then ω/η/Ω."
 function invariant_factors(side::Union{SideData,Nothing}, prefix::String, upper::Bool)
     (side === nothing || side.tableau === nothing) && return String[]
-    out = String[epsilon_symbol(col, prefix, upper) for col in side_epsilon_columns(side)]
+    out = String[epsilon_symbol(col, prefix, upper, side.kind, side.dim)
+                 for col in side_epsilon_columns(side)]
     for pair in side.pair_groups
         push!(out, pair_symbol(pair, prefix, side.kind, side.is_composite))
     end
@@ -988,7 +1049,7 @@ function render_expression(s::GrassmannStructure)
 end
 
 """
-    render_compact(n, d_S, N, S_type, F_type) -> Vector{String}
+    render_compact(n, d_S, d_F, S_type, F_type) -> Vector{String}
 
 Compact expansion at degree n: a header with the expected dimension
 binomial(d_S·N, n), then one line per term showing the invariant tensors,
@@ -997,11 +1058,11 @@ no reduction at all, the whole degree collapses to the single generic
 term. A MISMATCH line is appended if the dimensions fail to add up.
 Print with `foreach(println, render_compact(...))`.
 """
-function render_compact(n::Int, d_S::Int, N::Int, S_type::Symbol, F_type::Symbol)
-    expected = binomial(d_S * N, n)
+function render_compact(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symbol)
+    expected = binomial(d_S * d_F, n)
     lines = String["n=$n  (dim $expected)"]
     n == 0 && return push!(lines, "  1")
-    structures = independent_structures(n, d_S, N, S_type, F_type)
+    structures = independent_structures(n, d_S, d_F, S_type, F_type)
     isempty(structures) && return lines
     if !all(has_forced_invariant, structures)
         push!(lines, "  C^{α1..α$n}_{i1..i$n}  (generic Λ^$n(V⊗W) term, no reduction at this degree)")
@@ -1019,11 +1080,11 @@ function render_compact(n::Int, d_S::Int, N::Int, S_type::Symbol, F_type::Symbol
         push!(lines, "  " * (isempty(parts) ? "1" : join(parts, " ")) * "   [" * note * "]  dim $d")
     end
     total != expected &&
-        push!(lines, "  !! dimension MISMATCH: total $total vs expected $expected -- real bug, please report")
+        push!(lines, "  !! dimension MISMATCH: total $total vs expected $expected: real bug, please report")
     return lines
 end
 
-# ---------- explanation ----------
+#################### explanation ###############################
 
 "Prints a plain-language account of one side's contractions."
 function explain_side(side::SideData, label::String)
@@ -1033,23 +1094,24 @@ function explain_side(side::SideData, label::String)
     end
     println("  $label tableau  ", side.tableau.tableau, "  [", side.kind, "]")
     for col in side_epsilon_columns(side)
+        sym = antisym_invariant_name(length(col), side.kind, side.dim)
         if any(x -> x < 0, col)
-            println("    $label ε contracts θ-copies (negative entries = free coefficient slots) -- ", col)
+            println("    $label $sym contracts θ-copies (negative entries = free coefficient slots): ", col)
         else
-            println("    $label ε contracts θ-copies -- ", col)
+            println("    $label $sym contracts θ-copies: ", col)
         end
     end
     for pair in side.pair_groups
-        println("    $label ", side.kind == :Sp ? "ω" : "δ", " contracts θ-copies -- ", pair)
+        println("    $label ", side.kind == :Sp ? "ω" : "η", " contracts θ-copies: ", pair)
     end
     side.is_composite &&
         println("    $label composite pairing (shape $(side.residual_shape), dim $(side_dimension(side)), unresolved)")
     if side.kind == :SL && side.residual_rows !== nothing
         for col in column_groups_rows(side.residual_rows)
-            println("    $label antisymmetrizes θ-copies (free indices) -- ", col)
+            println("    $label antisymmetrizes θ-copies (free indices): ", col)
         end
         for row in row_groups_rows(side.residual_rows)
-            println("    $label symmetrizes θ-copies (free indices) -- ", row)
+            println("    $label symmetrizes θ-copies (free indices): ", row)
         end
     end
 end

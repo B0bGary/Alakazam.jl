@@ -468,27 +468,6 @@ function inverse(p)
     ip
 end
 
-# --- orbit + transversal (Schreier tree) ---
-function orbit_transversal(base_pt::Int, gens::Vector{Vector{Int}}, N::Int)
-    id = collect(1:N)
-    transversal = Dict{Int,Vector{Int}}(base_pt => id)
-    orbit = [base_pt];
-    queue = [base_pt]
-    while !isempty(queue)
-        pt = popfirst!(queue)
-        u = transversal[pt]
-        for g in gens
-            img = g[pt]
-            if !haskey(transversal, img)
-                transversal[img] = compose(g, u)
-                push!(orbit, img);
-                push!(queue, img)
-            end
-        end
-    end
-    orbit, transversal
-end
-
 function permutation_orbit_pairs(gens, a, b)
 
     seen = Set{Tuple{Int,Int}}()

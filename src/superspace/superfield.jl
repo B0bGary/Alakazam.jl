@@ -276,7 +276,7 @@ function apply_structure_side(nt, side, side_inds, index_set, side_name::String,
 
     side.residual_rows === nothing && error(
         "generate_independant_structure: $(side_name) branch shape $(side.residual_shape) " *
-        "($(side.kind)) is a validated composite with no elementary witness -- no explicit " *
+        "($(side.kind)) is a validated composite with no elementary witness: no explicit " *
         "tensor product represents this copy. Its multiplicity is real, so it cannot be " *
         "silently dropped; handle it manually or choose different group types.")
 
@@ -299,7 +299,7 @@ function apply_structure_side(nt, side, side_inds, index_set, side_name::String,
     for pair in side.pair_groups
         side.is_composite && error(
             "generate_independant_structure: $(side_name) side carries a non-elementary Ω " *
-            "invariant consuming θ-copies $(pair) -- no explicit elementary tensor product " *
+            "invariant consuming θ-copies $(pair): no explicit elementary tensor product " *
             "represents it; handle this branch manually.")
         pair_ctor === nothing && error(
             "generate_independant_structure: $(side_name) side needs a " *

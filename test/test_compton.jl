@@ -1,5 +1,5 @@
 #=
-Compton scattering in massless scalar QED -- the Alakazam equivalent of the introductory example
+Compton scattering in massless scalar QED: the Alakazam equivalent of the introductory example
 of the Redberry paper (arXiv:1302.1219, Sec. 1.2).   γ(k₁)φ(k₃) → γ(k₂)φ(k₄)
 =#
 

@@ -1073,7 +1073,11 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
         s = src[i]
         isZero(s[1]) && continue
         t = s[2]
-        find_weighted_square(construct_tensorterm_graph(t)) && continue   # identically zero
+        # Identically zero: some automorphism of the term sends it to minus itself. The single
+        # transposition test runs first because it is cheap and catches most cases outright; the
+        # general search is only reached when it finds nothing, and is budgeted so a term whose
+        # automorphism group is too large to explore is reported as non-zero rather than guessed.
+        (_exchange_vanishes(t) || find_weighted_square(construct_tensorterm_graph(t))) && continue
 
         fp = term_fingerprint(t)
         found = false
@@ -1109,32 +1113,78 @@ end
 # Canonical collection: merging summands that differ only by dummy names and factor order
 ##############################################################################################
 
+"""
+Number of distinct values in `col`, using `buf` as scratch so the count allocates nothing.
+"""
+function _ndistinct!(buf::Vector{UInt}, col::Vector{UInt})
+    copyto!(buf, col)
+    sort!(buf)
+    c = 0
+    @inbounds for i in eachindex(buf)
+        (i == 1 || buf[i] != buf[i-1]) && (c += 1)
+    end
+    return c
+end
+
+"""
+Colour each factor of a monomial by its contraction pattern, so that two terms differing only by
+dummy names and factor order get the same colours.
+
+The slot table is flattened into parallel arrays and searched by linear scan. A monomial carries a
+few dozen slots at most, and at that size a scan beats a hash map.
+"""
 function _contraction_colours(T::TensorTerm)
     ts = terms(T)
     n = length(ts)
     ind = Vector{Vector{IndexPair}}(undef, n)
+    off = Vector{Int}(undef, n + 1)
+    off[1] = 0
     @inbounds for i in 1:n
         ind[i] = indices(ts[i])
+        off[i+1] = off[i] + length(ind[i])
+    end
+    S = off[n+1]
+
+    uid  = Vector{UInt64}(undef, S)
+    fac  = Vector{Int}(undef, S)
+    slt  = Vector{Int}(undef, S)
+    psn  = Vector{Bool}(undef, S)
+    live = Vector{Bool}(undef, S)               # lightcone indices take no part
+    @inbounds for i in 1:n, s in eachindex(ind[i])
+        k = off[i] + s
+        idxo, poso = ind[i][s]
+        uid[k] = idxo.uid
+        fac[k] = i
+        slt[k] = s
+        psn[k] = poso.position
+        live[k] = !isLightcone(idxo)
     end
 
-    # index uid => the (factor, slot, position) triples carrying it; length 2 means a contraction
-    slots = Dict{UInt64,Vector{Tuple{Int,Int,Bool}}}()
-    @inbounds for i in 1:n, s in eachindex(ind[i])
-        idx, pos = ind[i][s]
-        isLightcone(idx) && continue
-        push!(get!(() -> Tuple{Int,Int,Bool}[], slots, idx.uid), (i, s, pos.position))
+    # occurrences of each index, and the other end when there are exactly two
+    cnt     = zeros(Int, S)
+    partner = zeros(Int, S)
+    @inbounds for k in 1:S
+        live[k] || continue
+        c = 0
+        other = 0
+        for j in 1:S
+            (live[j] && uid[j] == uid[k]) || continue
+            c += 1
+            (j != k && other == 0) && (other = j)
+        end
+        cnt[k] = c
+        partner[k] = other
     end
 
     col = Vector{UInt}(undef, n)
     @inbounds for i in 1:n
         h = hash(name(ts[i]), hash(length(ind[i])))
         for s in eachindex(ind[i])
-            idx, pos = ind[i][s]
-            v = get(slots, idx.uid, nothing)
-            if v === nothing || length(v) != 2
-                h = hash(idx.uid, hash(pos.position, hash(s, h)))   # free: the name matters
+            k = off[i] + s
+            if !live[k] || cnt[k] != 2
+                h = hash(uid[k], hash(psn[k], hash(s, h)))          # free: the name matters
             else
-                h = hash(pos.position, hash(s, h))                  # dummy: the name does not
+                h = hash(psn[k], hash(s, h))                        # dummy: the name does not
             end
         end
         col[i] = h
@@ -1142,31 +1192,23 @@ function _contraction_colours(T::TensorTerm)
 
     # refinement
     newcol = Vector{UInt}(undef, n)
-    seen = Set{UInt}()
-    for c in col
-        push!(seen, c)
-    end
-    ndistinct = length(seen)
+    buf = Vector{UInt}(undef, n)
+    ndistinct = _ndistinct!(buf, col)
     for _ in 1:n
         @inbounds for i in 1:n
             acc = UInt(0)
             for s in eachindex(ind[i])
-                idx, pos = ind[i][s]
-                v = get(slots, idx.uid, nothing)
-                (v === nothing || length(v) != 2) && continue
-                # the other end of this contraction (guard against a self-contraction)
-                other = (v[1][1] == i && v[1][2] == s) ? v[2] : v[1]
-                acc ⊻= hash(col[other[1]], hash(s, hash(other[2], hash(pos.position, UInt(0)))))
+                k = off[i] + s
+                (live[k] && cnt[k] == 2) || continue
+                o = partner[k]
+                acc ⊻= hash(col[fac[o]], hash(s, hash(slt[o], hash(psn[k], UInt(0)))))
             end
             newcol[i] = hash(acc, col[i])
         end
         copyto!(col, newcol)
-        empty!(seen)
-        for c in col
-            push!(seen, c)
-        end
-        length(seen) == ndistinct && break      # partition stable, further rounds are noise
-        ndistinct = length(seen)
+        nd = _ndistinct!(buf, col)
+        nd == ndistinct && break                # partition stable, further rounds are noise
+        ndistinct = nd
     end
     return col
 end
@@ -1238,6 +1280,102 @@ function canonical_form(T::TensorTerm)
 end
 
 """
+The exchange sign of any two slots of `t`: `-1` totally antisymmetric, `+1` totally symmetric, and
+`0` for anything else. Mixed (Young) symmetry has no single exchange sign, so those factors carry
+no symmetry step.
+"""
+function _exchange_sign(t::TensorSuperType)
+    length(indices(t)) < 2 && return 0
+    isAntisymmetric(t) && return -1
+    isSymmetric(t) && return 1
+    return 0
+end
+
+"""
+Whether two factors are copies of the same tensor.
+
+The `TensorData` uid screens pairs cheaply, but a match still falls through to the full structural
+comparison. Non-matching pairs (almost all of them) exit on the uid, so the exact comparison runs
+only for pairs that were going to be examined anyway.
+
+Operators carry their own data block, so they skip the uid and go straight to the fields.
+"""
+function _same_tensor_kind(a::TensorSuperType, b::TensorSuperType)
+    typeof(a) === typeof(b) || return false
+    if !(a isa OperatorSuperType) && !(b isa OperatorSuperType)
+        data(a).uid == data(b).uid || return false
+    end
+    return name(a) == name(b) && labels(a) == labels(b) &&
+           tableaux(a) == tableaux(b) && function_of(a) == function_of(b) &&
+           _extra_identity(a) == _extra_identity(b)
+end
+
+"""
+    _exchange_vanishes(tt) -> Bool
+
+True when exchanging two copies of one tensor maps the term to minus itself, forcing it to zero.
+
+Exchanging two rank-`r` factors is `r` transpositions at once, one per slot, so it is a symmetry of
+the term only if *every* slot closes a cycle: the dummies in slot `k` of the two factors must land
+on the same partner factor, in two slots that partner relates by a symmetry. Each closed slot
+contributes that symmetry's sign, and the exchange costs `(-1)^grading` on top. The term vanishes
+when the product is `-1`.
+"""
+function _exchange_vanishes(tt::TensorTerm)
+    ts = terms(tt)
+    n = length(ts)
+    n < 2 && return false
+
+    # endpoints of every dummy: uid => ((factor, slot), (factor, slot))
+    ends = Dict{UInt64,Vector{Tuple{Int,Int}}}()
+    @inbounds for i in 1:n, (k, (idx, _)) in enumerate(indices(ts[i]))
+        push!(get!(() -> Tuple{Int,Int}[], ends, idx.uid), (i, k))
+    end
+
+    @inbounds for i in 1:(n-1), j in (i+1):n
+        ri = length(indices(ts[i]))
+        ri == length(indices(ts[j])) || continue
+        ri == 0 && continue
+        _same_tensor_kind(ts[i], ts[j]) || continue
+        grading(ts[i]) == grading(ts[j]) || continue
+        can_swap(ts[i], ts[j]) || continue
+        # every factor between them must also be crossable, twice over
+        blocked = false
+        for m in (i+1):(j-1)
+            if !can_swap(ts[i], ts[m]) || !can_swap(ts[j], ts[m])
+                blocked = true; break
+            end
+        end
+        blocked && continue
+
+        total = iseven(grading(ts[i])) ? 1 : -1
+        ok = true
+        for k in 1:ri
+            # the two factors must agree on index level slot by slot: swapping an upper index for
+            # a lower one is not a relabelling, so such a pair is not exchangeable at all
+            indices(ts[i])[k][2] == indices(ts[j])[k][2] || (ok = false; break)
+            u = indices(ts[i])[k][1].uid
+            v = indices(ts[j])[k][1].uid
+            eu = get(ends, u, nothing)
+            ev = get(ends, v, nothing)
+            # both must be dummies: a free index cannot be relabelled
+            (eu === nothing || ev === nothing || length(eu) != 2 || length(ev) != 2) &&
+                (ok = false; break)
+            pu = eu[1] == (i, k) ? eu[2] : eu[1]
+            pv = ev[1] == (j, k) ? ev[2] : ev[1]
+            pu[1] == pv[1] || (ok = false; break)      # must land on the same partner factor
+            (pu[1] == i || pu[1] == j) && (ok = false; break)   # partner is one of the pair
+            part = ts[pu[1]]
+            sgn = isAntisymmetric(part) ? -1 : isSymmetric(part) ? 1 : 0
+            sgn == 0 && (ok = false; break)            # partner relates those slots by no symmetry
+            total *= sgn
+        end
+        ok && total == -1 && return true
+    end
+    return false
+end
+
+"""
 Whatever a factor is told apart by that its shared `TensorData` does not hold.
 
 `TensorData` is interned, so two factors of the same name and type share one object. Some matricies have other identifying properties
@@ -1246,10 +1384,13 @@ _extra_identity(::TensorSuperType) = nothing
 
 """
 Identity of a factor for signature purposes: everything about it except its indices.
+
+Keyed on the shared `TensorData`'s content `uid`, not on `objectid`: ~75x cheaper to compare, since `objectid` on an
+immutable struct recomputes over the fields every call.
 """
 _factor_identity(t::TensorSuperType) =
     t isa OperatorSuperType ? hash(name(t)) :
-    hash(_extra_identity(t), hash(typeof(t), objectid(data(t))))
+    hash(_extra_identity(t), hash(typeof(t), data(t).uid))
 
 """
 Emit the slot codes for one index vector.
@@ -1589,10 +1730,14 @@ end
 function Base.show(io::IO, T::TensorSuperType)
     print(io, tens2str(T))
 end
+#for future use with bras and kets to hijack the rendering
+function show_factor(io::IO, T::TensorSuperType,pos::Int64,TT::TensorTerm)
+    show(io, T)
+end
 
 function Base.show(io::IO, T::TensorTerm)
-    for tens in terms(T)
-        print(io, tens)
+    for tens in 1:length(terms(T))
+        show_factor(io,terms(T)[tens], tens, T)
     end
 end
 _unwrapnum(x) = SymbolicUtils.isconst(x) ? SymbolicUtils.unwrap_const(x) : x

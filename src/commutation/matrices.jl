@@ -13,6 +13,17 @@ mutable struct Mat <: MatrixSuperType
     end
 end
 
+#explicit fermionic "matrix"
+mutable struct Spinor <: MatrixSuperType
+    data::TensorData
+    indices::Vector{IndexPair}
+    Spinor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function Spinor(name::String, args...)
+        return new(build_tensor(name, args...)...)
+    end
+end
+grading(::Spinor)=1
+
 """
 Back-compatible alias. Renamed to mat to avoid conflict with base
 """
@@ -45,25 +56,39 @@ Base.hash(m::IdMatrix, h::UInt) =
 _extra_identity(m::IdMatrix) = m.index_set === nothing ? nothing : m.index_set.name
 
 
-# mutable struct Ket <: MatrixSuperType
-#     data::TensorData
-#     function Ket(name::String, args...)
-#         return new(build_tensor(name, args...)...)
-#     end
-#     function Ket(d::TensorData)
-#         return new(d)
-#     end
-# end
-# mutable struct Bra <: MatrixSuperType
-#     data::TensorData
-#     function Bra(name::String, args...)
-#         return new(build_tensor(name, args...)...)
-#     end
-#     function Bra(d::TensorData)
-#         return new(d)
-#     end
-# end
+"""Ket used in QM"""
+mutable struct Ket <: KetSuperType
+    data::TensorData
+    function Ket(name::String, args...)
+        return new(build_tensor(name, args...)...)
+    end
+    function Ket(d::TensorData)
+        return new(d)
+    end
+end
+"""Bra used in QM"""
+mutable struct Bra <: BraSuperType
+    data::TensorData
+    function Bra(name::String, args...)
+        return new(build_tensor(name, args...)...)
+    end
+    function Bra(d::TensorData)
+        return new(d)
+    end
+end
 
+function Base.show(io::IO, T::BraSuperType)
+    print(io, "⟨", tens2str(T), "|")
+end
+function Base.show(io::IO, T::KetSuperType)
+    print(io, "|", tens2str(T), "⟩")
+end
+
+"""Custom printing for braket notation."""
+function show_factor(io::IO, T::KetSuperType, pos::Int64, TT::TensorTerm)
+    after_bra = pos > 1 && terms(TT)[pos - 1] isa BraSuperType
+    print(io, after_bra ? "" : "|", tens2str(T), "⟩")
+end
 
 mutable struct Pauli <: PauliSuperType
     data::TensorData

@@ -121,7 +121,7 @@
 
     # Multi-term symmetries are linear relations across several monomials, each of which is
     # separately non-zero and separately canonical. Butler-Portugal cannot see these, and neither
-    # can graph isomorphism -- they need the Young projector, which hard_simplify runs only on
+    # can graph isomorphism they need the Young projector, which hard_simplify runs only on
     # request. Note neither identity is a pairwise t == ±u relation: Bianchi ties three monomials
     # together at once, and the contracted form relates two by a factor of 1/2.
     bianchi = Ri(a,b,c,d) + Ri(a,c,d,b) + Ri(a,d,b,c)

@@ -932,62 +932,9 @@ _with_operand(O::LieBracketSuperType, newop::TensorExpression) =
 
 _with_operand(O::VariationalSuperType, newop::TensorExpression) =
     typeof(O)(OperatorData(op_data(O), op_indices(O), newop), O.var)
-
-# # generic fallback 
-# function _with_operand(O::OperatorSuperType, newop::TensorExpression)
-#     o = copy(O)
-#     set_operand!(o, newop)
-#     return o
-# end
-
 """
 Perform a symmetrisation of nested partial derivatives. Sometimes useful for simplifications.
 """
-# function symmetrise_partials(TEX::TensorExpression)
-#     new_summand = zero()
-#     for summand in TEX.summands
-#         nterm = summand[1]
-#         for term in summand[2].terms
-#             if term isa PartialSuperType
-#                 symd, remap = symmetrise_partials(term)
-#                 # @show symd
-#                 temp = zero()
-#                 # @show symd
-#                 for par in symd
-#                     # @show  (nterm * par) / length(symd)
-#                     temp=temp ⨥ (nterm * par) // length(symd) #divide by number of terms to symmetrise
-#                     # @show temp
-#                 end
-#                 nterm = temp #had = here...
-#             # @show nterm
-#             else
-#                 nterm *= term
-#             end
-#         end
-#         new_summand += nterm
-#         # @show new_summand
-#     end
-#     return (new_summand)
-# end
-
-# function symmetrise_partials(TT::TensorTerm)
-#     new_term = 1
-#     for term in terms(TT)
-#         if term isa PartialSuperType
-#             (trm, remap) = symmetrise_partials(term)
-#             sum = zero()
-#             for t in trm
-#                 sum+=t
-#                 # @show sum "here"
-#             end
-#             new_term*=sum//length(trm)
-#         else
-#             new_term *= term
-#         end
-#     end
-#     # @show new_term
-#     return new_term
-# end
 function symmetrise_partials(TEX::TensorExpression)
     s = summands(TEX)
     isempty(s) && return TEX

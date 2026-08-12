@@ -215,6 +215,23 @@ end
 
 
 """
+    numberfield(T) -> NumberSet
+
+Which number field the components live in. `ℝ()` unless declared otherwise, so conjugation is the
+identity on a tensor that has not said it is complex.
+"""
+function numberfield(T::TensorDataSuperType)
+    return T.numberfield
+end
+function numberfield(T::TensorSuperType)
+    return numberfield(data(T))
+end
+
+"""Whether conjugation can stop at this leaf. ℚ and ℝ are fixed by conjugation; ℂ is not."""
+isrealfield(T) = numberfield(T) isa Union{RealNumberSet,RationalNumberSet}
+
+
+"""
 Check if a TensorExpression is a single TensorTerm. Returns true or false.
 """
 function singleterm(TEx::TensorExpression)

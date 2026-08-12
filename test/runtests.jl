@@ -17,6 +17,7 @@ if true
         "test_matrices.jl",
         "test_lie.jl",
         "test_trace.jl",
+        "test_conjugation.jl",
         "test_serialise.jl",
         "test_serialise_load.jl",
         "test_algebras.jl",

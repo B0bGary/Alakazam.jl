@@ -10,9 +10,42 @@ const _EMPTY_INDICES = IndexPair[]
 @inline notableaux()::Set{YoungTableau} = _EMPTY_TABLEAUX
 @inline noweights()::Dict{String,Number} = _EMPTY_WEIGHTS
 @inline nolabels()::Vector{LabelPair} = _EMPTY_LABELS
+# Shared default, so every real tensor points at one instance rather than allocating its own.
+# Real rather than complex because conjugation then stops at the leaf for the common case; a tensor
+# whose conjugate is a distinct object has to say so.
+const REAL_FIELD = ℝ()
+@inline realfield()::NumberSet = REAL_FIELD
+"""
+Content hash of a `TensorData`, covering every field.
+
+Immutability makes `objectid` expensive here, it recomputes over the fields on every call, ~75 ns against ~1 ns for comparing this.
+
+`tableaux` and `weights` are unordered containers, so they fold in through XOR; `function_of` is
+kept in canonical order by `_insert_coord!` and `labels` is compared as a vector by `==`, so both
+are hashed in sequence.
+"""
+function _tensordata_uid(name::String, function_of, weights, tableaux, labels,
+                         numberfield)::UInt64
+    h = hash(nameof(typeof(numberfield)), hash(name))
+    for c in function_of
+        h = hash(c, h)
+    end
+    for l in labels
+        h = hash(l[2].position, hash(l[1], h))
+    end
+    x = UInt(0)
+    for t in tableaux
+        x ⊻= hash(t)
+    end
+    for (k, v) in weights
+        x ⊻= hash(v, hash(k))
+    end
+    return hash(x, h)
+end
+
 """
 Mutual tensor data that all tensors should have in common. This makes it easier to add new features to tensors.
-Includes everything about a tensor except its indices. 
+Includes everything about a tensor except its indices.
 """
 struct TensorData <: TensorDataSuperType
     name::String
@@ -20,6 +53,13 @@ struct TensorData <: TensorDataSuperType
     weights::Dict{String,Number}
     tableaux::Set{YoungTableau}
     labels::Vector{LabelPair}
+    numberfield::NumberSet
+    uid::UInt64
+    function TensorData(name::String, function_of, weights, tableaux, labels,
+                        numberfield::NumberSet = REAL_FIELD)
+        new(name, function_of, weights, tableaux, labels, numberfield,
+            _tensordata_uid(name, function_of, weights, tableaux, labels, numberfield))
+    end
 end
 
 """
@@ -36,6 +76,7 @@ function build_tensor(name::String, args...)
         labels = nolabels();
         has_labels = false
         weights = noweights()
+        numberfield = realfield()
 
         for arg in args
             if arg isa _T_INDEX_VEC
@@ -70,27 +111,37 @@ function build_tensor(name::String, args...)
                 isempty(arg) && continue
                 has_labels || (labels=LabelPair[]; has_labels=true)
                 append!(labels, arg)
+            elseif arg isa NumberSet
+                numberfield = arg
+            elseif arg isa Type{<:NumberSet}
+                # accept the bare alias too, so `Tensor("psi", ℂ, ...)` works alongside `ℂ()`
+                numberfield = arg()
             end
         end
 
         tabs = has_tabs ? reduce_tableaux(tableaux) : tableaux
 
         if !has_coords
-            return (TensorData(name, function_of, weights, tabs, labels), indices)
+            return (TensorData(name, function_of, weights, tabs, labels, numberfield), indices)
         end
         w = Dict{String,Number}()
         for c in function_of
             ;
             w[c.name] = 1;
         end
-        return (TensorData(name, function_of, merge(w, weights), tabs, labels), indices)
+        return (TensorData(name, function_of, merge(w, weights), tabs, labels, numberfield),
+                indices)
 end
 
 """Rebuild a `TensorData` with one field replaced. Used by the rare mutating operations."""
 _with_name(p::TensorData, nm::String) =
-    TensorData(nm, p.function_of, p.weights, p.tableaux, p.labels)
+    TensorData(nm, p.function_of, p.weights, p.tableaux, p.labels, p.numberfield)
 _with_tableaux(p::TensorData, tabs::Set{YoungTableau}) =
-    TensorData(p.name, p.function_of, p.weights, tabs, p.labels)
+    TensorData(p.name, p.function_of, p.weights, tabs, p.labels, p.numberfield)
+"""Rebuild with a different number field. The name is left alone: bar-toggling belongs to
+conjugation, which decides it from the field rather than the other way round."""
+_with_numberfield(p::TensorData, f::NumberSet) =
+    TensorData(p.name, p.function_of, p.weights, p.tableaux, p.labels, f)
 
 # Defined here rather than in young.jl because that file loads before TensorData exists.
 function _add_tableau(p::TensorData, tab::YoungTableau)
@@ -481,7 +532,7 @@ function _coord_arg(x, tok::AbstractString)
     if x === nothing
         error("In a tensor string, {...} lists the coordinates the tensor depends on, but no " *
               "variable named `$tok` is defined. If `$tok` was meant to be an index, write it " *
-              "bare after ^ or _ (e.g. \"A_$tok\" or \"A^$tok\") -- index groups are not braced.")
+              "bare after ^ or _ (e.g. \"A_$tok\" or \"A^$tok\"): index groups are not braced.")
     end
     if x isa IndexSuperType
         error("In a tensor string, {...} lists the coordinates the tensor depends on, but `$tok` " *
@@ -583,8 +634,7 @@ function _parse_tensor_string(expr::String)
     end
     symbol = expr[firstindex(expr):nameend]
 
-    # A tensor name is one character. Several objects of the same kind are told apart by labels --
-    # `T"k_1^μ"` and `T"k_2^μ"` -- not by longer names.
+    # A tensor name is one character. Several objects of the same kind are told apart by labels `T"k_1^μ"` and `T"k_2^μ"`, not by longer names.
     @assert length(expr) > 1 && contains("_^([{?", expr[nextind(expr, nameend)]) "Tensor name should be one character."
 
     positions = []

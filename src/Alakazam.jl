@@ -63,6 +63,7 @@ export CovDerivSuperType, VariationalSuperType, LieBracketSuperType
 export HomomorphismSuperType, AntimorphismSuperType, InvolutionSuperType
 export CyclicSuperType, TraceSuperType
 export NumberSet, LieAlgebraSuperType
+export numberfield, isrealfield
 export GeneratorDerivSuperType
 
 ##########################
@@ -145,14 +146,15 @@ export commute_right
 ##########################
 #liebracket
 export Lie, @Lie, first, second, swap, expand_commutators
+
+
+###################3
+#traces
 export Trace, factor_trace, reduce_trace
 
 ##########################
 #variational
 export EL, VariationalDerivative
-
-
-
 
 ##########################
 #superspace
@@ -176,6 +178,10 @@ export generate_conformal_algebra, LieGenerator
 export SLAlgebra, SOAlgebra, SUAlgebra, SpAlgebra
 export epsilon, metric
 
+export ℝ,iℝ,ℚ,ℂ,ℍ,𝕆
+export Bra,Ket,BraSuperType,KetSuperType
+export Dagger, DaggerSuperType, apply_dagger, ✝
+export isReal, isImaginary, isComplex, togglebar, isbarred
 
 
 
@@ -242,6 +248,7 @@ include("operators/variations.jl")
 include("operators/lie.jl")
 #traces
 include("operators/trace.jl")
+include("operators/conjugation.jl")
 # identities
 include("core/identities.jl")
 #superspace
