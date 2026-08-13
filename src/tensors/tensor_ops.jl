@@ -1323,6 +1323,9 @@ function _same_tensor_kind(a::TensorSuperType, b::TensorSuperType)
            _extra_identity(a) == _extra_identity(b)
 end
 
+"Sentinel for an index the endpoint table has not seen; count 0 is never a dummy."
+const _NO_ENDS = (0, 0, 0, 0, 0)
+
 """
     _exchange_vanishes(tt) -> Bool
 
@@ -1339,10 +1342,20 @@ function _exchange_vanishes(tt::TensorTerm)
     n = length(ts)
     n < 2 && return false
 
-    # endpoints of every dummy: uid => ((factor, slot), (factor, slot))
-    ends = Dict{UInt64,Vector{Tuple{Int,Int}}}()
+    # Endpoints of every index, packed as (count, factor1, slot1, factor2, slot2). A dummy has
+    # exactly two and a free index one, so the whole record fits in a tuple, which the Dict stores
+    # inline. The count saturates at 3, meaning "more than two", which is not a dummy either way.
+    nslots = 0
+    @inbounds for t in ts
+        nslots += length(indices(t))
+    end
+    ends = Dict{UInt64,NTuple{5,Int}}()
+    sizehint!(ends, nslots)
     @inbounds for i in 1:n, (k, (idx, _)) in enumerate(indices(ts[i]))
-        push!(get!(() -> Tuple{Int,Int}[], ends, idx.uid), (i, k))
+        e = get(ends, idx.uid, _NO_ENDS)
+        ends[idx.uid] = e[1] == 0 ? (1, i, k, 0, 0) :
+                        e[1] == 1 ? (2, e[2], e[3], i, k) :
+                                    (3, e[2], e[3], e[4], e[5])
     end
 
     @inbounds for i in 1:(n-1), j in (i+1):n
@@ -1369,13 +1382,13 @@ function _exchange_vanishes(tt::TensorTerm)
             indices(ts[i])[k][2] == indices(ts[j])[k][2] || (ok = false; break)
             u = indices(ts[i])[k][1].uid
             v = indices(ts[j])[k][1].uid
-            eu = get(ends, u, nothing)
-            ev = get(ends, v, nothing)
-            # both must be dummies: a free index cannot be relabelled
-            (eu === nothing || ev === nothing || length(eu) != 2 || length(ev) != 2) &&
-                (ok = false; break)
-            pu = eu[1] == (i, k) ? eu[2] : eu[1]
-            pv = ev[1] == (j, k) ? ev[2] : ev[1]
+            eu = get(ends, u, _NO_ENDS)
+            ev = get(ends, v, _NO_ENDS)
+            # both must be dummies: a free index cannot be relabelled. A count other than 2 covers
+            # the absent case too, so no separate nothing check is needed
+            (eu[1] != 2 || ev[1] != 2) && (ok = false; break)
+            pu = (eu[2] == i && eu[3] == k) ? (eu[4], eu[5]) : (eu[2], eu[3])
+            pv = (ev[2] == j && ev[3] == k) ? (ev[4], ev[5]) : (ev[2], ev[3])
             pu[1] == pv[1] || (ok = false; break)      # must land on the same partner factor
             (pu[1] == i || pu[1] == j) && (ok = false; break)   # partner is one of the pair
             part = ts[pu[1]]

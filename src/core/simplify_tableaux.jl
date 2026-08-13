@@ -28,9 +28,21 @@ mutable struct LabeledMultiGraph
     skel::Union{Nothing,Graphs.SimpleGraph{Int}} # unweighted skeleton handed to vf2, built on demand and dropped whenever the graph changes. should save some time
 end
 
-LabeledMultiGraph() = LabeledMultiGraph(Int[], Dict{Int,Int}(), String[],
-    Vector{Vector{Float64}}(), Vector{Vector{Int}}(),
-    Dict{Tuple{Int,Int},Vector{Float64}}(), nothing)
+"""
+    LabeledMultiGraph([nnodes, nedges])
+
+Empty graph, optionally sized for what is about to be put in it.
+"""
+function LabeledMultiGraph(nnodes::Int=0, nedges::Int=0)
+    ids   = Int[];                        nnodes > 0 && sizehint!(ids, nnodes)
+    names = String[];                     nnodes > 0 && sizehint!(names, nnodes)
+    loops = Vector{Vector{Float64}}();    nnodes > 0 && sizehint!(loops, nnodes)
+    adj   = Vector{Vector{Int}}();        nnodes > 0 && sizehint!(adj, nnodes)
+    id2v  = Dict{Int,Int}();              nnodes > 0 && sizehint!(id2v, nnodes)
+    edges = Dict{Tuple{Int,Int},Vector{Float64}}()
+    nedges > 0 && sizehint!(edges, nedges)
+    return LabeledMultiGraph(ids, id2v, names, loops, adj, edges, nothing)
+end
 
 Base.copy(g::LabeledMultiGraph) = LabeledMultiGraph(
     copy(g.ids), copy(g.id2v), copy(g.names),
@@ -39,6 +51,12 @@ Base.copy(g::LabeledMultiGraph) = LabeledMultiGraph(
 
 _insert_sorted!(v::Vector{Float64}, x::Float64) =
     insert!(v, searchsortedfirst(v, x), x)
+
+"""
+Stand-in for "this node has no self-loops", shared by every such node instead of giving each its
+own empty vector. Saves on allocations
+"""
+const _NO_LOOPS = Float64[]
 
 """
     add_node!(g, id; name="")
@@ -51,7 +69,7 @@ function add_node!(g::LabeledMultiGraph, id::Integer; name="")
     if v == 0
         push!(g.ids, Int(id))
         push!(g.names, string(name))
-        push!(g.loops, Float64[])
+        push!(g.loops, _NO_LOOPS)          # replaced with a private vector if a loop arrives
         push!(g.adj, Int[])
         g.id2v[Int(id)] = length(g.ids)
     else
@@ -79,6 +97,8 @@ function add_edge!(g::LabeledMultiGraph, u::Integer, v::Integer; weight::Real)
     haskey(g.id2v, v) || add_node!(g, v)
     a, b = g.id2v[u], g.id2v[v]
     if a == b
+        # never mutate the shared empty
+        g.loops[a] === _NO_LOOPS && (g.loops[a] = Float64[])
         _insert_sorted!(g.loops[a], Float64(weight))
     else
         key = a < b ? (a, b) : (b, a)
@@ -466,7 +486,22 @@ end
 Explicitly construct a labeled graph from a tensor term.
 """
 function construct_tensorterm_graph(T1::TensorTerm, debug=false)
-    g1 = LabeledMultiGraph()
+    # Size the graph before filling it. One node per factor and per index slot; one edge per slot
+    # (slot to its factor), one per symmetry pair a tableau contributes, and one per contracted
+    # pair. Operators add a few more, so this is a lower bound and the containers may still grow
+    _nt = length(terms(T1))
+    _ni = 0
+    _ne = 0
+    for tens in terms(T1)
+        r = length(indices(tens))
+        _ni += r
+        _ne += r
+        for tab in tableaux(tens)
+            d = size(tab.adj_matrix, 1)
+            _ne += (d * (d - 1)) ÷ 2
+        end
+    end
+    g1 = LabeledMultiGraph(_nt + _ni, _ne + _ni ÷ 2)
     node_counter = 0
     dums = dummies(T1)   # don't name dummies in the graph
 
