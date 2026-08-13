@@ -25,16 +25,17 @@ mutable struct LabeledMultiGraph
     loops::Vector{Vector{Float64}}            # sorted self-loop weights
     adj::Vector{Vector{Int}}                  # internal adjacency (no loops)
     edges::Dict{Tuple{Int,Int},Vector{Float64}} # (min,max) -> sorted weights
+    skel::Union{Nothing,Graphs.SimpleGraph{Int}} # unweighted skeleton handed to vf2, built on demand and dropped whenever the graph changes. should save some time
 end
 
 LabeledMultiGraph() = LabeledMultiGraph(Int[], Dict{Int,Int}(), String[],
     Vector{Vector{Float64}}(), Vector{Vector{Int}}(),
-    Dict{Tuple{Int,Int},Vector{Float64}}())
+    Dict{Tuple{Int,Int},Vector{Float64}}(), nothing)
 
 Base.copy(g::LabeledMultiGraph) = LabeledMultiGraph(
     copy(g.ids), copy(g.id2v), copy(g.names),
     [copy(l) for l in g.loops], [copy(a) for a in g.adj],
-    Dict(k => copy(v) for (k, v) in g.edges))
+    Dict(k => copy(v) for (k, v) in g.edges), nothing)
 
 _insert_sorted!(v::Vector{Float64}, x::Float64) =
     insert!(v, searchsortedfirst(v, x), x)
@@ -45,6 +46,7 @@ _insert_sorted!(v::Vector{Float64}, x::Float64) =
 Mirrors `nx.add_node`: creates the node if new, otherwise updates its name.
 """
 function add_node!(g::LabeledMultiGraph, id::Integer; name="")
+    g.skel = nothing
     v = get(g.id2v, id, 0)
     if v == 0
         push!(g.ids, Int(id))
@@ -72,6 +74,7 @@ Mirrors `nx.add_edge` on a MultiGraph: auto-creates missing nodes and
 accumulates parallel edges.  Self-loops go into the node colour.
 """
 function add_edge!(g::LabeledMultiGraph, u::Integer, v::Integer; weight::Real)
+    g.skel = nothing
     haskey(g.id2v, u) || add_node!(g, u)
     haskey(g.id2v, v) || add_node!(g, v)
     a, b = g.id2v[u], g.id2v[v]
@@ -107,10 +110,12 @@ end
 # isomorphism check
 
 function _skeleton(g::LabeledMultiGraph)
+    g.skel === nothing || return g.skel
     sg = Graphs.SimpleGraph(length(g.ids))
     for (a, b) in keys(g.edges)
         Graphs.add_edge!(sg, a, b)
     end
+    g.skel = sg
     return sg
 end
 
@@ -231,6 +236,55 @@ end
     key = a < b ? (a, b) : (b, a)
     ws = get(g.edges, key, nothing)
     return ws !== nothing && (w in ws)
+end
+
+"""
+    wl_colours(g) -> Vector{UInt}
+
+Weisfeiler-Leman colour refinement. vf2 can only exclude a candidate pairing that
+its vertex relation rejects, and the raw labelling is coarse. Iterates. Cells that survive refinement 
+are genuinely interchangeable slots of a symmetric tensor.
+
+Computed once per graph and reused across every comparison that graph takes part in.
+"""
+function wl_colours(g::LabeledMultiGraph)
+    n = length(g.ids)
+    col = Vector{UInt}(undef, n)
+    @inbounds for v in 1:n
+        col[v] = hash(g.names[v], hash(g.loops[v]))
+    end
+    prev = length(unique(col))
+    prev == n && return col            
+    buf = Vector{UInt}(undef, n)
+    for _ in 1:n
+        @inbounds for v in 1:n
+            acc = UInt(0)
+            for u in g.adj[v]
+                acc += hash(col[u], hash(g.edges[v < u ? (v, u) : (u, v)]))
+            end
+            buf[v] = hash(col[v], acc)
+        end
+        copyto!(col, buf)
+        c = length(unique(col))
+        (c == prev || c == n) && break  # stable, or discrete
+        prev = c
+    end
+    return col
+end
+
+"""
+Invariant hash from an already-computed refinement, unequal ones prove non-isomorphism.
+"""
+invariant_from(col::Vector{UInt}) = hash(sort(col))
+
+"""
+    graph_invariant(g) -> UInt
+
+A hash that isomorphic graphs always agree on, used to reject pairs before paying for the full
+isomorphism search. 
+"""
+function graph_invariant(g::LabeledMultiGraph)
+    return invariant_from(wl_colours(g))
 end
 
 """
@@ -531,25 +585,26 @@ end
 """
 Grading is the sign flip to turn T2 into T1.
 """
-function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=false)
+function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=false;
+                                        g1=nothing, g2=nothing, ws1=nothing, ws2=nothing)
     length(terms(T1)) == length(terms(T2)) || return (false, 0)
     # update_indices!(T1)
     # update_indices!(T2)
     if free_indices(T1) != free_indices(T2)
         return (false, 0)
     end
-    g1 = construct_tensorterm_graph(T1)
-    g2 = construct_tensorterm_graph(T2)
+    # A caller comparing one term against many can build each graph once and pass it in.
+    g1 === nothing && (g1 = construct_tensorterm_graph(T1))
+    g2 === nothing && (g2 = construct_tensorterm_graph(T2))
     if debug
         draw_ind_graph(g1)
         draw_ind_graph(g2)
     end
     ISO = find_tensor_graph_iso(g1, g2)
-    if !is_isomorphic(ISO)
-        return (false, 0)
-    end
-    if find_weighted_square(g2) && find_weighted_square(g1)
-        return (true, 1)
+    # Only the weighted-square shortcut needs isomorphism established up front
+    if (ws2 === nothing ? find_weighted_square(g2) : ws2) &&
+       (ws1 === nothing ? find_weighted_square(g1) : ws1)
+        return is_isomorphic(ISO) ? (true, 1) : (false, 0)
     end
     #usually just 1, sometimes 2. biggest ive seen is 12.
     for isom_map in isomorphisms_iter(ISO)

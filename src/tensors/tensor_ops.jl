@@ -155,8 +155,9 @@ function hard_equals(a::TensorTerm, b::TensorTerm)
     return same_tensorterm_mod_syms(a, b)
 end
 
-function hard_equals_graded(a::TensorTerm, b::TensorTerm)
-    return same_tensorterm_mod_syms_grade(a, b)
+function hard_equals_graded(a::TensorTerm, b::TensorTerm; g1=nothing, g2=nothing,
+                            ws1=nothing, ws2=nothing)
+    return same_tensorterm_mod_syms_grade(a, b; g1, g2, ws1, ws2)
 end
 
 
@@ -1067,6 +1068,9 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
 
     out = Vector{CoeffPair}(undef, n)
     fps = Vector{UInt}(undef, n)          # fingerprint of each kept summand
+    # the graph of each kept summand, built once here rather than twice inside every comparison
+    gs  = Vector{LabeledMultiGraph}(undef, n)
+    ivs = Vector{UInt}(undef, n)          # isomorphism-invariant hash of that graph
     m = 0
 
     @inbounds for i in 1:n
@@ -1077,29 +1081,38 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
         # transposition test runs first because it is cheap and catches most cases outright; the
         # general search is only reached when it finds nothing, and is budgeted so a term whose
         # automorphism group is too large to explore is reported as non-zero rather than guessed.
-        (_exchange_vanishes(t) || find_weighted_square(construct_tensorterm_graph(t))) && continue
+        _exchange_vanishes(t) && continue
+        g = construct_tensorterm_graph(t)
+        find_weighted_square(g) && continue
 
         fp = term_fingerprint(t)
+        iv = graph_invariant(g)
         found = false
         for k in 1:m
             fps[k] == fp || continue      # cheap reject before the isomorphism search
-            eq, gr = hard_equals_graded(t, out[k][2])
+            ivs[k] == iv || continue      # stronger one, far cheaper than vf2
+            # every stored term already failed find_weighted_square above, so both flags are known
+            eq, gr = hard_equals_graded(t, out[k][2]; g1=g, g2=gs[k], ws1=false, ws2=false)
             eq || continue
             c = gr * out[k][1] + s[1]
             if isZero(c)
                 for q in k:(m-1)
                     out[q] = out[q+1]
                     fps[q] = fps[q+1]
+                    gs[q]  = gs[q+1]
+                    ivs[q] = ivs[q+1]
                 end
                 m -= 1
             else
                 out[k] = CoeffPair(c, t)   # same fingerprint as before, fps[k] still valid
+                gs[k]  = g                 
+                ivs[k] = iv
             end
             found = true;
             break
         end
 
-        found || (m += 1; out[m]=s; fps[m]=fp)
+        found || (m += 1; out[m]=s; fps[m]=fp; gs[m]=g; ivs[m]=iv)
     end
 
     m == 0 && return zero()

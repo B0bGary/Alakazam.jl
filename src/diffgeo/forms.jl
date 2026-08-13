@@ -172,14 +172,27 @@ function ∧(T1::TensorSuperType, T2::TensorSuperType, index_type::Union{IndexSe
     return prefact * eps1 * eps2 * T1c * T2c
 end
 
-"""The index set a form's slots belong to, from the tensor or from the coordinate."""
-function _form_index_set(T::TensorSuperType, x::Coordinate, index_type::Union{IndexSet,Nothing})
+"""
+The index set a form's slots belong to, chosen from the slots it actually has.
+"""
+_form_index_set(T::TensorSuperType, x::Coordinate, index_type::Union{IndexSet,Nothing}) =
+    _form_index_set(indices(T), x, index_type)
+
+function _form_index_set(pairs, x::Coordinate, index_type::Union{IndexSet,Nothing})
     index_type === nothing || return index_type
-    for (ind, _) in indices(T)
-        return ind.index_set
+    sets = IndexSet[]
+    for (ind, _) in pairs
+        ind.index_set in sets || push!(sets, ind.index_set)
     end
     #a zero-form carries no slot to read the set from, so the coordinate says
-    first(x.index_set)
+    isempty(sets) && return first(x.index_set)
+    cands = IndexSet[S for S in sets if S in x.index_set]
+    #if the coordinate declares none of them, fall back to every set rather than refusing outright
+    isempty(cands) && (cands = sets)
+    for S in cands
+        S.name == "spacetime" && return S
+    end
+    first(cands)
 end
 
 """Exterior derivative of a form."""
@@ -260,8 +273,9 @@ function exterior_derivative(T::TensorExpression, x::Coordinate,
                              dname::String="∂")
     #free_indices is a multiset, so take its keys
     free = Pair{IndexSuperType,IndexPosition}[k for (k, _) in collect(free_indices(T))]
-    tinds = index_type === nothing ?
-        (isempty(free) ? first(x.index_set) : free[1][1].index_set) : index_type
+    #same choice as the tensor method: not free[1]'s set, which depends both on declaration order
+    #and on how free_indices happens to enumerate
+    tinds = _form_index_set(free, x, index_type)
     formpairs = sort([pr for pr in free if pr[1].index_set == tinds], by=pr -> name(pr[1]))
     p = length(formpairs)
     pos = p == 0 ? tinds.default_position : formpairs[1][2]
