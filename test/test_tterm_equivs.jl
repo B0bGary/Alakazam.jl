@@ -91,4 +91,19 @@
         end
     end
 
+    #a covariant derivative is not a partial, and root_oprnd used to have a
+    #method for the partial alone, so it raised on anything carrying one
+    if 1==1
+        cdx = Coordinate("xcd", [spacetime_indices])
+        uu = Tensor("ucd", cdx)
+        cd(ii, pp, arg) = Derivative("∇cd", cdx, ii=>pp)(arg)
+        #the tensor at the bottom of a covariant nest
+        @test Alakazam.root_oprnd(cd(i, lower, cd(i, upper, uu))) == TensorExpression(uu)
+        #a nest of two different derivative kinds resolves to its innermost operand
+        @test Alakazam.root_oprnd(cd(i, lower, PartialDerivative("∂cd", cdx, j=>lower)(uu))) ==
+              TensorExpression(uu)
+        #≅ answers rather than raising
+        @test cd(i, lower, cd(i, upper, uu)) ≅ cd(i, lower, cd(i, upper, uu))
+    end
+
 end
