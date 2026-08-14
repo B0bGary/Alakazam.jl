@@ -115,6 +115,7 @@ export SymplecticForm
 #basic ops
 ##########################
 export pop_metric, contract_metrics, eliminate_kronecker, eliminate_epsilon,eliminate_matrices,eliminate_trace
+export antisym_contraction,conj_convention
 export ≅, cong, get_weighted_terms, term_weight, drop_weight_above, drop_weight_below, ×, append, rename_dummies, rename_dummies!
 export get_unused_indices
 export simplify, hard_simplify, simp_ops_n_sym, canonicalise, canonicalize,collect_terms

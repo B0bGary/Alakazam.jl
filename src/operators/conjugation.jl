@@ -196,15 +196,16 @@ function _dagger(T::EpsilonTensorSuperType)
     S = inds[1][1].index_set
     cls = conj_class(S)
     cls === :fixed && return T
+    s = conj_convention(S.metric_type, S)[2] 
     nT = copy(T)
     if cls === :quaternionic
         # SU(2): both indices flip together and the pair costs one sign
         set_indices!(nT, IndexPair[_conj_index(i) => _flip(p) for (i, p) in inds])
-        return -1 * nT
+    else
+        # spinor (complex): partner set, positions kept
+        set_indices!(nT, IndexPair[_conj_index(i) => p for (i, p) in inds])
     end
-    # spinor (complex) or real: partner set, positions kept, no sign
-    set_indices!(nT, IndexPair[_conj_index(i) => p for (i, p) in inds])
-    return nT
+    return s == 1 ? nT : s * nT
 end
 
 """
@@ -272,15 +273,37 @@ end
 
 
 """
-Reference position for an index of set `S` on tensor `T`: the position at which the conjugation
-rule for this field is *defined*, so that a displacement from it costs the quaternionic sign.
+    conj_convention(metric_type, S::IndexSet) -> (reference, sign)
 
-`default_position` supplies it for the unbarred field, and the barred partner takes the flip.
-θ carries its SU(2) index down where θ̄ carries it up, and they share one index set, so the reference
-cannot live on the set alone. Deriving it from the name keeps `conj(conj(x)) == x` automatic
-instead of something to be maintained.
+The conjugation convention for indices of `S`. Dispatch on metric type.
+Can override complex conjugation behaviour.
+
+    reference   the level at which conjugation costs nothing
+    sign        what a level away from the reference costs
+
+Both the fields and the invariant form read this one pair.
+
+The default takes the reference from the set's `default_position` and the sign from the class, which
+reproduces Alakazam's own convention: `(eps_{αβ})* = eps_{αdot βdot}` with no sign, so covariant
+spinors conjugate unsigned. Gates' "Superspace" instead sets `Cbar_{αβ} = -C_{αdot βdot}` from which 
+`(psi_a)^dag = -psibar_{adot}` follows. This is encoded by eg:
+
+    Alakazam.conj_convention(::Type{MyC}, S) = (upper, -1)
 """
-_conj_reference(S, barred::Bool) = barred ? _flip(S.default_position) : S.default_position
+conj_convention(::Type{<:MetricSuperType}, S::IndexSet) =(S.default_position, conj_class(S) === :quaternionic ? -1 : 1)
+
+conj_convention(::Nothing, S::IndexSet) = (S.default_position,1)
+
+"""
+The convention for `S`, with the reference flipped for a barred field.
+Derived from conj_convention.
+θ carries its SU(2) index down where θ̄ carries it up, and the two share one index set.
+This determines which picks up a sign.
+"""
+function _conj_rule(S, barred::Bool)
+    (ref, sgn) = conj_convention(S.metric_type, S)
+    return (barred ? _flip(ref) : ref, sgn)
+end
 
 """
     _conj_partner(idx) -> Index
@@ -316,8 +339,9 @@ function _conj_slot(idx, pos::IndexPosition, barred::Bool)
     S = idx.index_set
     cls = conj_class(S)
     cls === :fixed && return (idx, pos, 1)
-    cls === :complex && return (_conj_partner(idx), pos, 1)
-    sgn = pos == _conj_reference(S, barred) ? 1 : -1
+    (ref, s) = _conj_rule(S, barred)
+    sgn = pos == ref ? 1 : s
+    cls === :complex && return (_conj_partner(idx), pos, sgn)
     return (idx, _flip(pos), sgn)
 end
 

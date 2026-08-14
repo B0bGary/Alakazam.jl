@@ -25,8 +25,25 @@
         θ(x...) = Tensor("θ", ℂ, collect(x))
         θbar(x...) = Tensor(Alakazam.togglebar("θ"), ℂ, collect(x))
     end
-    @show Alakazam.togglebar("a")
-    @test Alakazam.togglebar("θ")=="̄θ"
+    # @show Alakazam.togglebar("a")
+    # @test Alakazam.togglebar("θ")=="̄θ"
+
+    # @show t=θ(α=>upper,i=>upper)
+    # @show t'
+    #  @show t=θ(α=>upper,i=>lower)
+    # @show t'
+    # @show t=θ(α=>lower,i=>upper)
+    # @show t'
+    # @show t=θ(α=>lower,i=>lower)
+    # @show t'
+    # @show t=θbar(α=>upper,i=>upper)
+    # @show t'
+    #  @show t=θbar(α=>upper,i=>lower)
+    # @show t'
+    # @show t=θbar(α=>lower,i=>upper)
+    # @show t'
+    # @show t=θbar(α=>lower,i=>lower)
+    # @show t'
 
     @testset "index set classification" begin
         # read off `conjugate` and `metric_type`, no dedicated field

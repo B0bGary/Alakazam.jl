@@ -717,6 +717,17 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
     return (sign, factor, extra_deltas, TensorTerm(allterms))
 end
 
+"""
+    antisym_contraction(metric, slot) -> (indpair, sign)
+
+Raising/lowering rule for an antisymmetric form.
+
+    ϵ_{ab} F^{b} =  F_{a}                     (contraction with slot 2, sign 1)
+    ϵ_{ab} F^{a} = -ϵ_{ba} F^{a} = -F_{b}     (contraction with slot 1, sign -1)
+
+"""
+antisym_contraction(metric::AntisymMetricSuperType, slot::Integer)= (slot == 2) ? 1 : -1
+
 
 """
 Repeated logic for replacing tensor inds with ones from a metric. Modifies the tensor in question. Returns flag to remove and the sign accumulated
@@ -732,15 +743,16 @@ function contraction_replacement!(tins, indpairnum, metric, isRiemannType::Bool)
     m2 = inds[2][1]
     m2pos = inds[2][2]
     issym = metric isa SymMetricSuperType
+    isasym = metric isa AntisymMetricSuperType
 
     if indpair[1] == m2 #tensor has an index matching the 2nd index of the metric
         #some complicated logic to make sure indices go to the right position# this should let you contract Kronckers and metrics in a consistent way
         if isRiemannType # metric, not a kronecker
-            if !(issym) && (indpair[2].position + m2pos.position) % 2 == 0 # 2nd metric and tensor pos same, raise and lower with sign change
-                sign = -1 #use 
-                indpair = m1 => op_pos(indpair[2])  #ϵ^ab F^b=-ϵ_ab F^b=-F_a
-            else
-                indpair = m1 => m1pos # raise/lower index #ϵ_ab F^b=F_a,η_ab F^b=F_a
+            if issym
+                indpair = m1 => m1pos # raise/lower index #η_ab F^b=F_a
+            elseif isasym
+                indpair=m1=>m1pos
+                sign = antisym_contraction(metric, 2)
             end
         else #TTHIS IS A KroneckerDelta
             indpair = m1 => indpair[2] # if opposite positions, keep tensor pos ( δ^j_i A^i= A^j for example)
@@ -749,15 +761,11 @@ function contraction_replacement!(tins, indpairnum, metric, isRiemannType::Bool)
     elseif indpair[1] == m1
         #some complicated logic to make sure indices go to the right position, based on symmetry of metric. if contracting with antisym, pick up a minus
         if isRiemannType
-            if !(issym)
-                if (indpair[2].position + m1pos.position) % 2 == 0 # 1st metric and tensor pos same, raise and lower without sign
-                    indpair = m2 => op_pos(indpair[2]) #ϵ^abF^a=ϵ_baF^a=F_b
-                else
-                    sign = -1
-                    indpair = m2 => m2pos #ϵ_abF^a=-ϵ_baF^a=-F_b
-                end
-            else
+            if issym
                 indpair = m2 => m2pos # raise/lower. η_baF^b=η_abF^b=F_a
+            elseif isasym
+                indpair= m2=>m2pos
+                sign = antisym_contraction(metric, 1)
             end
         else #kronecker
             indpair = m2 => indpair[2] # keep index in same pos ( δ_i^j A^i= A^j for example)

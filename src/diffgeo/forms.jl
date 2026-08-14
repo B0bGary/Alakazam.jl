@@ -196,7 +196,7 @@ function _form_index_set(pairs, x::Coordinate, index_type::Union{IndexSet,Nothin
 end
 
 """Exterior derivative of a form."""
-𝖽(T::TensorSuperType, x::Coordinate, args...; kwargs...) = exterior_derivative(T, x, args...; kwargs...)
+𝖽(T::Tensorial, x::Coordinate, args...; kwargs...) = exterior_derivative(T, x, args...; kwargs...)
 
 """
 Exterior derivative of a p-form, as the antisymmetrised partial derivative
