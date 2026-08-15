@@ -726,7 +726,7 @@ Raising/lowering rule for an antisymmetric form.
     ϵ_{ab} F^{a} = -ϵ_{ba} F^{a} = -F_{b}     (contraction with slot 1, sign -1)
 
 """
-antisym_contraction(metric::AntisymMetricSuperType, slot::Integer)= (slot == 2) ? 1 : -1
+antisym_contraction(::AntisymMetricSuperType, slot::Integer)= (slot == 2) ? 1 : -1
 
 
 """

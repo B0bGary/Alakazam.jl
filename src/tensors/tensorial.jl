@@ -63,6 +63,31 @@ struct TensorData <: TensorDataSuperType
 end
 
 """
+    _default_numberfield(inds) -> NumberSet
+
+Field to assume when the constructor was not told one: ℝ when every index is fixed by conjugation,
+ℂ otherwise.
+
+A tensor carrying an index whose representation is not self-conjugate cannot be real. Reading it off the indices
+instead gets both common cases right with nothing declared
+
+`conj_class` throws on a set that is self-conjugate with neither metric nor algebra, which is a
+misconfiguration rather than a question about this tensor; it is treated as fixed here so that
+construction does not fail, and the error still surfaces on conjugation.
+"""
+function _default_numberfield(inds)
+    for (idx, _) in inds
+        cls = try
+            conj_class(idx.index_set)
+        catch
+            :fixed
+        end
+        cls === :fixed || return ComplexNumberSet()
+    end
+    return REAL_FIELD
+end
+
+"""
     build_tensor(name, args...) -> (TensorData, Vector{IndexPair})
 
 Parse the tensor constructor arguments into the shared data and the index vector.
@@ -77,6 +102,7 @@ function build_tensor(name::String, args...)
         has_labels = false
         weights = noweights()
         numberfield = realfield()
+        has_field = false
 
         for arg in args
             if arg isa _T_INDEX_VEC
@@ -92,8 +118,8 @@ function build_tensor(name::String, args...)
                 for c in arg
                     _insert_coord!(function_of, c)
                 end
-            elseif arg isa Dict{String,Number}
-                weights = arg
+            elseif arg isa AbstractDict{String,<:Number}
+                weights = Dict{String,Number}(arg)
             elseif arg isa YoungTableau
                 has_tabs || (tableaux=Set{YoungTableau}(); has_tabs=true)
                 push!(tableaux, arg)
@@ -113,11 +139,21 @@ function build_tensor(name::String, args...)
                 append!(labels, arg)
             elseif arg isa NumberSet
                 numberfield = arg
+                has_field = true
             elseif arg isa Type{<:NumberSet}
                 # accept the bare alias too, so `Tensor("psi", ℂ, ...)` works alongside `ℂ()`
                 numberfield = arg()
+                has_field = true
+            elseif arg isa AbstractVector && isempty(arg)
+                continue
+            else
+                # Complain rather than drop it
+                error("Unexpected argument to tensor \"$name\": $arg of type $(typeof(arg))")
             end
         end
+
+        # nothing declared: read the field off the indices rather than assuming real
+        has_field || (numberfield = _default_numberfield(indices))
 
         tabs = has_tabs ? reduce_tableaux(tableaux) : tableaux
 

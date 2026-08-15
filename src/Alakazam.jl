@@ -178,6 +178,7 @@ export to_dumless_same_tensor_mod_syms #for tests...
 #### algebras
 export generate_conformal_algebra, LieGenerator
 export SLAlgebra, SOAlgebra, SUAlgebra, SpAlgebra
+export Spin, division_algebra, spacetime_dimension
 export epsilon, metric
 
 export ℝ,iℝ,ℚ,ℂ,ℍ,𝕆

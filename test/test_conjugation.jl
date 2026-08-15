@@ -1,3 +1,18 @@
+struct MajC <: AntisymMetricSuperType
+    data::Alakazam.TensorData
+    indices::Vector{Alakazam.IndexPair}
+end
+Alakazam.conj_convention(::Type{MajC}, S::IndexSet) = (upper, -1)
+
+# A form following the convention of Gates Superspace, where C is imaginary:
+# (C_{ab})* = -C_{adot bdot}, from which (psi_a)^dag = -psibar_{adot} follows. Declared here exactly
+# as a user would declare it, so this doubles as a check that one method really is enough.
+struct GatesC <: AntisymMetricSuperType
+    data::Alakazam.TensorData
+    indices::Vector{Alakazam.IndexPair}
+end
+Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
+
 @testset "Complex Conjugation" begin
 
     #setup
@@ -150,11 +165,12 @@
         # The dot is conventional, not mandatory. Partners are matched on the undecorated base, so
         # a user who marks the conjugate set with a bar or a hat gets those back, not a dot.
         CD, CM, CH = Alakazam.COMBINING_DOT, Alakazam.COMBINING_MACRON, Alakazam.COMBINING_HAT
+
         function cpair(nm)
-            a = IndexSet(nm, 2, lower, EpsilonTensor, fermionic)
-            b = IndexSet(nm * "c", 2, lower, EpsilonTensor, fermionic)
-            a.conjugate = b; b.conjugate = a
-            (a, b)
+            local su = IndexSet(nm, 2, lower, EpsilonTensor, fermionic)
+            local sc = IndexSet(nm * "c", 2, lower, EpsilonTensor, fermionic)
+            su.conjugate = sc; sc.conjugate = su
+            (su, sc)
         end
         conj1(idx) = indices(Tensor("ψ", ℂ, [idx => lower])')[1][1]
 
@@ -207,4 +223,225 @@
         @test first_coef(Alakazam.apply_antimorphism(identity, e, conj)) == 2 - 3im
         @test first_coef(Alakazam.apply_antimorphism(identity, e, identity)) == 2 + 3im
     end
+    @testset "conj_convention is the single override point" begin
+        # the defaults, which every other testset above is implicitly relying on
+        @test Alakazam.conj_convention(su2.metric_type, su2) == (su2.default_position, -1)
+        @test Alakazam.conj_convention(spinor.metric_type, spinor) == (spinor.default_position, 1)
+        @test Alakazam.conj_convention(spacetime.metric_type, spacetime)[2] == 1
+
+        # the barred flip lives in the engine, not the convention: theta and thetabar share one
+        # index set but carry their doublet index on opposite levels
+        (ref_u, _) = Alakazam._conj_rule(su2, false)
+        (ref_b, _) = Alakazam._conj_rule(su2, true)
+        @test ref_u == su2.default_position
+        @test ref_b == Alakazam._flip(su2.default_position)
+
+        # form and fields read the same pair, so they cannot disagree. The epsilon takes the sign
+        # outright; a field slot takes it only when displaced from the reference
+        s = Alakazam.conj_convention(su2.metric_type, su2)[2]
+        @test SymplecticForm("ε", [i => upper, j => upper])' ==
+              s * SymplecticForm("ε", [i => lower, j => lower])
+        atref = θ(α => upper, i => su2.default_position)'
+        @test first_coef(TensorExpression(atref)) == 1
+        away  = θ(α => upper, i => Alakazam._flip(su2.default_position))'
+        @test first_coef(TensorExpression(away)) == s
+    end
+
+    @testset "a user convention reaches the fields" begin
+        # Gates' rule, declared once at the top of this file as `conj_convention(::Type{GatesC},…)`.
+        # Nothing else is stated: the signs on psi follow from the form's.
+        g  = IndexSet("gates", 2, upper, GatesC, fermionic)
+        gd = IndexSet("gatesdot", 2, upper, GatesC, fermionic)
+        g.conjugate = gd; gd.conjugate = g
+        a  = Index("α", g); Index("α", gd)      # the partner, matched on the undecorated base
+        ψ(x...)    = Tensor("ψ", ℂ, collect(x))
+        ψbar(x...) = Tensor(Alakazam.togglebar("ψ"), ℂ, collect(x))
+
+        @test Alakazam.conj_class(g) === :complex
+        @test Alakazam.conj_convention(g.metric_type, g) == (upper, -1)
+
+        # reference is upper, so the raised index is unsigned and the lowered one is not:
+        # (psi^a)^dag = psibar^adot,   (psi_a)^dag = -psibar_adot
+        cu = ψ(a => upper)'
+        cl = ψ(a => lower)'
+        @test first_coef(TensorExpression(cu)) == 1
+        @test first_coef(TensorExpression(cl)) == -1
+        # the index still moves to the partner set, and keeps its level
+        @test indices(first_summand(TensorExpression(cu)))[1][1].index_set.name == "gatesdot"
+        @test indices(first_summand(TensorExpression(cu)))[1][2] == upper
+        @test indices(first_summand(TensorExpression(cl)))[1][2] == lower
+
+        # and it is still an involution, the two signs cancelling
+        @test (ψ(a => lower)')' == ψ(a => lower)
+    end
+    @testset "class x field x position" begin
+        # Every combination of conjugation class, number field and index level, checked for all
+        # four things conjugation can do to a leaf: the overall sign, whether the name is barred,
+        # which index set the slot lands in, and at which level.
+        #
+        # The field and the indices are independent, so the sign is their product: iℝ contributes
+        # -1 on top of whatever the slot contributes, and only ℂ bars the name.
+        st  = IndexSet("mx_st", 4, upper, Metric)                        # :fixed,  (upper, +1)
+        # Spin(2,1) is what makes this real: an antisymmetric form alone would classify as
+        # quaternionic, which is the ambiguity the algebra route exists to settle. The
+        # explicit MajC still wins over the metric the algebra would supply.
+        mj  = IndexSet("mx_maj", upper, MajC, fermionic, Spin(2, 1))    # :fixed,  (upper, -1)
+        mj.conjugate = mj
+        wl  = IndexSet("mx_wl",  2, lower, EpsilonTensor, fermionic)     # :complex
+        wld = IndexSet("mx_wld", 2, lower, EpsilonTensor, fermionic)
+        wl.conjugate = wld; wld.conjugate = wl
+        su  = IndexSet("mx_su2", 2, lower, EpsilonTensor)                # :quaternionic
+        su.conjugate = su
+        for (S, nm) in ((st,"a"), (mj,"α"), (wl,"α"), (su,"i"))
+            Index(nm, S)
+        end
+        Index("α", wld)                       # the partner, matched on the undecorated base
+
+        @test Alakazam.conj_class(st) === :fixed
+        @test Alakazam.conj_class(mj) === :fixed
+        @test Alakazam.conj_class(wl) === :complex
+        @test Alakazam.conj_class(su) === :quaternionic
+
+        """(coefficient, name barred?, index set, level) after conjugating a one-index tensor."""
+        function probe(S, pos, field)
+            t = field === nothing ? Tensor("ψ", [first(S.indices) => pos]) :
+                                    Tensor("ψ", field, [first(S.indices) => pos])
+            e = TensorExpression(adjoint(t))
+            tens = terms(first_summand(e))[1]
+            (first_coef(e), Alakazam.isbarred(name(tens)),
+             indices(tens)[1][1].index_set.name, indices(tens)[1][2])
+        end
+
+        # set, level, field  =>  sign, barred, resulting set, resulting level.
+        # Fields are explicit here; the inferred default is checked separately below.
+        cases = [
+            # :fixed, default convention: no sign from the index at either level
+            (st, upper, ℝ,   1, false, "mx_st", upper),
+            (st, lower, ℝ,   1, false, "mx_st", lower),
+            (st, upper, iℝ, -1, false, "mx_st", upper),
+            (st, lower, iℝ, -1, false, "mx_st", lower),
+            (st, upper, ℂ,   1, true,  "mx_st", upper),
+            (st, lower, ℂ,   1, true,  "mx_st", lower),
+            # Majorana: index and level untouched, but the lower slot is imaginary
+            (mj, upper, ℝ,   1, false, "mx_maj", upper),
+            (mj, lower, ℝ,  -1, false, "mx_maj", lower),
+            (mj, upper, iℝ, -1, false, "mx_maj", upper),
+            (mj, lower, iℝ,  1, false, "mx_maj", lower),
+            (mj, upper, ℂ,   1, true,  "mx_maj", upper),
+            (mj, lower, ℂ,  -1, true,  "mx_maj", lower),
+            # complex: moves to the partner set, keeps its level. ℂ is the only legal field
+            (wl, upper, ℂ,   1, true,  "mx_wld", upper),
+            (wl, lower, ℂ,   1, true,  "mx_wld", lower),
+            # quaternionic: keeps its set, flips level, signs away from the reference (lower).
+            # ℝ is legal -- a real field on a quaternionic index is a symplectic Majorana condition
+            (su, lower, ℝ,   1, false, "mx_su2", upper),
+            (su, upper, ℝ,  -1, false, "mx_su2", lower),
+            (su, lower, iℝ, -1, false, "mx_su2", upper),
+            (su, upper, iℝ,  1, false, "mx_su2", lower),
+            (su, lower, ℂ,   1, true,  "mx_su2", upper),
+            (su, upper, ℂ,  -1, true,  "mx_su2", lower),
+        ]
+        for (S, pos, field, sgn, bar, set, npos) in cases
+            @test probe(S, pos, field) == (sgn, bar, set, npos)
+        end
+
+        # A representation not isomorphic to its conjugate admits no reality condition, so a tensor
+        # carrying one cannot be declared real or imaginary. Quaternionic is not caught: that is a
+        # symplectic Majorana condition, which is legitimate.
+        @test_throws ErrorException probe(wl, lower, ℝ)
+        @test_throws ErrorException probe(wl, upper, iℝ)
+
+        # with nothing declared, the field is read off the indices
+        idx(S) = first(S.indices)
+        @test numberfield(Tensor("t", [idx(st) => upper])) isa Alakazam.RealNumberSet
+        @test numberfield(Tensor("t", [idx(mj) => upper])) isa Alakazam.RealNumberSet
+        @test numberfield(Tensor("t", [idx(wl) => lower])) isa Alakazam.ComplexNumberSet
+        @test numberfield(Tensor("t", [idx(su) => lower])) isa Alakazam.ComplexNumberSet
+        @test numberfield(Tensor("t")) isa Alakazam.RealNumberSet             # a scalar
+        # ...and an explicit field still wins, in both directions
+        @test numberfield(Tensor("t", ℂ, [idx(st) => upper])) isa Alakazam.ComplexNumberSet
+        @test numberfield(Tensor("t", ℝ, [idx(su) => lower])) isa Alakazam.RealNumberSet
+    end
+
+    @testset "conjugation class across the spin groups" begin
+        # the class must follow the division algebra for every signature, not just the four the
+        # exceptional isomorphisms pin
+        for d in 2:11, p in (1, 2)
+            q = d - p
+            q >= 1 || continue
+            alg = Spin(p, q)
+            da  = division_algebra(alg)
+            S = IndexSet("sp_$(p)_$(q)", lower, fermionic, alg, EpsilonTensor)
+            if da === ℂ
+                # a complex representation needs a partner; declaring it self-conjugate is an error
+                S.conjugate = S
+                @test_throws ErrorException Alakazam.conj_class(S)
+            else
+                S.conjugate = S
+                @test Alakazam.conj_class(S) === (da === ℍ ? :quaternionic : :fixed)
+            end
+        end
+    end
+
+    @testset "several indices at once" begin
+        # Everything above is rank 1. With more than one slot the signs multiply, classes can mix
+        # inside one tensor, and the field is decided by all the slots together.
+        st  = IndexSet("mi_st", 4, upper, Metric);            a = Index("a", st)
+        su  = IndexSet("mi_su2", 2, lower, EpsilonTensor);    su.conjugate = su
+        i, j = Index("i", su), Index("j", su)
+        wl  = IndexSet("mi_wl",  2, lower, EpsilonTensor, fermionic)
+        wld = IndexSet("mi_wld", 2, lower, EpsilonTensor, fermionic)
+        wl.conjugate = wld; wld.conjugate = wl
+        al = Index("α", wl); Index("α", wld)
+        mj = IndexSet("mi_mj", upper, MajC, fermionic, Spin(2, 1)); mj.conjugate = mj
+        m = Index("μ", mj)
+
+        """(coefficient, name, [(set, level)...]) after conjugating."""
+        function shape(t)
+            e = TensorExpression(adjoint(t))
+            tn = terms(first_summand(e))[1]
+            (first_coef(e), name(tn),
+             [(x[1].index_set.name, x[2]) for x in indices(tn)])
+        end
+
+        # two quaternionic slots: one sign per slot away from the reference, so they multiply
+        @test shape(Tensor("T", ℂ, [i=>lower, j=>lower]))[1] ==  1
+        @test shape(Tensor("T", ℂ, [i=>upper, j=>lower]))[1] == -1
+        @test shape(Tensor("T", ℂ, [i=>upper, j=>upper]))[1] ==  1   # (-1)^2
+        # ...and both levels flip
+        @test shape(Tensor("T", ℂ, [i=>upper, j=>upper]))[3] ==
+              [("mi_su2", lower), ("mi_su2", lower)]
+
+        # two Majorana slots, both at the reference: no sign, nothing moves, no bar
+        @test shape(Tensor("X", [m=>upper, m=>upper])) ==
+              (1, "X", [("mi_mj", upper), ("mi_mj", upper)])
+
+        # mixed classes in one tensor: each slot follows its own rule
+        @test shape(Tensor("ψ", ℂ, [al=>lower, i=>lower])) ==
+              (1, Alakazam.togglebar("ψ"), [("mi_wld", lower), ("mi_su2", upper)])
+        @test shape(Tensor("ψ", ℂ, [al=>lower, a=>upper])) ==
+              (1, Alakazam.togglebar("ψ"), [("mi_wld", lower), ("mi_st", upper)])
+        # Majorana sign survives alongside a slot that contributes nothing, and stays unbarred
+        @test shape(Tensor("X", [m=>lower, a=>upper])) ==
+              (-1, "X", [("mi_mj", lower), ("mi_st", upper)])
+
+        # the inferred field looks at every slot: one complex index is enough
+        @test numberfield(Tensor("q", [al=>lower, a=>upper])) isa Alakazam.ComplexNumberSet
+        @test numberfield(Tensor("q", [m=>lower,  a=>upper])) isa Alakazam.RealNumberSet
+        @test numberfield(Tensor("q", [a=>upper,  a=>lower])) isa Alakazam.RealNumberSet
+
+        # and so does the contradiction check, wherever the complex index sits
+        @test_throws ErrorException adjoint(Tensor("q", ℝ, [a=>upper, al=>lower]))
+        @test_throws ErrorException adjoint(Tensor("q", ℝ, [al=>lower, a=>upper]))
+
+        # involution with several slots: the signs cancel pairwise across the two applications
+        for t in (Tensor("T", ℂ, [i=>upper, j=>lower]),
+                  Tensor("T", ℂ, [i=>upper, j=>upper]),
+                  Tensor("ψ", ℂ, [al=>lower, i=>lower]),
+                  Tensor("X", [m=>lower, a=>upper]),
+                  Tensor("X", [m=>lower, m=>upper]))
+            @test adjoint(adjoint(t)) == t
+        end
+    end
+
 end

@@ -18,6 +18,7 @@ if true
         "test_lie.jl",
         "test_trace.jl",
         "test_conjugation.jl",
+        "test_spin.jl",
         "test_serialise.jl",
         "test_serialise_load.jl",
         "test_algebras.jl",

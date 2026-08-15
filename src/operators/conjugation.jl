@@ -162,9 +162,23 @@ _dagger(tt::TensorTerm) = apply_antimorphism(_dagger, tt)
 _dagger(d::DaggerSuperType) = apply_involution(_dagger, d)
 
 function _dagger(T::TensorSuperType)
-    conj_is_identity(T) && return T
-    _isImaginary(numberfield(T)) && return -1 * T
-    _isComplex(numberfield(T)) && return _conj_leaf(T)
+    # The field and the indices are independent and compose. Field decides the name and any
+    # overall factor, each slot decides its own sign.
+    f = numberfield(T)
+    # A representation that is not isomorphic to its conjugate admits no reality condition, so a
+    # tensor carrying such an index cannot be real or imaginary.
+    if (_isReal(f) || _isImaginary(f))
+        for (idx, _) in indices(T)
+            conj_class(idx.index_set) === :complex && error(
+                "tensor \"$(name(T))\" is declared over $f but carries index " *
+                "\"$(name(idx))\" of set \"$(idx.index_set.name)\", whose conjugate is a " *
+                "different representation; such a tensor is complex, so declare it over ℂ")
+        end
+    end
+    _isReal(f)      && return _conj_leaf(T, false)
+    _isImaginary(f) && return -1 * _conj_leaf(T, false)
+    # only a complex field has a distinct conjugate to name, so only it toggles the bar
+    _isComplex(f)   && return _conj_leaf(T, true)
     throw(ArgumentError(
         "conjugation is not defined for a tensor over $(numberfield(T)); " *
         "declare the tensor over ℝ, iℝ or ℂ, or add a rule for this field"))
@@ -254,9 +268,23 @@ function conj_class(S)
     c = S.conjugate
     c === nothing && return :fixed
     (c === S || c.name == S.name) || return :complex
+    # Frobenius-Schur classifies by the endomorphism algebra from `division_algebra`. The metric cannot generically distinguish eg su(2) and sl(2,R)
+    # both carry an antisymmetric epsilon, and are quaternionic and real respectively.
+    if S.algebra !== nothing
+        d = division_algebra(S.algebra)
+        d === ℍ && return :quaternionic
+        d === ℝ && return :fixed
+        # Only reachable with the set naming itself as its own conjugate, which a complex representation cannot be
+        d === ℂ && error("index set $(S.name) carries an algebra whose defining representation " *
+                         "is complex, so its conjugate is a different representation, but the " *
+                         "set names itself as its own conjugate; declare the partner set and " *
+                         "point the two at each other")
+        # 𝕆 has no endomorphism algebra among the three: fall through to the metric
+    end
     mt = S.metric_type
     mt === nothing && error("index set $(S.name) is self-conjugate but declares no metric, so " *
-                            "real and quaternionic cannot be told apart; declare its metric")
+                            "real and quaternionic cannot be told apart; declare its metric, " *
+                            "or its algebra")
     return mt <: AntisymMetricSuperType ? :quaternionic : :fixed
 end
 
@@ -288,7 +316,7 @@ reproduces Alakazam's own convention: `(eps_{αβ})* = eps_{αdot βdot}` with n
 spinors conjugate unsigned. Gates' "Superspace" instead sets `Cbar_{αβ} = -C_{αdot βdot}` from which 
 `(psi_a)^dag = -psibar_{adot}` follows. This is encoded by eg:
 
-    Alakazam.conj_convention(::Type{MyC}, S) = (upper, -1)
+    Alakazam.conj_convention(::Type{MyC}, S::IndexSet) = (upper, -1)
 """
 conj_convention(::Type{<:MetricSuperType}, S::IndexSet) =(S.default_position, conj_class(S) === :quaternionic ? -1 : 1)
 
@@ -338,9 +366,15 @@ quaternionic one (conjugation exchanges the representation with its dual on the 
 function _conj_slot(idx, pos::IndexPosition, barred::Bool)
     S = idx.index_set
     cls = conj_class(S)
-    cls === :fixed && return (idx, pos, 1)
-    (ref, s) = _conj_rule(S, barred)
+    # The default is 1, so a spacetime index is unaffected, while a Majorana set declaring (upper, -1) makes psi_a imaginary.
+    # The barred flip belongs to the quaternionic case alone. It exists because θ and θ̄ carry their
+    # SU(2) index on opposite levels, which is the same fact as the position flipping. Gor a complex
+    # index the position is preserved and ψ and ψ̄ sit at the same level, so flipping the reference
+    # would make the two applications asymmetric and conj∘conj would return -1 rather than the
+    # identity.
+    (ref, s) = _conj_rule(S, barred && cls === :quaternionic)
     sgn = pos == ref ? 1 : s
+    cls === :fixed   && return (idx, pos, sgn)
     cls === :complex && return (_conj_partner(idx), pos, sgn)
     return (idx, _flip(pos), sgn)
 end
@@ -356,18 +390,22 @@ Reproduces the 4D 𝒩=2 reality conditions exactly:
     (θ̄_α̇^i)*     = θ_{αi}         barred, at ITS reference  -> +
     (θ̄_{α̇i})*    = -θ^i_α        barred, displaced         -> -
 """
-function _conj_leaf(T::TensorSuperType)
+function _conj_leaf(T::TensorSuperType, bar::Bool)
     barred = isbarred(name(T))
     sgn = 1
+    moved = false
     inds = IndexPair[]
     for (idx, pos) in indices(T)
         (ni, np, s) = _conj_slot(idx, pos, barred)
         sgn *= s
+        (ni === idx && np == pos) || (moved = true)
         push!(inds, ni => np)
     end
+    # nothing to rebuild: no slot moved, no sign, and the name stays put
+    (!bar && !moved && sgn == 1) && return T
     nT = copy(T)
-    set_name!(nT, togglebar(name(T)))
-    isempty(inds) || set_indices!(nT, inds)
+    bar && set_name!(nT, togglebar(name(T)))
+    (moved && !isempty(inds)) && set_indices!(nT, inds)
     return sgn == 1 ? nT : -1 * nT
 end
 

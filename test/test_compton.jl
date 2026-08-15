@@ -55,7 +55,7 @@ of the Redberry paper (arXiv:1302.1219, Sec. 1.2).   γ(k₁)φ(k₃) → γ(k�
     @test squared !== nothing                       # fully reduced to a scalar
     @test iszerosym(onshell(squared) - 8 * e^4)     # |M|² = 8e⁴, a constant
 
-    # gauge invariance: k₁_i M^ij = 0 and M^ij k₂_j = 0. The sharpest check on the amplitude --
+    # gauge invariance: k₁_i M^ij = 0 and M^ij k₂_j = 0. The sharpest check on the amplitude
     # each diagram violates it alone, and only the seagull's normalisation restores it.
     ward = true
     for n in 1:3                                    # k₁,k₂,k₃ span the momenta appearing in M

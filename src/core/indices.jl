@@ -30,12 +30,15 @@ mutable struct IndexSet
       conjugate=nothing
       algebra=nothing
       islightcone=(name=="lightcone" ? true : false)
+      # An algebra names an invariant form, but only as a default. User metric overrides
+      user_metric = false
 
       for arg in args
          if arg isa Int
             range = arg
          elseif arg isa Type{<:MetricSuperType}
             metric_type = arg
+            user_metric = true
          elseif arg isa Tuple{Int64,Int64}
             signature = arg
          elseif arg isa Vector{Int64}
@@ -51,8 +54,8 @@ mutable struct IndexSet
          elseif arg isa Nothing
             nothing
          elseif arg isa LieAlgebraSuperType
-            metric_type=metric(arg)
             algebra=arg
+            user_metric || (metric_type=metric(arg))
             range=dimension(arg)
          elseif arg isa Bool
             islightcone=arg
@@ -398,6 +401,17 @@ end
 #         $(esc(tuple)) = Index($chars, $(esc(rhs)))
 #     end
 # end
+"""
+    @indices a:f ∈ set
+    @indices αdot:γdot ∈ set
+
+Declare a range of indices in `set` and bind each to a variable of the same name.
+
+A decoration is written as an ASCII suffix `dot`, `bar`, `hat` or `tilde` on both endpoints.
+The variables keep the suffixed spelling, so `@indices αdot:γdot ∈ spinordot` binds `αdot`, `βdot`
+and `γdot`, while the indices themselves are named `̇α`, `̇β` and `̇γ` in the mark-first form the rest
+of the package uses, so they match what `dotted` and the decorated alphabets produce.
+"""
 macro indices(ex)
     @assert ex.head == :call
     @assert ex.args[1] == :∈
@@ -407,15 +421,19 @@ macro indices(ex)
     @assert lhs.head == :call
     @assert lhs.args[1] == :(:)
 
-    first = only(String(lhs.args[2]))
-    last  = only(String(lhs.args[3]))
+    (mk1, suf1, first) = _split_index_suffix(String(lhs.args[2]))
+    (mk2, suf2, last)  = _split_index_suffix(String(lhs.args[3]))
+    mk1 === mk2 || error("@indices endpoints must carry the same decoration, got " *
+                         "\"$(lhs.args[2])\" and \"$(lhs.args[3])\"")
 
     chars = collect(first:last)
-    vars  = Symbol.(chars)
+    # stored name is mark-first; the variable keeps the spelling the user typed
+    names = [mk1 === nothing ? string(c) : string(mk1) * string(c) for c in chars]
+    vars  = [Symbol(string(c) * suf1) for c in chars]
     tuple = Expr(:tuple, vars...)
 
     quote
-        $(esc(tuple)) = Index($chars, $(esc(rhs)))
+        $(esc(tuple)) = Index($names, $(esc(rhs)))
     end
 end
 
@@ -456,6 +474,31 @@ dotted(c::Char) = string(COMBINING_DOT) * string(c)
 barred(c::Char) = string(COMBINING_MACRON) * string(c)
 hatted(c::Char) = string(COMBINING_HAT) * string(c)
 tilded(c::Char) = string(COMBINING_TILDE) * string(c)
+
+"""
+Decorations a range endpoint may name, spelled as an ASCII suffix.
+
+Written as a suffix rather than as the mark itself because the mark cannot be typed into an
+identifier.
+"""
+const INDEX_SUFFIXES = (("dot", COMBINING_DOT), ("bar", COMBINING_MACRON),
+                        ("hat", COMBINING_HAT), ("tilde", COMBINING_TILDE))
+
+"""
+    _split_index_suffix(s) -> (mark, suffix, base)
+
+Split a range endpoint into its decoration and the single character it decorates. `("αdot")` gives
+`(COMBINING_DOT, "dot", 'α')`; an undecorated endpoint gives `(nothing, "", c)`.
+"""
+function _split_index_suffix(s::AbstractString)
+    for (suf, mk) in INDEX_SUFFIXES
+        if endswith(s, suf) && length(s) > length(suf)
+            return (mk, suf, only(chop(s, tail=length(suf))))
+        end
+    end
+    return (nothing, "", only(s))
+end
+
 
 
 const LATIN_LOWER = [string(c) for c in 'a':'z']
