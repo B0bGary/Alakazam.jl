@@ -30,6 +30,7 @@ if true
         "test_n02.jl",
         "test_forms.jl",
         "test_exterior.jl",
+        "test_latex.jl",
         "test_compton.jl",
     ]
     _TESTDIR = mktempdir(cleanup=false)

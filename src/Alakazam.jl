@@ -50,7 +50,7 @@ export to_latex
 export TensorData, TensorDataSuperType, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
 export SymmetricTensor, AntisymmetricTensor, RiemannTensor
 export Boson, Fermion
-export @Tensor, @T_str
+export @Tensor, @T_str, @LT_str, parse_latex
 
 ##########################
 #all supertypes
@@ -239,6 +239,7 @@ include("commutation/matrices.jl")
 include("commutation/commutators.jl")
 include("tensors/tensor_props.jl")
 include("tensors/tensor_ops.jl")
+include("tensors/latex_parse.jl")
 include("diffgeo/forms.jl")
 include("operators/operator_ops.jl")
 include("operators/derivative.jl")

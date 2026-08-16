@@ -55,7 +55,8 @@ function Base.hash(d::TensorSuperType, h::UInt)::UInt
     return hash(x, h)
 end
 # add single term check to make things less expensive
-==(a::TensorExpression, b::TensorTerm) = singleterm(a) && first_coef(a) == 1 && (first_summand(a) == b)
+# isequal, not ==
+==(a::TensorExpression, b::TensorTerm) = singleterm(a) && isequal(first_coef(a), 1) && (first_summand(a) == b)
 ==(a::TensorTerm, b::TensorExpression) = b == a
 ==(a::TensorSuperType, b::TensorExpression) = b == a
 function ==(a::TensorExpression, b::TensorSuperType)

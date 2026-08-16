@@ -97,4 +97,18 @@
     @test_throws ErrorException T"A_{a}"                   # a is an Index, not a Coordinate
     @test_throws ErrorException T"A_{qqqq}"                # no such variable at all
 
+    ###############################################
+    ### | bars hold slots out of the group being accumulated
+    ###############################################
+    # The bracket spans three slots but only two join the group, so the tableau must be built
+    # from what was accumulated rather than from the span. Both bracket kinds count alike.
+    @test length(collect(tableaux(T"A_[a|b|c]"))[1].index_assignment) == 2
+    @test collect(tableaux(T"A_[a|b|c]"))[1].index_assignment ==
+          collect(tableaux(T"A_(a|b|c)"))[1].index_assignment
+    # antisymmetric over slots 1 and 3, with slot 2 held out
+    @test isZeroTens(simplify(T"A_[a|b|c]" + T"A_[c|b|a]"))
+    # and an unpaused group is unaffected
+    @test isZeroTens(simplify(T"A_[ab]" + T"A_[ba]"))
+    @test length(collect(tableaux(T"A_[abc]"))[1].index_assignment) == 3
+
 end

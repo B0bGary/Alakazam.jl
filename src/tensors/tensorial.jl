@@ -709,9 +709,12 @@ function _parse_tensor_string(expr::String)
             tabstart = slotnum + 1
         elseif char == "]"
             asym = false
+            # one box per slot that was actually accumulated, not per slot inside the bracket:
+            # `|` bars hold slots out of the group, so counting the span would promise the
+            # tableau more entries than tabaccum carries. The `)` branch below counts the same way.
             push!(
                 tableaulist,
-                YoungTableau(fill(1, slotnum - tabstart + 1), tabaccum)
+                YoungTableau(fill(1, length(tabaccum)), tabaccum)
             )
         elseif char == "("
             tabaccum = Vector{Int64}()
