@@ -111,4 +111,62 @@
     @test isZeroTens(simplify(T"A_[ab]" + T"A_[ba]"))
     @test length(collect(tableaux(T"A_[abc]"))[1].index_assignment) == 3
 
+    ###############################################
+    ### a NAME may carry the same ASCII decorations an index may
+    ###############################################
+    # The mark leads, which is the form conjugation and to_latex already use, so a name written
+    # with a suffix and a name produced by conjugating are the same object.
+    let BAR = string(Alakazam.COMBINING_MACRON), DOT = string(Alakazam.COMBINING_DOT),
+        HAT = string(Alakazam.COMBINING_HAT), TIL = string(Alakazam.COMBINING_TILDE)
+
+        @test name(T"Abar_a") == BAR * "A"
+        @test name(T"Adot_a") == DOT * "A"
+        @test name(T"Ahat_a") == HAT * "A"
+        # tilde was in INDEX_SUFFIXES but missing from the tensor-string table, so it used to be
+        # read as part of a label rather than as a decoration
+        @test name(T"Atilde_a") == TIL * "A"
+
+        # a decorated name and a decorated index together, which is the spinor case
+        let t = T"Abar_?xdot"
+            @test name(t) == BAR * "A"
+            @test first(indices(t))[1].name == DOT * "x"
+        end
+
+        # a decorated name with nothing after it is still a tensor
+        @test name(T"Abar") == BAR * "A"
+        @test isempty(indices(T"Abar"))
+
+        # the wildcard marker stays outside the mark
+        @test name(T"?Abar_a") == "?" * BAR * "A"
+
+        # and an undecorated name is untouched
+        @test name(T"A_a") == "A"
+        @test first(indices(T"Abar^a"))[2] == upper
+    end
+
+    ###############################################
+    ### @Tensor A_bc takes the suffixes too
+    ###############################################
+    # This form BINDS a variable named after the tensor, and a decorated name is not a valid
+    # identifier, so the binding keeps the spelling typed while the tensor carries the mark.
+    let BAR = string(Alakazam.COMBINING_MACRON), DOT = string(Alakazam.COMBINING_DOT)
+        @Tensor Wbar_ab
+        @test name(Wbar) == BAR * "W"
+        @test [i[1].name for i in indices(Wbar)] == ["a", "b"]
+
+        # a decorated index: the token is looked up as the variable the caller declared
+        @Tensor V_αdot
+        @test first(indices(V))[1].name == DOT * "α"
+
+        # a name with no indices at all
+        @Tensor Ubar
+        @test name(Ubar) == BAR * "U"
+        @test isempty(indices(Ubar))
+
+        # and the undecorated form is unchanged
+        @Tensor Q_ab
+        @test name(Q) == "Q"
+        @test [i[1].name for i in indices(Q)] == ["a", "b"]
+    end
+
 end

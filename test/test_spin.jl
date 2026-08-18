@@ -55,7 +55,7 @@
     @testset "conjugation class follows from the algebra" begin
         clear_global!()
         # 2+1D Majorana: self-conjugate and real, the case the metric alone gets wrong. An
-        # antisymmetric form makes the metric route say quaternionic; the algebra says real.
+        # the algebra says real, and now so would the default
         maj = IndexSet("majorana",lower, fermionic, Spin(2, 1))
         maj.conjugate = maj
         @test Alakazam.conj_class(maj) === :fixed
@@ -107,6 +107,31 @@
         for d in 2:11
             @test division_algebra(Spin(1, d - 1)) === division_algebra(Spin(d - 1, 1))
         end
+    end
+
+    @testset "what the caller states outright beats what the algebra implies" begin
+        # An algebra supplies a metric, a dimension and, for spinors, a grading. Each is only a
+        # default: without this the value asked for is silently discarded. The defaults are applied
+        # after the arguments are read, so the order they were written in cannot matter either.
+        clear_global!()
+        # range
+        @test IndexSet("ur_a", 4, lower, EpsilonTensor, fermionic, Spin(4)).range == 4
+        @test IndexSet("ur_b", lower, EpsilonTensor, fermionic, Spin(4), 4).range == 4
+        @test IndexSet("ur_c", lower, EpsilonTensor, fermionic, Spin(4)).range == 2
+        @test IndexSet("ur_d", lower, fermionic, Spin(11)).range == 32
+        # metric
+        @test IndexSet("ur_e", lower, EpsilonTensor, fermionic, Spin(6)).metric_type == EpsilonTensor
+        @test IndexSet("ur_f", lower, Spin(6), EpsilonTensor).metric_type == EpsilonTensor
+        @test IndexSet("ur_g", lower, Spin(6)).metric_type == SymplecticForm
+        # grading: a spinor index anticommutes unless told otherwise
+        @test IndexSet("ur_h", upper, Spin(4)).grading == 1
+        @test IndexSet("ur_i", upper, bosonic, Spin(4)).grading == 0
+        @test IndexSet("ur_j", upper, Spin(4), bosonic).grading == 0
+        # and only the spin algebras have an opinion about it
+        @test IndexSet("ur_k", lower, SUAlgebra(2)).grading == 0
+        @test IndexSet("ur_l", lower, SOAlgebra(4)).grading == 0
+        @test Alakazam.default_grading(SUAlgebra(2)) === nothing
+        @test Alakazam.default_grading(Spin(4)) === fermionic
     end
 
 end

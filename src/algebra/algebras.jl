@@ -137,22 +137,28 @@ signature(::SpinAlgebra{P,Q}) where {P,Q} = (P, Q)
 """
 Invariant form, but only where naming one is safe.
 """
-metric(a::SpinAlgebra) = a.N == 2 ? EpsilonTensor : nothing
+function metric(a::SpinAlgebra)
+
+    a.N == 2 && return EpsilonTensor
+    # A quaternionic representation carries an antisymmetric invariant form
+    division_algebra(a) === ℍ && return SymplecticForm
+    return nothing
+end
 Base.show(io::IO, ::SpinAlgebra{P,Q}) where {P,Q} = print(io, "spin(", P, ",", Q, ")")
 
 """
 Reality of the minimal chiral spinor.
 
-`Spin(p,q)` sits inside the even subalgebra `Cl⁰(p,q) ≅ Cl(p, q-1)`, whose type is fixed by
+`Spin(p,q)` sits inside the even subalgebra `Cl0(p,q) = Cl(p, q-1)`, whose type is fixed by
 `(p - q + 1) mod 8`.
 
-Checked against the standard Lorentzian table for `d = 2..11`: ℝ at 3, 9, 11 for Majorana and ℍ at
+Checked against the standard Lorentzian table for `d = 2..11`: R at 3, 9, 11 for Majorana and H at
 5, 7 for symplectic Majorana in odd dimensions, and in even dimensions the type predicts
 Majorana-Weyl exactly.
 
 What it does not report is whether a Majorana condition exists, which is a question about the full
-`Cl(p,q)` and is genuinely convention-dependent. Working in a Majorana basis means declaring a 
-self-conjugate index set directly.
+`Cl(p,q)`. A Majorana spinor is declared as a self-conjugate index set, which is real unless an
+algebra says otherwise.
 """
 function division_algebra(::SpinAlgebra{P,Q}) where {P,Q}
     m = mod(P - Q + 1, 8)
@@ -208,7 +214,4 @@ _real_dim(::Type{QuaternionNumberSet}) = 4
 _real_dim(::Type{OctonionNumberSet}) = 8
 _real_dim(::Nothing) = nothing
 
-
-# so(d::Integer, field::NumberSet) = SOAlgebra(d, field)
-# su(d::Integer, field::NumberSet) = SUAlgebra(d, field)
 

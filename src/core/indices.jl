@@ -9,6 +9,14 @@ end
 const bosonic=IndexGrading(0)
 const fermionic=IndexGrading(1)
 
+"""
+    default_grading(algebra) -> IndexGrading | Nothing
+
+The statistics an algebra implies for indices carrying it, or `nothing` where it implies none.
+"""
+default_grading(::LieAlgebraSuperType) = nothing
+default_grading(::SpinAlgebra) = fermionic
+
 
 mutable struct IndexSet
    name::String
@@ -30,15 +38,16 @@ mutable struct IndexSet
       conjugate=nothing
       algebra=nothing
       islightcone=(name=="lightcone" ? true : false)
-      # An algebra names an invariant form, but only as a default. User metric overrides
-      user_metric = false
+      # An algebra names an invariant form, a dimension and, for spinors, a grading as a default. 
+      given = Symbol[]
 
       for arg in args
          if arg isa Int
             range = arg
+            push!(given, :range)
          elseif arg isa Type{<:MetricSuperType}
             metric_type = arg
-            user_metric = true
+            push!(given, :metric_type)
          elseif arg isa Tuple{Int64,Int64}
             signature = arg
          elseif arg isa Vector{Int64}
@@ -51,18 +60,28 @@ mutable struct IndexSet
             default_position = arg
          elseif arg isa IndexGrading
             grading=arg.grading
+            push!(given, :grading)
          elseif arg isa Nothing
             nothing
          elseif arg isa LieAlgebraSuperType
             algebra=arg
-            user_metric || (metric_type=metric(arg))
-            range=dimension(arg)
          elseif arg isa Bool
             islightcone=arg
          else
             error("Unexpected argument: $arg")
          end
       end
+      # Defaults from the algebra, applied after the loop so that the order the arguments were
+      # written in cannot matter.
+      if algebra !== nothing
+         (:metric_type in given) || (metric_type = metric(algebra))
+         (:range in given)       || (range = dimension(algebra))
+         if !(:grading in given)
+            g = default_grading(algebra)
+            g === nothing || (grading = g.grading)
+         end
+      end
+
       metric_type == MetricSuperType && error("Explicit metric subtype of MetricSuperType must be specified")
       if signature isa Nothing
          if metric_type!==nothing && metric_type <: SymMetricSuperType
@@ -179,6 +198,65 @@ const upper = IndexPosition(0)
 const lower = IndexPosition(1)
 const ↑ = upper
 const ↓ = lower
+
+#############################################################################
+# Declaring which index sets conjugate into which
+#############################################################################
+
+"""
+    conjugates!(a::IndexSet, b::IndexSet) -> a
+    conjugates!(a::IndexSet)              -> a
+
+Declare how an index set behaves under conjugation, by pointing it at the set its indices land in.
+"""
+function conjugates!(a::IndexSet, b::IndexSet)
+    a.range == b.range || error(
+        "index sets \"$(a.name)\" and \"$(b.name)\" cannot be conjugates: their ranges are " *
+        "$(a.range) and $(b.range), and a representation has the same dimension as its conjugate.")
+    a.grading == b.grading || error(
+        "index sets \"$(a.name)\" and \"$(b.name)\" cannot be conjugates: one is bosonic and the " *
+        "other fermionic, and conjugation does not change statistics.")
+    if a === b || a.name == b.name
+        return conjugates!(a)
+    end
+    a.conjugate = b
+    b.conjugate = a
+    return a
+end
+
+function conjugates!(a::IndexSet)
+    old = a.conjugate
+    a.conjugate = a
+    # A self-conjugate set is real or quaternionic
+    try
+        conj_class(a)
+    catch
+        a.conjugate = old
+        rethrow()
+    end
+    return a
+end
+
+"""
+    @conjugates a b
+    @conjugates a
+
+Declare conjugation between index sets, forwarding to [`conjugates!`](@ref).
+
+    @conjugates spinor spinordot     # a complex pair: each conjugates into the other
+    @conjugates majorana             # self-conjugate: real, or quaternionic
+"""
+macro conjugates(args...)
+    # `@conjugates a, b` arrives as a single tuple expression rather than as two arguments
+    if length(args) == 1 && args[1] isa Expr && args[1].head === :tuple
+        args = Tuple(args[1].args)
+    end
+    length(args) in (1, 2) || error(
+        "@conjugates takes one index set, making it self-conjugate, or two, making them each " *
+        "other's conjugate; got $(length(args)).")
+    return esc(:($(conjugates!)($(args...))))
+end
+
 const SET_REGISTRY=Dict{String,IndexSet}()
 const COORD_REGISTRY=Dict{String,Coordinate}()
 const IndexTypes = Union{Index,DummyPatternIndex}
@@ -667,3 +745,12 @@ function generate_indices(I::IndexSet)
    #every caller does `nid === nothing && throw(OutOfIndices(...))`
    nothing
 end
+
+"""
+    division_algebra(S::IndexSet) -> Type{<:NumberSet} | Nothing
+
+The endomorphism algebra of what the index set carries, taken from its algebra, or `nothing`
+when it declares none.
+"""
+division_algebra(S::IndexSet) =
+    S.algebra === nothing ? nothing : division_algebra(S.algebra)

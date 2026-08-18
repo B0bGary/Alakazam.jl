@@ -268,24 +268,22 @@ function conj_class(S)
     c = S.conjugate
     c === nothing && return :fixed
     (c === S || c.name == S.name) || return :complex
-    # Frobenius-Schur classifies by the endomorphism algebra from `division_algebra`. The metric cannot generically distinguish eg su(2) and sl(2,R)
-    # both carry an antisymmetric epsilon, and are quaternionic and real respectively.
-    if S.algebra !== nothing
-        d = division_algebra(S.algebra)
+    # Frobenius-Schur classifies by the endomorphism algebra, which `division_algebra` reads off
+    # the set's algebra, or reports as nothing when it declares none.
+    d = division_algebra(S)
+    if d !== nothing
         d === ℍ && return :quaternionic
         d === ℝ && return :fixed
-        # Only reachable with the set naming itself as its own conjugate, which a complex representation cannot be
-        d === ℂ && error("index set $(S.name) carries an algebra whose defining representation " *
-                         "is complex, so its conjugate is a different representation, but the " *
-                         "set names itself as its own conjugate; declare the partner set and " *
-                         "point the two at each other")
-        # 𝕆 has no endomorphism algebra among the three: fall through to the metric
+        d === ℂ && error("index set $(S.name) carries an algebra whose defining representation "*
+                         "is complex, so its conjugate is a different representation, but the "*
+                         "set names itself as its own conjugate; declare the partner set and "*
+                         "point the two at each other. If a real form is meant, such as a "*
+                         "Majorana spinor in a dimension whose chiral spinor is complex, leave "*
+                         "the algebra off: a self-conjugate set is real by default.")
+        # O has no endomorphism algebra among the three: fall through
     end
-    mt = S.metric_type
-    mt === nothing && error("index set $(S.name) is self-conjugate but declares no metric, so " *
-                            "real and quaternionic cannot be told apart; declare its metric, " *
-                            "or its algebra")
-    return mt <: AntisymMetricSuperType ? :quaternionic : :fixed
+    # No algebra: a set that is its own conjugate is taken to be real.
+    return :fixed
 end
 
 _flip(p::IndexPosition) = IndexPosition(!p.position)

@@ -23,8 +23,9 @@ Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
         spinordot = IndexSet("spinordot", 2, lower, EpsilonTensor, fermionic)
         spinor.conjugate = spinordot
         spinordot.conjugate = spinor
-        # SU(2) is self-conjugate with an ANTISYMMETRIC form -> quaternionic, the case that signs
-        su2 = IndexSet("su2", 2, lower, EpsilonTensor)
+        # SU(2) is self-conjugate and quaternionic. That is carried by the ALGEBRA: an
+        # antisymmetric form alone does not imply it, so a set declaring only the form is real.
+        su2 = IndexSet("su2", 2, lower, EpsilonTensor, SUAlgebra{ℂ}(2))
         su2.conjugate = su2
         # spacetime is self-conjugate with a SYMMETRIC metric -> fixed
         spacetime = IndexSet("spacetime", 4, upper, Metric)
@@ -66,13 +67,16 @@ Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
         @test Alakazam.conj_class(spinordot) === :complex
         @test Alakazam.conj_class(su2) === :quaternionic
         @test Alakazam.conj_class(spacetime) === :fixed
-        # self-conjugate with no metric cannot be told apart from quaternionic, and must not be
-        # guessed.
-        # The constructor always supplies a metric, so the field is cleared directly
+        # A self-conjugate set with nothing else declared is real. The invariant form is not
+        # consulted at all: its symmetry does not determine the reality, so a set carrying an
+        # antisymmetric form but no algebra is real too, and quaternionic must be declared.
         bare = IndexSet("bare", 2, lower)
         bare.conjugate = bare
         bare.metric_type = nothing
-        @test_throws ErrorException Alakazam.conj_class(bare)
+        @test Alakazam.conj_class(bare) === :fixed
+        antisym_only = IndexSet("antisym_only", 4, lower, EpsilonTensor, fermionic)
+        antisym_only.conjugate = antisym_only
+        @test Alakazam.conj_class(antisym_only) === :fixed
     end
 
     @testset "number field decides whether conjugation acts" begin
@@ -290,7 +294,7 @@ Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
         wl  = IndexSet("mx_wl",  2, lower, EpsilonTensor, fermionic)     # :complex
         wld = IndexSet("mx_wld", 2, lower, EpsilonTensor, fermionic)
         wl.conjugate = wld; wld.conjugate = wl
-        su  = IndexSet("mx_su2", 2, lower, EpsilonTensor)                # :quaternionic
+        su  = IndexSet("mx_su2", 2, lower, EpsilonTensor, SUAlgebra{ℂ}(2))  # :quaternionic
         su.conjugate = su
         for (S, nm) in ((st,"a"), (mj,"α"), (wl,"α"), (su,"i"))
             Index(nm, S)
@@ -387,7 +391,7 @@ Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
         # Everything above is rank 1. With more than one slot the signs multiply, classes can mix
         # inside one tensor, and the field is decided by all the slots together.
         st  = IndexSet("mi_st", 4, upper, Metric);            a = Index("a", st)
-        su  = IndexSet("mi_su2", 2, lower, EpsilonTensor);    su.conjugate = su
+        su  = IndexSet("mi_su2", 2, lower, EpsilonTensor, SUAlgebra{ℂ}(2)); su.conjugate = su
         i, j = Index("i", su), Index("j", su)
         wl  = IndexSet("mi_wl",  2, lower, EpsilonTensor, fermionic)
         wld = IndexSet("mi_wld", 2, lower, EpsilonTensor, fermionic)
@@ -442,6 +446,59 @@ Alakazam.conj_convention(::Type{GatesC}, S::IndexSet) = (upper, -1)
                   Tensor("X", [m=>lower, m=>upper]))
             @test adjoint(adjoint(t)) == t
         end
+    end
+
+    @testset "@conjugates declares the pairing" begin
+        # two sets become each other's conjugate; one becomes its own. Both forms forward to
+        # conjugates!, so the function is equally usable where a macro would be awkward.
+        clear_global!()
+        w  = IndexSet("cw", upper, fermionic, Spin(4))
+        wb = IndexSet("cwbar", upper, fermionic, Spin(4))
+        @conjugates w wb
+        @test w.conjugate === wb
+        @test wb.conjugate === w
+        @test Alakazam.conj_class(w) === :complex
+
+        # a comma between them reads the same
+        a = IndexSet("ca", upper, fermionic, Spin(4))
+        b = IndexSet("cb", upper, fermionic, Spin(4))
+        @conjugates a, b
+        @test a.conjugate === b && b.conjugate === a
+
+        maj = IndexSet("cmaj", upper, fermionic, Spin(3))
+        @conjugates maj
+        @test maj.conjugate === maj
+        @test Alakazam.conj_class(maj) === :fixed
+
+        su2 = IndexSet("csu2", lower, SUAlgebra{ℂ}(2))
+        @conjugates su2
+        @test Alakazam.conj_class(su2) === :quaternionic
+
+        # naming one set twice is the self-conjugate case, not an error
+        m2 = IndexSet("cm2", upper, fermionic, Spin(3))
+        @conjugates m2 m2
+        @test m2.conjugate === m2
+
+        p = IndexSet("cp", upper, fermionic, Spin(4))
+        q = IndexSet("cq", upper, fermionic, Spin(4))
+        conjugates!(p, q)
+        @test p.conjugate === q
+    end
+
+    @testset "@conjugates refuses a pairing that cannot hold" begin
+        clear_global!()
+        # a representation and its conjugate share a dimension and their statistics
+        r4 = IndexSet("cr4", 4, lower, EpsilonTensor)
+        r2 = IndexSet("cr2", 2, lower, EpsilonTensor)
+        @test_throws ErrorException conjugates!(r4, r2)
+        f2 = IndexSet("cf2", 2, lower, EpsilonTensor, fermionic)
+        b2 = IndexSet("cb2", 2, lower, EpsilonTensor, bosonic)
+        @test_throws ErrorException conjugates!(f2, b2)
+
+        # a complex representation cannot be its own conjugate, and is caught at the declaration
+        cx = IndexSet("ccx", upper, fermionic, Spin(4))
+        @test_throws ErrorException conjugates!(cx)
+        @test cx.conjugate === nothing        # and the set is left as it was
     end
 
 end

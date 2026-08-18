@@ -26,6 +26,7 @@ import Symbolics: terms
 #basic objs
 ##########################
 export IndexSuperType, Index, IndexSet, IndexPosition, IndexGrading, DummyPatternIndex, Coordinate, @indices
+export IndexPair
 #index functions
 export get_index, det, in_default_pos, op_pos, dimension, safe_pop!
 export raise_all, lower_all, flip_all
@@ -50,7 +51,7 @@ export to_latex
 export TensorData, TensorDataSuperType, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
 export SymmetricTensor, AntisymmetricTensor, RiemannTensor
 export Boson, Fermion
-export @Tensor, @T_str, @LT_str, parse_latex
+export @Tensor, @T_str, @LT_str, parse_latex, @conjugates, conjugates!
 
 ##########################
 #all supertypes

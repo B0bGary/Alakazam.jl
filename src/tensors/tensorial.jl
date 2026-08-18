@@ -540,16 +540,67 @@ function parse_indices(head, indices, leaf)
     return indices
 end
 
+"""
+    _split_suffix(token) -> (mark, base)
+
+Peel an ASCII decoration off a token: `"Abar"` gives the macron and `"A"`. `nothing` when the token
+carries none. Longest suffix first, so one cannot shadow another.
+"""
+function _split_suffix(tok::AbstractString)
+    for suf in index_suffixes
+        if length(tok) > length(suf) && endswith(tok, suf)
+            return (_suffix_mark(suf), String(chop(tok, tail=length(suf))))
+        end
+    end
+    return (nothing, String(tok))
+end
+
+"""
+    _split_index_run(run) -> Vector{String}
+
+Cut a run of index characters into tokens, each one character with any decoration it carries, so
+`"adotb"` is `["adot", "b"]`. Each token is looked up as a variable, which is where the mark
+actually comes from: the caller wrote it when the index was declared.
+"""
+function _split_index_run(s::AbstractString)
+    toks = String[]
+    i = firstindex(s)
+    while i <= lastindex(s)
+        j = nextind(s, i)
+        tok = string(s[i])
+        if j <= lastindex(s)
+            for suf in index_suffixes
+                if startswith(SubString(s, j), suf)
+                    tok *= suf
+                    j += ncodeunits(suf)
+                    break
+                end
+            end
+        end
+        push!(toks, tok)
+        i = j
+    end
+    return toks
+end
+
 Base.@doc"Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
 macro Tensor(expr::Symbol)
-    length(string(expr)) == 1 && return Tensor(string(expr))
-    index_count = length(string(expr)) - 2
-    # split the symbol A_bc at the underscore
-    symbol, indices = split(string(expr), "_")
+    s = string(expr)
+    length(s) == 1 && return Tensor(s)
+
+    # The macro binds a variable named after the tensor, so the binding keeps the spelling that was
+    # typed: a decorated name is not a valid identifier, since an identifier cannot begin with a
+    # combining mark. `@Tensor Abar_b` therefore binds `Abar` to a tensor named with the mark.
+    namepart, indexrun = occursin("_", s) ? split(s, "_", limit=2) : (s, "")
+    mk, base = _split_suffix(namepart)
+    tname = mk === nothing ? String(namepart) : string(mk) * base
+    var = Symbol(namepart)
+
+    toks = _split_index_run(indexrun)
     return quote
-        $(esc(Symbol(symbol))) = Tensor(
-            $(string(symbol)),
-            [$([:($(esc(Symbol(index))) => lower) for index in indices]...)]
+        $(esc(var)) = Tensor(
+            $tname,
+            [$([:($(esc(Symbol(t))) => lower) for t in toks]...)]
         )
     end
 end
@@ -580,7 +631,10 @@ function _coord_arg(x, tok::AbstractString)
           "$(typeof(x)), not a Coordinate.")
 end
 
-const index_suffixes = ["dot", "hat", "bar"]
+"""Decorations spelled as an ASCII suffix, taken from [`INDEX_SUFFIXES`](@ref) so that the tensor
+strings, the `@indices` macro and the TeX reader all recognise the same set. Longest first, so that
+a suffix which is a prefix of another cannot shadow it."""
+const index_suffixes = sort!([suf for (suf, _) in INDEX_SUFFIXES], by=length, rev=true)
 function next_index(expr, i, comma_mode)
 
     if comma_mode
@@ -670,7 +724,24 @@ function _parse_tensor_string(expr::String)
     end
     symbol = expr[firstindex(expr):nameend]
 
-    # A tensor name is one character. Several objects of the same kind are told apart by labels `T"k_1^μ"` and `T"k_2^μ"`, not by longer names.
+    # A name may carry the same ASCII decorations an index may: `χbar` is the barred χ, written
+    # with the mark leading, which is the form conjugation and `to_latex` already use. 
+    let tail = nextind(expr, nameend)
+        if tail <= lastindex(expr)
+            for suf in index_suffixes
+                if startswith(SubString(expr, tail), suf)
+                    mk = _suffix_mark(suf)
+                    lead = count(==('?'), symbol)
+                    symbol = symbol[1:lead] * string(mk) * symbol[nextind(symbol, lead):end]
+                    nameend = tail + ncodeunits(suf) - 1
+                    break
+                end
+            end
+        end
+    end
+    # a decorated name with nothing after it is still a tensor: T"χbar"
+    nameend == lastindex(expr) && return :($(Tensor)($symbol))
+    # A tensor name is one character, decoration aside. Several objects of the same kind are told apart by labels `T"k_1^μ"` and `T"k_2^μ"`, not by longer names.
     @assert length(expr) > 1 && contains("_^([{?", expr[nextind(expr, nameend)]) "Tensor name should be one character."
 
     positions = []
@@ -835,8 +906,11 @@ macro Tensor_str(expr::String)
     return esc(:(@Tensor $expr))
 end
 
+"""The combining mark a suffix stands for."""
+_suffix_mark(suf::AbstractString) = first(mk for (s, mk) in INDEX_SUFFIXES if s == suf)
+
 """Combining mark written for each recognised index suffix, matching what `uni_to_TeX` decodes."""
-const _INDEX_SUFFIX_MARKS = ("dot" => '̇', "bar" => '̄', "hat" => '̂')
+const _INDEX_SUFFIX_MARKS = Tuple(suf => mk for (suf, mk) in INDEX_SUFFIXES)
 
 """
     apply_index_suffix(name) -> String
