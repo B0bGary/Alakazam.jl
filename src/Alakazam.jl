@@ -59,6 +59,7 @@ export @Tensor, @T_str, @LT_str, parse_latex, @conjugates, conjugates!
 export MetricSuperType, SymMetricSuperType, AntisymMetricSuperType, HermMetricSuperType
 export EpsilonTensorSuperType, KroneckerSuperType
 export MatrixSuperType, PauliSuperType, GammaSuperType, Gamma5SuperType
+export CliffordTensorSuperType, GammaTensorSuperType, PauliTensorSuperType
 export OperatorSuperType, LeibnizOperatorSuperType, DerivativeSuperType, PartialSuperType
 export CovDerivSuperType, VariationalSuperType, LieBracketSuperType
 export HomomorphismSuperType, AntimorphismSuperType, InvolutionSuperType
@@ -106,7 +107,8 @@ export young_projector_size, multiterm_reduce
 ##########################
 export Metric, KroneckerDelta, EpsilonTensor, Delta
 export is_riemann_metric
-export Mat, IdMatrix, Pauli, Gamma, Gamma5, spinor_dimension, spinor_indexset
+export Mat, IdMatrix, Spinor, Pauli, Gamma, Gamma5, spinor_dimension, spinor_indexset
+export GammaM, GammaT, PauliM, PauliT, clifford_rank
 export reduce_matrix, contract_sigma, @mrule, @matrix, has_commutation_rel
 export contract_adjacent#needed for macro
 
@@ -161,7 +163,7 @@ export EL, VariationalDerivative
 
 ##########################
 #superspace
-export Superspace, generate_grassmann_product, GrassmannStructure, independent_structures, explain_structure, render_expression, generate_independant_structure
+export Superspace, generate_grassmann_product, GrassmannStructure, independent_structures, explain_structure, render_expression, generate_independent_structure
 export generate_superfield, generate_superfield_naive, project_to_component, grassmann_coefficient
 export grassmann_order, drop_nilpotent
 

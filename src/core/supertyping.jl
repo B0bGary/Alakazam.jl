@@ -32,6 +32,10 @@ abstract type GammaSuperType <: MatrixSuperType end #new supertype for gamma mat
 abstract type Gamma5SuperType <: MatrixSuperType end #new supertype for gamma matrices, since they have special properties that we want to be able to check for in simplification rules
 
 abstract type DiracVectorSuperType <:MatrixSuperType end # bras and kets, don't want commute since inner prod and outer prod are different
+
+abstract type CliffordTensorSuperType <: TensorSuperType end
+abstract type GammaTensorSuperType <: CliffordTensorSuperType end
+abstract type PauliTensorSuperType <: TensorSuperType end
 abstract type BraSuperType <:DiracVectorSuperType end 
 abstract type KetSuperType <:DiracVectorSuperType end 
 

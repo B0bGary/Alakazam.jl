@@ -48,6 +48,12 @@ function _resolve_type_expr(ex)
     elseif ex isa Expr && ex.head === :curly
         base = _resolve_type_expr(ex.args[1])
         base{(_resolve_type_expr(a) for a in ex.args[2:end])...}
+    elseif ex isa Number || ex isa Bool || ex isa Char
+        # A VALUE type parameter, not a type: `SpinAlgebra{4,1}` carries its signature this way,
+        # as does `Array{Int,2}`. Parsing yields the literal itself, which is already the parameter.
+        ex
+    elseif ex isa QuoteNode
+        ex.value                      # a Symbol parameter, as in `Val{:x}`
     else
         error("Unsupported type expression: $ex")
     end
@@ -139,7 +145,10 @@ Includes coordinates, IndexSets, sort_order, and anything else defined by the us
 """
 get_header() = to_dict(global_values)
 get_header_json() = JSON.json(Dict("header"=>get_header()))
-save_header(filename::String) = write(filename*".json", get_header_json)
+# `get_header_json()`, not `get_header_json`: without the call this wrote the FUNCTION OBJECT and
+# raised `MethodError: no method matching write(::IOStream, ::typeof(get_header_json))`, so this
+# exported entry point could never have worked.
+save_header(filename::String) = write(filename*".json", get_header_json())
 
 
 ##########################################
@@ -155,10 +164,35 @@ function to_dict(x::Dict)
     Dict("type"=>string(typeof(x)), "value"=>Dict(k=>to_dict(v) for (k, v) in x))
 end
 
+"""
+Serialise one field of a struct.
+
+Identical to `to_dict` except for REFERENTIAL values. An `IndexSet` or `Coordinate` is a shared,
+registry-owned object: nesting a copy of it would both bloat the file and, worse, revive as a
+distinct object, so any comparison against the registered one fails. Storing a reference keeps
+identity intact.
+
+This is applied by every struct path rather than by hand-written cases per type, so a user who
+defines a type with a new field -- including one holding an index set -- is serialised correctly
+without teaching the serialiser anything.
+"""
+_ser_field(v::IndexSet)   = Dict("__ref__" => "IndexSet",   "name" => v.name)
+_ser_field(v::Coordinate) = Dict("__ref__" => "Coordinate", "name" => v.name)
+# Anything JSON represents natively is stored as itself. Wrapping a String as
+# {"type":"String","value":...} sends revival through `reconstruct(String, ...)`, which has no
+# method -- the wrapper is only useful for values whose type cannot be inferred from the JSON.
+_ser_field(v::Union{Number,AbstractString,Symbol,Bool,Char,Nothing}) = v
+_ser_field(v::Union{AbstractArray,Tuple}) = [_ser_field(e) for e in v]
+# A Type is stored as its name. Descending into one instead reaches Julia's own type internals
+# (`Core.TypeName` and friends), which are self-referential -- that recursion is unbounded and
+# overflows the stack. `from_field(::Val{:metric_type})` reads this back with `eval(Meta.parse(·))`.
+_ser_field(v::Type) = string(v)
+_ser_field(v) = to_dict(v)
+
 # only reached for actual structs with real fields
 function to_dict(x)
     Dict("type"=>string(typeof(x)),
-        (string(f)=>to_dict(getfield(x, f)) for f in fieldnames(typeof(x)))...)
+        (string(f)=>_ser_field(getfield(x, f)) for f in fieldnames(typeof(x)))...)
 end
 
 
@@ -171,11 +205,24 @@ to_dict(x::IndexSuperType) = Dict(
 
 """
 Skips storing the array of contained indices, otherwise there would be a loop.
+
+Two conjugate index sets likewise point at each other, so nesting the partner would recurse without
+end. The conjugate is therefore stored by NAME and relinked once every set exists -- the same
+treatment `to_dict(::Coordinate)` already gives the sets a coordinate belongs to.
 """
 to_dict(x::IndexSet) = Dict(
     "type" => string(typeof(x)),
     "indices" => [string(i) for i in x.indices],
-    (string(f) => getfield(x, f) for f in fieldnames(typeof(x)) if f != :indices)...
+    "conjugate" => (x.conjugate === nothing ? nothing : x.conjugate.name),
+    # via `to_dict`, not a raw `getfield`: an algebra is a struct, and storing it raw flattens it
+    # to its bare fields with the TYPE discarded, so it came back as an anonymous Dict that the
+    # IndexSet constructor rejected outright.
+    "algebra" => (x.algebra === nothing ? nothing : to_dict(x.algebra)),
+    # the remaining fields stay RAW: `IndexSet` has `from_field` handlers matched to those exact
+    # forms (metric_type as a type name, default_position, grading), and wrapping them here would
+    # hand those handlers a shape they do not expect.
+    (string(f) => getfield(x, f)
+     for f in fieldnames(typeof(x)) if f ∉ (:indices, :conjugate, :algebra))...
 )
 
 to_dict(x::Pair{I,IndexPosition}) where I<:IndexSuperType = Dict("index"=>to_dict(x[1]), "position"=>x[2].position)
@@ -258,8 +305,38 @@ end
 ########################################
 #basic tensors and TEXPs
 function to_dict(x::TensorSuperType)
-    return Dict("type" => string(typeof(x)), "data" => _flat_tensor_dict(x))
+    d = Dict("type" => string(typeof(x)), "data" => _flat_tensor_dict(x))
+    extra = _extra_fields(x)
+    isempty(extra) || (d["extra"] = extra)
+    return d
 end
+
+"""
+Fields a tensor type declares BEYOND the `data`/`indices` pair.
+
+The flat layout above carries only those two, because almost every tensor has exactly them and
+flattening keeps the common case cheap. A type with more -- `IdMatrix` records which space it is
+the identity on -- would otherwise have that field silently dropped, and since `IdMatrix` defines
+`==` and `hash` on it, two identities over different spaces would compare equal after a round trip.
+
+Collected generically rather than by writing a bespoke `to_dict` per type, so a new type with an
+extra field is handled without anyone remembering to teach the serialiser about it. The revival
+side reads them back through `from_field`, so a field can still opt into special treatment by
+defining a method there.
+"""
+function _extra_fields(x)
+    out = Dict{String,Any}()
+    for f in fieldnames(typeof(x))
+        (f === :data || f === :indices) && continue
+        out[string(f)] = _extra_value(getfield(x, f))
+    end
+    return out
+end
+
+# Referential values are stored by registry key, never nested: an IndexSet reached this way must
+# come back as THE registered set, not a copy, or identity comparisons against it fail.
+_extra_value(v::Nothing) = nothing
+_extra_value(v) = _ser_field(v)
 
 function to_dict(x::TensorTerm)
     return Dict("type"=>string(typeof(x)), "terms"=>[to_dict(term) for term in terms(x)])
@@ -380,6 +457,19 @@ function reconstruct_header(s, ::Val{:index_sets}, into::Module=Main)
             from_dict(data[key], into)
         end
     end
+    # second pass: every set now exists, so the conjugate names stored above can be resolved into
+    # the mutual references they stand for. Done here rather than in the constructor because the
+    # partner is generally not built yet at that point.
+    for key in keys(data)
+        entry = data[key]
+        haskey(entry, "conjugate") || continue
+        partner = from_json_value(entry["conjugate"], into)
+        partner === nothing && continue
+        (haskey(SET_REGISTRY, key) && haskey(SET_REGISTRY, partner)) || continue
+        a, b = SET_REGISTRY[key], SET_REGISTRY[partner]
+        a.conjugate === b && continue          # already linked from the partner's own entry
+        conjugates!(a, b)
+    end
 end
 function reconstruct_header(s, ::Val{:covariant_expansions}, into::Module=Main)
     data = s["value"]
@@ -429,7 +519,11 @@ function reconstruct_header(s, ::Val{:derivative_commutators}, into::Module=Main
     data = s["value"]
     for key in keys(data)
         keypair = Meta.parse(key) |> eval
-        if !(keypair in keys(commutators))
+        # `derivative_algebra`, not `commutators`: a CovariantCommutator is stored in the former,
+        # so guarding on the latter tested a dict this entry could never be in and the guard never
+        # fired. Harmless while re-adding overwrites with an identical value, but it meant the
+        # "already present" check did nothing at all.
+        if !(keypair in keys(derivative_algebra))
             comdat = data[key]
             reconcom = from_dict(comdat, into)
             add_commutator!(reconcom)
@@ -461,6 +555,13 @@ function from_dict(d::AbstractDict, into::Module=Main)
 end
 
 function from_json_value(x::AbstractDict, into::Module=Main)
+    # a reference resolves to the registered object, never to a rebuilt copy
+    if haskey(x, "__ref__")
+        r = x["__ref__"]
+        r == "IndexSet"   && return SET_REGISTRY[x["name"]]
+        r == "Coordinate" && return COORD_REGISTRY[x["name"]]
+        error("Unknown reference kind \"$r\" in serialised data")
+    end
     if haskey(x, "type")
         return from_dict(x, into)
     else
@@ -485,11 +586,40 @@ end
 function from_field(::Type{T}, ::Val{:metric_type}, v, into::Module=Main) where T
     return eval(Meta.parse(v))
 end
+"""
+Revive a grading as an `IndexGrading` rather than as the bare `Int` the field stores.
+
+`reconstruct(::Type{IndexSet}, ...)` feeds the field values positionally into `IndexSet(name,
+args...)`, but that constructor dispatches on the TYPE of each argument, not its position. A bare
+`Int` there matches the `range` branch, so a stored grading was being read as a dimension and the
+grading itself silently stayed at its default -- a fermionic set came back bosonic, which changes
+every Koszul sign computed from it.
+"""
+function from_field(::Type{IndexSet}, ::Val{:grading}, v, into::Module=Main)
+    g = from_json_value(v, into)
+    g isa IndexGrading && return g
+    return IndexGrading(g)
+end
+
+"""
+Deferred: the partner may not exist yet when this set is built, so the link is made in a second
+pass by `reconstruct_header(::Val{:index_sets})` once all of them are present.
+"""
+from_field(::Type{IndexSet}, ::Val{:conjugate}, v, into::Module=Main) = nothing
+
+"""Rebuild the algebra from its recorded type rather than the anonymous field dump."""
+function from_field(::Type{IndexSet}, ::Val{:algebra}, v, into::Module=Main)
+    v === nothing && return nothing
+    return from_dict(v, into)
+end
+
 function from_field(::Type{T}, ::Val{:default_position}, v, into::Module=Main) where T
     return (IndexPosition(v["position"]))
 end
 function from_field(::Type{T}, ::Val{:index_set}, v, into::Module=Main) where T
-    return SET_REGISTRY[v]
+    v === nothing && return nothing            # an optional space, e.g. an unattached IdMatrix
+    v isa AbstractString && return SET_REGISTRY[v]   # how an Index stores its set
+    return from_json_value(v, into)                  # a reference dict from `_ser_field`
 end
 
 """A `NumberSet` round-trips as its type name; rebuild the singleton from it."""
@@ -522,6 +652,10 @@ _as_labels(v::AbstractVector) = LabelPair[_as_label_pair(x) for x in v]
 _as_label_pair(x::Pair) = LabelPair(String(x[1]), _as_position(x[2]))
 _as_label_pair(x::AbstractDict) = LabelPair(String(x["first"]), _as_position(x["second"]))
 _as_position(p::IndexPosition) = p
+# An `IndexPosition` written raw serialises as an OBJECT, `{"position": true}`, not as the bare
+# boolean -- so a non-empty label list came back as a Dict here and `Bool(::Dict)` failed. Empty
+# lists never hit this, which is why it went unnoticed.
+_as_position(p::AbstractDict) = IndexPosition(Bool(p["position"]))
 _as_position(p) = IndexPosition(Bool(p))
 
 """Rebuild a `TensorData` alone - used for an operator's own data block, which has no indices."""
@@ -551,7 +685,12 @@ end
 
 """Tensors serialise as one "data" block; split it back into data and indices."""
 function reconstruct(T::Type{<:TensorSuperType}, d, into::Module=Main)
-    return T(_tensor_parts(d["data"], into)...)
+    parts = _tensor_parts(d["data"], into)
+    haskey(d, "extra") || return T(parts...)
+    # extras follow data/indices in declaration order, which is the order the constructors take
+    extras = Any[from_field(T, Val(f), d["extra"][string(f)], into)
+                 for f in fieldnames(T) if f !== :data && f !== :indices]
+    return T(parts..., extras...)
 end
 
 """

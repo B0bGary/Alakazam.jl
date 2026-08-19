@@ -9,7 +9,7 @@ mutable struct Mat <: MatrixSuperType
     indices::Vector{IndexPair}
     Mat(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Mat(name::String, args...)
-        return new(build_tensor(name, args...)...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
 end
 
@@ -19,7 +19,7 @@ mutable struct Spinor <: MatrixSuperType
     indices::Vector{IndexPair}
     Spinor(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Spinor(name::String, args...)
-        return new(build_tensor(name, args...)...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
 end
 grading(::Spinor)=1
@@ -59,22 +59,22 @@ _extra_identity(m::IdMatrix) = m.index_set === nothing ? nothing : m.index_set.n
 """Ket used in QM"""
 mutable struct Ket <: KetSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Ket(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Ket(name::String, args...)
-        return new(build_tensor(name, args...)...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
-    function Ket(d::TensorData)
-        return new(d)
-    end
+    Ket(d::TensorData) = new(d, IndexPair[])
 end
 """Bra used in QM"""
 mutable struct Bra <: BraSuperType
     data::TensorData
+    indices::Vector{IndexPair}
+    Bra(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Bra(name::String, args...)
-        return new(build_tensor(name, args...)...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
-    function Bra(d::TensorData)
-        return new(d)
-    end
+    Bra(d::TensorData) = new(d, IndexPair[])
 end
 
 function Base.show(io::IO, T::BraSuperType)
@@ -90,30 +90,134 @@ function show_factor(io::IO, T::KetSuperType, pos::Int64, TT::TensorTerm)
     print(io, after_bra ? "" : "|", tens2str(T), "⟩")
 end
 
-mutable struct Pauli <: PauliSuperType
+mutable struct PauliM <: PauliSuperType
     data::TensorData
     indices::Vector{IndexPair}
-    Pauli(d::TensorData, i::Vector{IndexPair}) = new(d, i)
-    function Pauli(name::String, args...)
-        return new(build_tensor(name, args...)...)
+    PauliM(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function PauliM(name::String, args...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
-    function Pauli(args...)
-        return new(build_tensor("σ", args...)...)
+    function PauliM(args...)
+        return new(build_tensor("σ", ℂ, args...)...)
     end
 
 end
 
-mutable struct Gamma <: GammaSuperType
+"""
+Rank of a Clifford basis element read straight off an index list: the number of spacetime vector
+indices.
+"""
+_clifford_rank_inds(i) =
+    count(p -> !_is_spinor_set(p[1]) && _is_spacetime_set(p[1].index_set), i)
+
+mutable struct GammaM <: GammaSuperType
     data::TensorData
     indices::Vector{IndexPair}
-    Gamma(d::TensorData, i::Vector{IndexPair}) = new(d, i)
-    function Gamma(name::String, args...)
-        return new(build_tensor(name, args...)...)
+    GammaM(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function GammaM(name::String, args...)
+        return new(build_tensor(name, ℂ, args...)...)
     end
-    function Gamma(args...)
-        return new(build_tensor("γ", args...)...)
+    function GammaM(args...)
+        return new(build_tensor("γ", ℂ, args...)...)
     end
+end
 
+# Component forms, these commute.
+mutable struct GammaT <: GammaTensorSuperType
+    data::TensorData
+    indices::Vector{IndexPair}
+    GammaT(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function GammaT(name::String, args...)
+        return new(build_tensor(name, ℂ, args...)...)
+    end
+    function GammaT(args...)
+        return new(build_tensor("γ", ℂ, args...)...)
+    end
+end
+
+mutable struct PauliT <: PauliTensorSuperType
+    data::TensorData
+    indices::Vector{IndexPair}
+    PauliT(d::TensorData, i::Vector{IndexPair}) = new(d, i)
+    function PauliT(name::String, args...)
+        return new(build_tensor(name, ℂ, args...)...)
+    end
+    function PauliT(args...)
+        return new(build_tensor("σ", ℂ, args...)...)
+    end
+end
+
+"""
+True when the indices span more than one index set.
+
+This is what separates the two forms. The matrix form carries only the vector indices it is
+named for, with the spinor indices implicit in the matrix product. The component form carries
+spinor indices explicitly, and those necessarily belong to a different set.
+"""
+function _is_component_form(t)
+    inds = indices(t)
+    length(inds) < 2 && return false
+    s = inds[1][1].index_set
+    return any(p -> p[1].index_set !== s, inds)
+end
+
+"""
+True when an index set carries spinors rather than spacetime vectors.
+"""
+function _is_spinor_set(S::IndexSet)
+    S.metric_type !== nothing && S.metric_type <: AntisymMetricSuperType && return true
+    return S.grading == fermionic.grading  
+end
+_is_spinor_set(idx) = _is_spinor_set(idx.index_set)
+
+"""
+    clifford_rank(t)
+
+Rank of a Clifford basis element: the number of spacetime vector indices it carries, so 1 for
+γ^{a}, 2 for γ^{ab} or Σ_{ab}, and d for the top form.
+"""
+clifford_rank(t) = _clifford_rank_inds(indices(t))
+
+"""
+Spacetime sets are those carrying a symmetric metric, which is what distinguishes them from
+internal ones such as an SU(2) R-symmetry set. A set with no declared metric is taken to be
+spacetime, since that is the common case for a plain vector index.
+"""
+function _is_spacetime_set(S::IndexSet)
+    S.metric_type === nothing && return true
+    return S.metric_type <: SymMetricSuperType
+end
+
+"""
+    Gamma(args...)
+
+Gamma matrices. Returns the matrix form `GammaM` when the indices lie in a single set, and the
+component form `GammaT` when spinor indices are given explicitly.
+"""
+Gamma(d::TensorData, i::Vector{IndexPair}) = GammaM(d, i)
+function Gamma(name::String, args...)
+    t = GammaM(name, args...)
+    return _is_component_form(t) ? GammaT(data(t), indices(t)) : t
+end
+function Gamma(args...)
+    t = GammaM(args...)
+    return _is_component_form(t) ? GammaT(data(t), indices(t)) : t
+end
+
+"""
+    Pauli(args...)
+
+As `Gamma`, for the Pauli matrices. The component form (σ^{μ})_{α α̇} carries one undotted and
+one dotted spinor index, which live in different sets again, so the same test selects it.
+"""
+Pauli(d::TensorData, i::Vector{IndexPair}) = PauliM(d, i)
+function Pauli(name::String, args...)
+    t = PauliM(name, args...)
+    return _is_component_form(t) ? PauliT(data(t), indices(t)) : t
+end
+function Pauli(args...)
+    t = PauliM(args...)
+    return _is_component_form(t) ? PauliT(data(t), indices(t)) : t
 end
 
 mutable struct Gamma5 <: Gamma5SuperType
@@ -121,10 +225,10 @@ mutable struct Gamma5 <: Gamma5SuperType
     indices::Vector{IndexPair}
     Gamma5(d::TensorData, i::Vector{IndexPair}) = new(d, i)
     function Gamma5(name::String, args...)
-        return new(build_tensor(name, "5" => upper, args...)...)
+        return new(build_tensor(name, ℂ, "5" => upper, args...)...)
     end
     function Gamma5(args...)
-        return new(build_tensor("γ5", "5" => upper, args...)...)
+        return new(build_tensor("γ5", ℂ, "5" => upper, args...)...)
     end
 
 end
@@ -240,6 +344,12 @@ function reduce_matrix(σ1::PauliSuperType, σ2::PauliSuperType, tterm::TensorTe
         return (false,  zero())
     end
 end
+
+"""
+Accept the entry points `Gamma` and `Pauli` where a type is expected.
+"""
+contract_adjacent(To::Tensorial, ::typeof(Gamma)) = contract_adjacent(To, GammaSuperType)
+contract_adjacent(To::Tensorial, ::typeof(Pauli)) = contract_adjacent(To, PauliSuperType)
 
 """
 Moves matrices of the given type to be adjacent, then contracts them when possible

@@ -223,6 +223,24 @@ function _dagger(T::EpsilonTensorSuperType)
 end
 
 """
+Bras and kets exchange under the dagger: `⟨ψ|' = |ψ⟩` and `|ψ⟩' = ⟨ψ|`.
+A bra is the adjoint of its ket, so the dagger has to return the other type.
+The name is carried across unchanged.
+"""
+function _dagger(T::Union{BraSuperType,KetSuperType})
+    # indices are conjugated exactly as for any other tensor (for now), then the type flips
+    sgn = 1
+    inds = IndexPair[]
+    for (idx, pos) in indices(T)
+        (ni, np, s) = _conj_slot(idx, pos, false)
+        sgn *= s
+        push!(inds, ni => np)
+    end
+    flipped = T isa BraSuperType ? Ket(data(T), inds) : Bra(data(T), inds)
+    return sgn == 1 ? flipped : sgn * flipped
+end
+
+"""
 Kronecker delta. `(δ_α^β)* = δ_α̇^β̇` keeps its positions; `(δ_i^j)* = δ_j^i` is the same object with
 its slots read the other way round, which flipping both positions reproduces. No sign either way.
 """

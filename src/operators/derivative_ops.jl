@@ -274,8 +274,7 @@ mutable struct CovariantCommutator
     C::TensorExpression
 end
 
-# #unused...
-derivative_algebra = Dict{Tuple{String,String},CovariantCommutator}() #integer is 1 for comm, -1 for anticommut, expression is the result of the commutator/anticommutator (eg for fermionic derivatives)
+derivative_algebra = Dict{Tuple{CommutatorKey,CommutatorKey},CovariantCommutator}() #integer is 1 for comm, -1 for anticommut, expression is the result of the commutator/anticommutator (eg for fermionic derivatives)
 
 # ==(C1::Commutator,C2::Commutator)= f1==f2 for fields in C1,C2
 ==(a::CovariantCommutator, b::CovariantCommutator) = begin
@@ -292,22 +291,21 @@ function add_commutator!(grading::Integer, A::DerivativeSuperType, B::Derivative
     if free_indices(A * B) != free_indices(C) && !isZeroTens(C)
         throw(InvalidCommutatorDefinition(A, B, C))
     end
-    derivative_algebra[minmax(name(A), name(B))] = CovariantCommutator(grading, A, B, C)
+    derivative_algebra[minmax(_ckey(A), _ckey(B))] = CovariantCommutator(grading, A, B, C)
 end
 add_commutator!(grading::Integer, A::DerivativeSuperType, B::DerivativeSuperType, C::Int64) = add_commutator!(grading, A, B, TensorExpression(C))
 function add_commutator!(va::CovariantCommutator)
-    k=minmax(name(va.A), name(va.B))
+    k=minmax(_ckey(va.A), _ckey(va.B))
     derivative_algebra[k]=va
 end
 
 function get_commutator(A::DerivativeSuperType, B::DerivativeSuperType)
-    key=minmax(name(A), name(B))
+    key=minmax(_ckey(A), _ckey(B))
     if haskey(derivative_algebra, key)
         comrel=derivative_algebra[key]
         dictout=Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
         sign=1
-        #check which order the rel corresponds to
-        if name(comrel.A)==name(A)
+        if _ckey(comrel.A)==_ckey(A)
             merge!(dictout, get_pattern(comrel.A, A))
             merge!(dictout, get_pattern(comrel.B, B))
         else

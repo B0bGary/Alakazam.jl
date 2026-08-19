@@ -884,6 +884,23 @@ function reduce_epsilon(tens::EpsilonTensorSuperType, metric::EpsilonTensorSuper
     n = length(inds_m)
     n != length(inds_t) && return (false, 1, 1)
     inds_t[1][1].index_set != inds_m[1][1].index_set && return (false, 1, 1)
+   
+    if n != inds_m[1][1].index_set.range
+        n == 2 || return (false, 1, 1)      # higher-rank non-volume forms: leave alone
+        slot_t = findfirst(r -> any(q -> q[1] == r[1], inds_m), inds_t)
+        slot_t === nothing && return (false, 1, 1)
+        shared = inds_t[slot_t][1]
+        slot_m = findfirst(q -> q[1] == shared, inds_m)
+        # a contraction needs the shared index raised on one form and lowered, if at the same level there is nothing to cancel
+        inds_t[slot_t][2] == inds_m[slot_m][2] && return (false, 1, 1)
+        free_t = inds_t[3-slot_t]
+        free_m = inds_m[3-slot_m]
+        free_t[2] == free_m[2] && return (false, 1, 1)
+        sgn = (slot_t == slot_m) ? -1 : 1
+        return (true, sgn,
+                TensorExpression(KroneckerDelta([free_t[1] => free_t[2],
+                                                 free_m[1] => free_m[2]])))
+    end
 
     extra_deltas = zero()
     for σ in permutations(1:n)

@@ -1,11 +1,11 @@
 # Alakazam
 
 <div align="center">
-  <img src="https://gitlab.com/B0bGary/alakazam.jl/-/raw/main/newlogoalakazamtest.png" width="400" height="400" alt="Alakazam">
+  <img src="https://gitlab.com/B0bGary/alakazam.jl/-/raw/main/newlogoalakazamtest.png" width="400" height="400" alt="Alakazam!">
 </div>
 
 Alakazam is a Julia-based solution to performing symbolic algebraic manipulations of tensors and tensor equations.
-It was designed primarily for studying field theories in physics.
+It was designed primarily for studying field theories in physics and quantum mechanics, including with supersymmetry.
 In particular, it includes the ability to raise and lower tensor indices with a metric, simplify expressions using symmetries of tensors, and perform covariant differentiation.
 
 For those working on supersymmetric theories, Alakazam can handle covariant derivatives with multiple indices, perform superspace integration, and more.
@@ -26,7 +26,7 @@ spacetime_indices = IndexSet("spacetime", 4,lower)
 ```
 Then, we can create some index objects
 ```julia
-μ,ν,ρ,τ = Index(["μ","ν","ρ","τ"], spacetime_indices)
+@indices μ:τ∈spacetime_indices
 ```
 Now we can create more interesting tensor objects,
 ```julia
@@ -47,7 +47,6 @@ This section will be updated when an upcoming paper on this package is published
 
 For more info, see demo.jl
 
-
 ## Support
 
 If you'd like to support me and future development of this project, please donate [here](https://www.paypal.com/donate/?business=L23N9VSVR9KB4&no_recurring=0&item_name=Thanks+for+supporting+the+development+of+great+tools%21&currency_code=USD).
@@ -61,5 +60,6 @@ If you'd like to contribute, or have any questions in general, please get in tou
 
 ## Authors and acknowledgment
 Written by me.
+Many thanks to Cian Luke Martin for the suggestion of macros during the early stages of development. 
+Many thanks to Alejandro Soto Franco for several useful merge requests. 
 Credits to Kasper Peeters, author of Cadabra, whose project inspired me to create Alakazam.
-

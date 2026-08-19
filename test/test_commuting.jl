@@ -151,3 +151,122 @@
         @test Alakazam.simplify(Qc*Pc*Rc) == Alakazam.simplify(Pc*Qc*Rc - hcm*Sc*Rc)
 
 end
+
+###############################################################################
+# Edge cases for the commutation-relation key.
+###############################################################################
+
+@testset "Commutator keys" begin
+
+    clear_global!()
+    clear_commutators!()
+
+    st  = IndexSet("spacetime", 4, lower, Metric)
+    st2 = IndexSet("spacetime_other", 4, lower, Metric)      # same kind, different name
+    sp  = IndexSet("spinor", 4, lower, fermionic, SymplecticForm)
+    spc = IndexSet("spinor_conj", 4, lower, fermionic, SymplecticForm)
+
+    μ, ν, ρ, σ = Index(["μ", "ν", "ρ", "σ"], st)
+    p, q       = Index(["p", "q"], st2)
+    α, β       = Index(["α", "β"], sp)
+    # conjugate-set indices, accented as users spell them
+    αdot = Index("α" * Alakazam.COMBINING_DOT, spc)
+    αbar = Index("α" * Alakazam.COMBINING_MACRON, spc)
+
+    key = Alakazam._ckey
+
+    ###########################################################################
+    # what must NOT be distinguished, or a declared relation is lost
+    ###########################################################################
+
+    # index names are irrelevant: a relation for X^μ must hold for X^ν
+    @test key(Mat("X", [μ => upper])) == key(Mat("X", [ν => upper]))
+
+    # index POSITION is irrelevant: raising or lowering does not change what an object is
+    @test key(Mat("X", [μ => upper])) == key(Mat("X", [μ => lower]))
+
+    # index-set NAME is irrelevant when the kind agrees. This is the one that broke the built-in
+    # Clifford identities: they are registered against one set, and a gamma built on a set the
+    # user named themselves must still find them.
+    @test key(Gamma([μ => upper])) == key(Gamma([p => upper]))
+
+    # writing order is irrelevant, since the signature is a sorted multiset
+    @test key(Gamma([μ => upper, α => lower, β => lower])) ==
+          key(Gamma([α => lower, β => lower, μ => upper]))
+
+    ###########################################################################
+    # what MUST be distinguished, or one declaration overwrites another
+    ###########################################################################
+
+    # rank: γ^a and γ^{ab} are different objects sharing a name
+    @test key(Gamma([μ => upper])) != key(Gamma([μ => upper, ν => upper]))
+    @test key(Gamma([μ => upper, ν => upper])) !=
+          key(Gamma([μ => upper, ν => upper, ρ => upper]))
+
+    # kind: a spacetime index is not a spinor index
+    @test key(Mat("X", [μ => upper])) != key(Mat("X", [α => upper]))
+
+    # matrix form vs component form of one symbol
+    @test key(Gamma([μ => upper])) != key(Gamma([μ => upper, α => lower, β => lower]))
+
+    # ACCENTS: σ_{αα̇} carries one index from each bundle and σ_{αβ} two from one. These support
+    # genuinely different relations. σ^{μν} is self-dual on undotted indices while σ̄^{μν} is
+    # anti-self-dual on dotted ones.
+    @test key(Pauli([μ => upper, α => lower, αdot => lower])) !=
+          key(Pauli([μ => upper, α => lower, β => lower]))
+
+    # and different accents stay apart, for a user who writes both α̇ and ᾱ with distinct meanings
+    @test key(Mat("Y", [αdot => lower])) != key(Mat("Y", [αbar => lower]))
+    @test key(Mat("Y", [αdot => lower]) ) == key(Mat("Y", [αdot => lower]))
+
+    ###########################################################################
+    # end to end: declare, look up, and confirm the lookups agree with each other
+    ###########################################################################
+
+    A1 = Mat("A", [μ => upper])
+    B1 = Mat("B", [ν => upper])
+    @commutator [A1, B1] = zero()
+
+    @test has_commutation_rel(A1, B1)
+    @test Alakazam.can_swap(A1, B1)
+    @test get_commutator(A1, B1)[1] == 1
+
+    # the same relation is found through differently-named indices of the same set
+    @test has_commutation_rel(Mat("A", [ρ => upper]), Mat("B", [σ => upper]))
+    @test Alakazam.can_swap(Mat("A", [ρ => lower]), Mat("B", [σ => lower]))
+
+    ###########################################################################
+    # two relations for one name coexist rather than overwrite
+    ###########################################################################
+
+    G1 = Gamma([μ => upper])                    # rank 1
+    G2 = Gamma([μ => upper, ν => upper])        # rank 2, same name
+    D1 = Mat("D", [ρ => upper])     # an index of its own: γ^{μ}D^{μ} is not a valid dummy pair
+    # the two differ in grading, so they are distinguishable after the fact even though both
+    # right-hand sides vanish.
+    @commutator [G1, D1] = zero()          # commutator, so G1 and D1 freely exchange
+    @anticommutator {G2, D1} = zero()      # ANTIcommutator: same names, different entry
+
+    @test get_commutator(G1, D1)[1] == 1                # recovered as a commutator
+    @test get_commutator(G2, D1)[1] == -1               # rank-2 entry survived independently
+    @test Alakazam.can_swap(G1, D1)
+    @test !Alakazam.can_swap(G2, D1)                    # anticommuting: not freely swappable
+
+    # removing one leaves the other in place
+    remove_commutator!(G2, D1)
+    @test !has_commutation_rel(G2, D1)
+    @test has_commutation_rel(G1, D1)
+
+    ###########################################################################
+    # same-name pairs still resolve, as `generate_conformal_algebra` relies on for [P,P] = 0
+    ###########################################################################
+
+    P1 = Mat("P", [μ => upper])
+    P2 = Mat("P", [ν => upper])
+    @commutator [P1, P2] = zero()
+    @test has_commutation_rel(P1, P2)
+    @test Alakazam.can_swap(Mat("P", [ρ => upper]), Mat("P", [σ => upper]))
+
+    clear_commutators!()
+    clear_global!()
+end

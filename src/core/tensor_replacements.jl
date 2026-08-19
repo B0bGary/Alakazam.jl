@@ -240,6 +240,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
 
             rep2 = copy(replace)
             resolve_wildcard_names!(rep2, match.tensor_name_matches, matched_src)
+            freshen_private_dummies!(rep2, allt, nothing, new_exp)
             for summand in summands(rep2)
                 for rep in terms(term(summand))
                     operator_index_subs!(match.index_matches, rep)
@@ -253,6 +254,7 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
                     push!(excluded, t)
                 end
             end
+
 
             new_exp += ((-1)^grade) * TensorTerm(pre) * rep2 * TensorTerm(post)
             update_indices!(rep2)
@@ -268,6 +270,55 @@ function substitute_terms(exp::TensorTerm, pattern::TensorTerm, replace::TensorE
     else
         return exp
     end
+end
+
+"""
+    freshen_private_dummies!(rep2, factors, extra, sofar)
+
+Rename a replacement's own dummy indices away from everything the match is being spliced into.
+"""
+function freshen_private_dummies!(rep2::TensorExpression, factors, extra, sofar)
+    taken = OrderedSet{IndexSuperType}()
+    for ctx in (factors, extra)                 # factor lists
+        (ctx === nothing || isempty(ctx)) && continue
+        collect_indices!(taken, TensorTerm(ctx))
+    end
+    sofar === nothing || collect_indices!(taken, sofar)   # an expression
+    isempty(taken) && return rep2
+
+    blocked = OrderedSet{IndexSuperType}()
+    for q in taken
+        push!(blocked, q)
+    end
+    for summand in summands(rep2), (q, _) in indices(term(summand))
+        push!(blocked, q)          # nothing the replacement already uses may be a rename target
+    end
+    renamed = Dict{IndexSuperType,IndexSuperType}()
+
+    for summand in summands(rep2)
+        tt = term(summand)
+        dums = dummies(tt)
+        isempty(dums) && continue
+
+        guide = Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
+        for (ind, pos) in indices(tt)
+            (ind in dums) || continue          # free indices carry the pattern binding: leave them
+            (ind in taken) || continue         # no clash with the context, nothing to do
+            ind isa DummyPatternIndex && continue
+            if !haskey(renamed, ind)
+                set = ind.index_set
+                pool = OrderedSet{IndexSuperType}(
+                    q for q in get_unused_indices(tt, set) if !(q in blocked))
+                new = safe_pop!(pool, set)   # generates a further index if the pool runs dry
+                renamed[ind] = new
+                push!(blocked, new)
+                push!(taken, new)
+            end
+            guide[ind=>pos] = renamed[ind] => pos
+        end
+        isempty(guide) || set_indices_deep!(tt, guide)
+    end
+    return rep2
 end
 
 """

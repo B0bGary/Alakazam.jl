@@ -15,7 +15,47 @@ end
 
 #keys should be a symmetric pair eg (σ,σ), (M,P) for gens etc (they're sorted into lexo-order)
 #stores sign for com/acom, indexed pair and their com rel. These should be matrix type
-const commutators = Dict{Tuple{String,String},Commutator}()
+"""
+Key under which a commutation relation is stored: name, concrete type, and index signature.
+"""
+const CommutatorKey = Tuple{String,Symbol,String}
+
+"""
+Sorted multiset of the KINDS of index an object carries: `v` spacetime, `s` spinor, `i` internal.
+Infers the type from metrics and grading etc. Hard because we can't tie to the like indexset names,
+as users can change this to random things
+"""
+function _ckey_sig(inds)
+    tags = Vector{String}(undef, length(inds))
+    @inbounds for k in eachindex(inds)
+        idx = inds[k][1]
+        S = idx.index_set
+        kind = _is_spinor_set(S) ? "s" : (_is_spacetime_set(S) ? "v" : "i")
+        tags[k] = kind * _accent_of(idx.name)
+    end
+    sort!(tags)
+    return join(tags, ",")
+end
+
+"""
+The combining mark decorating an index name, or `""` when it carries none.
+"""
+function _accent_of(nm::AbstractString)
+    for (_, mark) in INDEX_SUFFIXES
+        occursin(mark, nm) && return mark
+    end
+    return ""
+end
+
+_ckey(A)::CommutatorKey = (name(A), nameof(typeof(A)), _ckey_sig(indices(A)))
+
+"""
+Operators key on their OWN indices, not on `indices`.
+"""
+_ckey(A::OperatorSuperType)::CommutatorKey =
+    (name(A), nameof(typeof(A)), _ckey_sig(op_indices(A)))
+
+const commutators = Dict{Tuple{CommutatorKey,CommutatorKey},Commutator}()
 
 
 # ==(C1::Commutator,C2::Commutator)= f1==f2 for fields in C1,C2
@@ -31,7 +71,7 @@ function clear_commutators!()
 end
 
 function remove_commutator!(A::MatrixSuperType,B::MatrixSuperType)
-    key=minmax(name(A),name(B))
+    key=minmax(_ckey(A),_ckey(B))
     if haskey(commutators,key)
         delete!(commutators,key)
     end
@@ -40,7 +80,7 @@ end
 function remove_commutator!(L::LieBracketSuperType)
     A=first(L)
     B=second(L)
-    key=minmax(name(isTensor(A)),name(isTensor(B)))
+    key=minmax(_ckey(isTensor(A)),_ckey(isTensor(B)))
     if haskey(commutators,key)
         delete!(commutators,key)
     end
@@ -56,26 +96,25 @@ function add_commutator!(grading::Integer, A::MatrixSuperType, B::MatrixSuperTyp
     if free_indices(A * B) != free_indices(C) && !isZeroTens(C)
         throw(InvalidCommutatorDefinition(A, B, C))
     end
-    commutators[minmax(name(A), name(B))] = Commutator(grading, A, B, C)
+    commutators[minmax(_ckey(A), _ckey(B))] = Commutator(grading, A, B, C)
 end
 
 add_commutator!(grading::Integer, A::MatrixSuperType,B::MatrixSuperType,C::Int64 )=add_commutator!(grading, A,B,TensorExpression(C) )
-add_commutator!(k::Tuple{String,String},va::Commutator)=commutators[k]=va
+add_commutator!(k::Tuple{CommutatorKey,CommutatorKey},va::Commutator)=commutators[k]=va
 function add_commutator!(va::Commutator)
-    k=minmax(name(va.A),name(va.B))
+    k=minmax(_ckey(va.A),_ckey(va.B))
     commutators[k]=va
 end
 
 
 """Gets the result of (anti)commuting A with B"""
 function get_commutator(A::MatrixSuperType,B::MatrixSuperType)::Tuple{Integer,TensorExpression}
-    key=minmax(name(A),name(B))
+    key=minmax(_ckey(A),_ckey(B))
     if haskey(commutators,key)
         comrel=commutators[key]
         dictout=Dict{Pair{IndexTypes,IndexPosition}, Pair{IndexTypes,IndexPosition}}()
         sign=1
-        #check which order the rel corresponds to
-        if name(comrel.A)==name(A)
+        if _ckey(comrel.A)==_ckey(A)
             merge!(dictout,get_pattern(comrel.A,A))
             merge!(dictout,get_pattern(comrel.B,B))
         else

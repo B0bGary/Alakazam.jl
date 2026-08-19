@@ -140,6 +140,18 @@ function op_grading(T::OperatorSuperType)
     return grade % 2
 end
 
+"""
+Grading of an operator: its own grading composed with that of what it acts on.
+
+Without this an operator falls through to the generic `grading(::TensorSuperType)`, which sums over
+`indices`. This would accidentally ignore operands with non-standard grading.
+"""
+function grading(T::OperatorSuperType)
+    opd = operand(T)
+    g = (opd === nothing || isZeroTens(opd)) ? 0 : grading(opd)
+    return (op_grading(T) + g) % 2
+end
+
 
 ###############################################################
 ###############################################################

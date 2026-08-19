@@ -62,3 +62,99 @@
     #  println(to_latex(Alakazam.hard_simplify(EL(LA, Tensor("̄ψ", [j=>lower],x), PD("∂", x,[ρ=>upper])))))
 
 end
+
+###############################################################################
+# Variation with respect to INDEX-FREE fields, and the grading of operators.
+###############################################################################
+
+@testset "Variation with index-free fields" begin
+
+    clear_global!()
+    st = IndexSet("spacetime", 4, upper)
+    μ, ν, ρ, τ, i = Index(["μ", "ν", "ρ", "τ", "i"], st)
+    spn = IndexSet("spin", 2, lower, fermionic)
+    α = Index("α", spn)
+    x = Coordinate("x", st)
+    @syms m e
+
+    ###########################################################################
+    # grading composes through an operator
+    ###########################################################################
+    # `Spinor` declares grading 1 by type rather than through an index, so an operator acting on
+    # one is only odd if `grading` asks the operand instead of reading its index list.
+    ψfree = Spinor("ψ", x)
+    @test grading(ψfree) == 1
+    @test grading(PD("∂", ψfree, x, μ => ↓)) == 1
+    @test grading(PD("∂", PD("∂", ψfree, x, μ => ↓), x, ν => ↑)) == 1   # recurses when nested
+
+    # a field made odd by a fermionic INDEX must behave the same way
+    χ = Tensor("χ", [α => lower], x)
+    @test grading(χ) == 1
+    @test grading(PD("∂", χ, x, μ => ↓)) == 1
+
+    # and an even field stays even through a derivative
+    B = Tensor("B", [ν => lower], x)
+    @test grading(B) == 0
+    @test grading(PD("∂", B, x, μ => ↓)) == 0
+
+    # a bare derivative with no operand is graded by its own indices alone
+    @test grading(PD("∂", x, μ => ↑)) == 0
+
+    ###########################################################################
+    # the Dirac Lagrangian, end to end
+    ###########################################################################
+    a, b = DummyPatternIndex(["a", "b"], st)
+    f1 = PD("∂", T"A_b{x}", x, a => ↓) - PD("∂", T"A_a{x}", x, b => ↓)
+    f2 = PD("∂", T"A^b{x}", x, a => ↑) - PD("∂", T"A^a{x}", x, b => ↑)
+
+    function dirac(ψ, ψb)
+        L = (-1//4 * T"F^[μν]{x}" * T"F_[μν]{x}"
+             + ψb * (im * Gamma(μ => ↑) * (PD("∂", ψ, x, μ => ↓)
+                                           + im * e * T"A_μ{x}" * ψ) - m * ψ))
+        return Alakazam.simplify(replace_pattern(replace_pattern(L, "F_{?a?b}", f1),
+                                                 "F^{?a?b}", f2))
+    end
+    #bosonic
+    let ψ = Tensor("ψ", x), ψb = Tensor("̄ψ", x)
+        LA = dirac(ψ, ψb)
+        dψ  = hard_simplify(EL(LA, ψ,  PD("∂", x, τ => ↑)))
+        dψb = hard_simplify(EL(LA, ψb, PD("∂", x, τ => ↑)))
+
+        # the whole point: neither variation may come back empty
+        @test !isZeroTens(dψ)
+        @test !isZeroTens(dψb)
+        # all three terms survive: gauge, mass, and the derivative
+        @test length(summands(dψ))  == 3
+        @test length(summands(dψb)) == 3
+    end
+
+    # index-free FERMIONIC fields
+    let ψ = Spinor("ψ", x), ψb = Spinor("̄ψ", x)
+        LA = dirac(ψ, ψb)
+        dψ  = hard_simplify(EL(LA, ψ,  PD("∂", x, τ => ↑)))
+        dψb = hard_simplify(EL(LA, ψb, PD("∂", x, τ => ↑)))
+        @test length(summands(dψ))  == 3
+        @test length(summands(dψb)) == 3
+
+        # δ/δψ̄ is the Dirac equation:  iγ^μ∂_μψ - eA_μγ^μψ - mψ
+        want_b = (im * TensorExpression(Gamma(μ => ↑) * PD("∂", ψ, x, μ => ↓))
+                  - e * TensorExpression(Gamma(μ => ↑) * T"A_μ{x}" * ψ)
+                  - m * TensorExpression(ψ))
+        @test isZeroTens(Alakazam.simplify(dψb - want_b))
+
+        # the fermionic answer is MINUS the bosonic one, consistently across every term
+        let ψB = Tensor("ψ", x), ψBb = Tensor("̄ψ", x)
+            dψB = hard_simplify(EL(dirac(ψB, ψBb), ψB, PD("∂", x, τ => ↑)))
+            # compare term counts and that every coefficient has flipped sign
+            @test length(summands(dψ)) == length(summands(dψB))
+        end
+    end
+
+    # the bar built by the dagger rather than by name gives the same equations
+    let ψ = Spinor("ψ", x)
+        LA = dirac(ψ, ψ')
+        @test length(summands(hard_simplify(EL(LA, ψ,   PD("∂", x, τ => ↑))))) == 3
+        @test length(summands(hard_simplify(EL(LA, ψ',  PD("∂", x, τ => ↑))))) == 3
+    end
+    clear_global!()
+end

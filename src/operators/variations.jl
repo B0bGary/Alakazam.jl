@@ -1,6 +1,6 @@
 
 """Computes the Euler-Lagrange equations for a given lagrangian and tensor field."""
-function EL(lag::TensorExpression, A::Tensor, DA::DerivativeSuperType)
+function EL(lag::TensorExpression, A::TensorSuperType, DA::DerivativeSuperType)
     #compute the variational derivative of the lagrangian with respect to the tensor field A
     v=VariationalDerivative(lag, A)
     set_operand!(DA, A)
@@ -60,6 +60,8 @@ function apply_derivative(D::VariationalSuperType)
                         b=isTensor(operand(tensor.var))
                         if a isa TensorSuperType && b isa TensorSuperType
                             if name(a) == name(b)
+                                # the match itself is what makes this term contribute
+                                derived = true
                                 for inds in zip(indices(tens), indices(tensor.var))
                                     if inds[1][2] != inds[2][2] #check if the positions are the same
                                         #positions not same, use metric...
@@ -76,6 +78,8 @@ function apply_derivative(D::VariationalSuperType)
 
                     end
                 elseif name(tens) == name(tensor.var) #same name
+                    # as above: the name match decides that the term contributes
+                    derived = true
                     #replace with delta functions for the indices
                     for inds in zip(indices(tens), indices(tensor.var))
                         if inds[1][2] != inds[2][2] #check if the positions are the same

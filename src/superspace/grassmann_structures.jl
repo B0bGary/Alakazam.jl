@@ -1,6 +1,6 @@
 ############################################################
 # Author: Jesse Woods
-# Please cite ... if you use this script in your work.
+# Please cite the paper 'Decomposing Grassmann Monomials for Superfield Expansions' if you use this script in your work.
 
 
 ############################################################
@@ -41,15 +41,13 @@
 # Worth knowing:
 # * Odd SO(N): the candidate list spans both parities of the trace count, because contracting with the
 #   odd-rank ε changes a diagram's size by an odd amount (e.g. Λ²C³ ≅ C³).
-# * :O is computed on the identity component, so it really gives SO  content; 
+# * :O is computed on the identity component, so it really gives SO content; 
 #   ε is excluded for :O (it flips sign under reflections).
 # * Totally antisymmetric contractions serve :SL/:SU, :Sp and :SO. For :SL/:SO they are always the full-rank ε.
 #   For :Sp the invariant on 2k antisymmetrised slots is ω^∧k, which is ε only at full valence 2k = dim (ε ∝ ω∧...∧ω);
 #   at lower valence it prints as ω or ω^∧k, not ε.
 #
 ############################################################
-
-
 
 ############## partitions & dimension formulas ###################
 function integer_partitions(n::Int, max_part::Int=n)
@@ -71,21 +69,21 @@ function gl_dim(lam::Vector{Int}, m::Int)
     isempty(lam) && return 1
     length(lam) > m && return 0
     conj = conjugate(lam)
-    num = 1
-    den = 1
+    num = BigInt(1)
+    den = BigInt(1)
     for i in 1:length(lam)
         for j in 1:lam[i]
             num *= (m + j - i)
             den *= lam[i] - j + conj[j] - i + 1
         end
     end
-    return num ÷ den
+    return Int(num ÷ den)
 end
 # Shared core of the Weyl dimension formulas:
 # Π_{i<j} (l_i²-l_j²)/(m_i²-m_j²), optionally times Π_i l_i/m_i.
 function weyl_dim_ratio(l, m, with_singles::Bool)
-    num = 1 // 1
-    den = 1 // 1
+    num = Rational{BigInt}(1)
+    den = Rational{BigInt}(1)
     for i in 1:length(l), j in (i+1):length(l)
         num *= (l[i] - l[j]) * (l[i] + l[j])
         den *= (m[i] - m[j]) * (m[i] + m[j])
@@ -418,9 +416,7 @@ function branch_gl_to_o(lam::Vector{Int}, dim::Int)
             vcat(xs2, [1 / x for x in xs2], [Rational{BigInt}(1)])
         end)
     return branch_via_characters("branch_gl_to_o", lam, dim, r,
-        branch_candidates(n, r, iseven(dim) ? 2 : 1),
-        (mu, xs) -> o_character_exact(mu, xs, dim), full_eigs,
-        mu -> o_dim(mu, dim); base_offset=100_000)
+        branch_candidates(n, r, iseven(dim) ? 2 : 1),   (mu, xs) -> o_character_exact(mu, xs, dim), full_eigs, mu -> o_dim(mu, dim); base_offset=0)
 end
 
 ################# explicit contraction witnesses ####################
@@ -723,8 +719,7 @@ end
 """
     elementary_invariant_terms(lam, mu, tab, dim, kind, mult)
 
-Explicit example contractions for one certified branch `lam -> mu`, never
-more than `mult` of them (so this search can never change any count).
+Explicit example contractions for one certified branch.
 :Sp delegates to `sp_elementary_terms` (per-column ω^k strips plus ω-pair
 fillings). :O/:SO use η-pair fillings; :SO additionally uses ε, which has
 one FIXED valence, dim: a full column of height dim strips entirely, and a
@@ -855,7 +850,7 @@ function side_terms(lam::Vector{Int}, tab, dim::Int, kind::Symbol)
             append!(terms, found)
             remaining = mult - length(found)
             if remaining > 0 && isempty(mu)
-                #  zero() free indices is unambiguous whatever invariant achieves it
+                #  zero free indices is unambiguous whatever invariant achieves it
                 all_labels = sort(vcat(tab.tableau...))
                 for _ in 1:remaining
                     push!(terms, SideData(dim, kind, tab, Vector{Int}[], mu, [all_labels], true))
@@ -936,9 +931,7 @@ Name of the totally antisymmetric invariant consuming `len` antisymmetrised
 slots. For :Sp that invariant is ω^∧(len/2). It is totally antisymmetric at
 any valence, but it equals the volume form ε ONLY at full valence
 len == dim, where ε ∝ ω^∧(dim/2); at len < dim it is ω (len=2) or a lower
-wedge power, and naming it ε would misstate its rank. :SL and :SO groups are
-always full length dim (an :SO partial ε carries its unused slots as
-negative labels), so those are genuine ε.
+wedge power.
 """
 function antisym_invariant_name(len::Int, kind::Symbol, dim::Int)
     (kind == :Sp && len != dim) || return "ε"
@@ -969,8 +962,11 @@ function free_indices_structure(side::Union{SideData,Nothing}, n::Int)
     return sort(vcat(Int[], side.residual_rows...))
 end
 
-"Symmetrization notation for the coefficient: one row -> (sym), one column
--> [antisym], mixed -> each row in its own parentheses."
+"""
+Symmetrization notation for the coefficient, denoting the Young projector of
+the residual shape: `(...)` symmetrises along a row, `[...]` antisymmetrises
+down a column. One row gives `(sym)`, one column gives `[antisym]`.
+"""
 function symmetrized_str(side::Union{SideData,Nothing}, prefix::String)
     (side === nothing || side.residual_rows === nothing || isempty(side.residual_rows)) && return ""
     rows = side.residual_rows
@@ -978,7 +974,7 @@ function symmetrized_str(side::Union{SideData,Nothing}, prefix::String)
         return "(" * join([idx_label(prefix, k) for k in rows[1]], "") * ")"
     all(r -> length(r) == 1, rows) &&
         return "[" * join([idx_label(prefix, k) for k in vcat(rows...)], "") * "]"
-    return join(["(" * join([idx_label(prefix, k) for k in row], "") * ")" for row in rows], "")
+    return join(["(" * join([idx_label(prefix, k) for k in row], "") * ")" for row in rows])
 end
 
 "All invariant-tensor factors on one side: ε groups, then ω/η/Ω."
@@ -1015,7 +1011,9 @@ function coeff_note(side::Union{SideData,Nothing}, prefix::String)
     isempty(side.residual_shape) && return ""
     tless = (side.kind in (:Sp, :O, :SO) && gl_dim(side.residual_shape, side.dim) != d) ?
         ", traceless" : ""
-    return "$prefix: $(side.residual_rows) dim $d$tless"
+    mixed = length(side.residual_shape) > 1 && any(>(1), side.residual_shape)
+    shape = mixed ? "shape (" * join(side.residual_shape, ",") * ") " : ""
+    return "$prefix: $shape$(side.residual_rows) dim $d$tless"
 end
 
 "True iff at least one side of `s` carries an actual invariant contraction."
@@ -1052,10 +1050,10 @@ end
     render_compact(n, d_S, d_F, S_type, F_type) -> Vector{String}
 
 Compact expansion at degree n: a header with the expected dimension
-binomial(d_S·N, n), then one line per term showing the invariant tensors,
-the coefficient, and its tableau with the true dimension. If any block has
-no reduction at all, the whole degree collapses to the single generic
-term. A MISMATCH line is appended if the dimensions fail to add up.
+binomial(d_S·d_F, n), then one line per Cauchy block showing the invariant
+tensors, the coefficient, and its tableau with the true dimension. Blocks
+with no invariant contraction are still listed, as the plain Cauchy term.
+A MISMATCH line is appended if the dimensions fail to add up.
 Print with `foreach(println, render_compact(...))`.
 """
 function render_compact(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symbol)
@@ -1064,10 +1062,6 @@ function render_compact(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symb
     n == 0 && return push!(lines, "  1")
     structures = independent_structures(n, d_S, d_F, S_type, F_type)
     isempty(structures) && return lines
-    if !all(has_forced_invariant, structures)
-        push!(lines, "  C^{α1..α$n}_{i1..i$n}  (generic Λ^$n(V⊗W) term, no reduction at this degree)")
-        return lines
-    end
     total = 0
     for s in structures
         d = side_dimension(s.spinor) * side_dimension(s.flavour)
@@ -1079,6 +1073,9 @@ function render_compact(n::Int, d_S::Int, d_F::Int, S_type::Symbol, F_type::Symb
         note = isempty(notes) ? "scalar" : join(notes, " × ")
         push!(lines, "  " * (isempty(parts) ? "1" : join(parts, " ")) * "   [" * note * "]  dim $d")
     end
+    any(has_forced_invariant, structures) ||
+        push!(lines, "  (no invariant contraction available at this degree; " *
+                     "the terms above are the plain Cauchy blocks)")
     total != expected &&
         push!(lines, "  !! dimension MISMATCH: total $total vs expected $expected: real bug, please report")
     return lines

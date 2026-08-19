@@ -39,7 +39,7 @@ function generate_superfield_naive(name::String, extra_inds::Vector{Pair{I,Index
         max_order=spinor_dim*flavour_dim
         for or in 0:max_order
             base_term=generate_grassmann_product(g, or)
-            # order_terms=generate_independant_structure(base_term) #vector of tuples (term,spinortab,flavtab)
+            # order_terms=generate_independent_structure(base_term) #vector of tuples (term,spinortab,flavtab)
             gs[i][or]=[base_term]
         end
     end
@@ -136,7 +136,7 @@ function generate_superfield(name::String, extra_inds::Vector{Pair{I,IndexPositi
         for or in 0:max_order
             base_term = generate_grassmann_product(g, or)
             # vector of tuples (term, spinortab, flavtab)
-            order_terms = generate_independant_structure(base_term;
+            order_terms = generate_independent_structure(base_term;
                 S_type=S_type, F_type=F_type, pair_tensor=pair_tensor)
             gs[i][or] = order_terms
         end
@@ -221,12 +221,12 @@ end
 """
 For "1"
 """
-generate_independant_structure(term::Integer; kwargs...) = [(TensorExpression(term), nothing, nothing)]
+generate_independent_structure(term::Integer; kwargs...) = [(TensorExpression(term), nothing, nothing)]
 
-function generate_independant_structure(term::TensorExpression; kwargs...)
+function generate_independent_structure(term::TensorExpression; kwargs...)
     term == Alakazam. zero() && return []
     isTerm(term) == false && error("Input should be a tensor term of grassmann numbers")
-    return generate_independant_structure(isTerm(term); kwargs...)
+    return generate_independent_structure(isTerm(term); kwargs...)
 end
 
 """
@@ -235,7 +235,7 @@ This is done using the invariant tensors of each algebra (ε/ω/δ).
 Reduction is only performed if it will decrease the number of indices on the coefficient field.
 The reduced theta products are returned, as well as the associated tableau to be applied to the coefficient field.
 """
-function generate_independant_structure(term::TensorTerm; S_type=nothing, F_type=nothing,
+function generate_independent_structure(term::TensorTerm; S_type=nothing, F_type=nothing,
     pair_tensor=nothing)
     order = length(terms(term))
     order == 0 && return [(TensorExpression(1), nothing, nothing)]
@@ -275,7 +275,7 @@ function apply_structure_side(nt, side, side_inds, index_set, side_name::String,
     (side === nothing || side.tableau === nothing) && return nt
 
     side.residual_rows === nothing && error(
-        "generate_independant_structure: $(side_name) branch shape $(side.residual_shape) " *
+        "generate_independent_structure: $(side_name) branch shape $(side.residual_shape) " *
         "($(side.kind)) is a validated composite with no elementary witness: no explicit " *
         "tensor product represents this copy. Its multiplicity is real, so it cannot be " *
         "silently dropped; handle it manually or choose different group types.")
@@ -298,11 +298,11 @@ function apply_structure_side(nt, side, side_inds, index_set, side_name::String,
     pair_ctor = pair_tensor_override === nothing ? metric(index_set.algebra) : pair_tensor_override
     for pair in side.pair_groups
         side.is_composite && error(
-            "generate_independant_structure: $(side_name) side carries a non-elementary Ω " *
+            "generate_independent_structure: $(side_name) side carries a non-elementary Ω " *
             "invariant consuming θ-copies $(pair): no explicit elementary tensor product " *
             "represents it; handle this branch manually.")
         pair_ctor === nothing && error(
-            "generate_independant_structure: $(side_name) side needs a " *
+            "generate_independent_structure: $(side_name) side needs a " *
             (side.kind == :Sp ? "ω (symplectic)" : "δ (metric)") *
             " pair tensor on θ-copies $(pair), but metric($(typeof(index_set.algebra))) " *
             "returned nothing and no `pair_tensor` override was given.")

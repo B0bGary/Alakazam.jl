@@ -39,10 +39,8 @@ function generate_conformal_algebra(d::Int)
    else
       iSet=IndexSet("spacetime", d, lower)
       μ = Index("μ", iSet)#generate a single index so that indexgen has a charset to draw from
-      x=Coordinate(x,iSet)
+      x=Coordinate("x",iSet) 
    end
-   # indpool=OrderedSet(is.indices)
-   # newind = safe_pop!(indpool,is)
    
    P=LieGenerator("P",x,[i for i in safe_pop!(iSet,1)])
    M=LieGenerator("M",x,[i for i in safe_pop!(iSet,2)],generate_antisymmetric_tableau([1,2]))
@@ -54,7 +52,7 @@ function generate_conformal_algebra(d::Int)
    rhslorentz=im*(Metric(I[1],I[3])*LieGenerator("M",x,[I[2],I[4]])-Metric(I[1],I[4])*LieGenerator("M",x,[I[2],I[3]])-Metric(I[2],I[3])*LieGenerator("M",x,[I[1],I[4]])+Metric(I[2],I[4])*LieGenerator("M",x,[I[1],I[3]]))
    @commutator [M,LieGenerator("M",x,[i for i in I[3:end]])]=rhslorentz
    @commutator [M,LieGenerator("P",x,[I[3]])]=im*(Metric(I[1],I[3])*LieGenerator("P",x,[I[2]])-Metric(I[2],I[3])*LieGenerator("P",x,[I[1]]))
-   @commutator [M,LieGenerator("K",x,[I[3]])]=im*(Metric(I[1],I[3])*LieGenerator("P",x,[I[2]])-Metric(I[2],I[3])*LieGenerator("P",x,[I[1]]))
+   @commutator [M,LieGenerator("K",x,[I[3]])]=im*(Metric(I[1],I[3])*LieGenerator("K",x,[I[2]])-Metric(I[2],I[3])*LieGenerator("K",x,[I[1]]))
 
    @commutator [D,P]=im*P
    @commutator [D,K]=-im*K

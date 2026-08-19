@@ -1989,7 +1989,7 @@ relation that does not vanish, where the exchange is allowed but costs a remaind
 """
 function can_swap(a::TensorSuperType, b::TensorSuperType)
     (a isa MatrixSuperType && b isa MatrixSuperType) || return true
-    c = get(commutators, minmax(name(a), name(b)), nothing)
+    c = get(commutators, minmax(_ckey(a), _ckey(b)), nothing)
     c === nothing && return false
     return c.grading == 1 && isZeroTens(c.C)
 end
@@ -2001,7 +2001,7 @@ exchanged at all.
 """
 function has_commutation_rel(a::TensorSuperType, b::TensorSuperType)
     (a isa MatrixSuperType && b isa MatrixSuperType) || return false
-    return haskey(commutators, minmax(name(a), name(b)))
+    return haskey(commutators, minmax(_ckey(a), _ckey(b)))
 end
 
 """

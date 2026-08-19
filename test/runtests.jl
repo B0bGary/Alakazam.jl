@@ -21,6 +21,7 @@ if true
         "test_spin.jl",
         "test_serialise.jl",
         "test_serialise_load.jl",
+        "test_serialise_roundtrip.jl",
         "test_algebras.jl",
         "test_variational.jl",
         "test_new_macros.jl",
