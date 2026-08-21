@@ -178,15 +178,18 @@
     @test sort(g1*g2*g3)==g1*g2*g3
     # @test sort(g1*g3*g2)==-g1*g2*g3+2*g1
 
-    @mrule g1*g2*g3 = (2-spacetime_up.range)*g2
-    @mrule g1*g3 = spacetime_up.range
+    #:dim, not spacetime_up.range: naming the set captures its dimension at definition, and
+    #these rules stay registered for the rest of the session, so gammas from any other set
+    #would then be reduced with this set's dimension
+    @mrule g1*g2*g3 = (2 - :dim)*g2
+    @mrule g1*g3 = :dim
 
 
     g4=Gamma(ρ=>upper)
     g5=Gamma(σ=>upper)
 
 
-    @mrule g1*g2*g4*g3 = 2*g4*g2+(spacetime_up.range-2)*g2*g4 # =4Metric in 4D
+    @mrule g1*g2*g4*g3 = 2*g4*g2+(:dim - 2)*g2*g4 # =4Metric in 4D
     @test contract_adjacent(g1*g2*g3, Alakazam.Gamma)==-2*g2
     @test contract_adjacent(g1*g3, Alakazam.Gamma)==4
     @test sort(contract_adjacent(g1*g2*g4*g3, Alakazam.Gamma))==4*Metric([ν=>upper, ρ=>upper])#great!!!

@@ -49,7 +49,7 @@ export to_latex
 ##########################
 #base tensors
 export TensorData, TensorDataSuperType, Tensorial, TensorTerm, Tensor, TensorExpression, TensorSuperType
-export SymmetricTensor, AntisymmetricTensor, RiemannTensor
+export SymmetricTensor, AntisymmetricTensor, RiemannTensor, Riemann
 export Boson, Fermion
 export @Tensor, @T_str, @LT_str, parse_latex, @conjugates, conjugates!
 

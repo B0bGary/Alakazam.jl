@@ -68,11 +68,11 @@
     A=AntisymmetricTensor("A", [μ=>lower])
     Ad=EpsilonTensor([μ=>upper, ν=>upper, ρ=>upper, τ=>upper])*Tensor("A", [τ=>lower])
     # @test ⋆(A)==Ad #failed for some reason... need to fix equality logic
-    @test ⋆(A)-Ad==Alakazam.zero()
+    @test rename_dummies(⋆(A)-Ad)==Alakazam.zero()
     f=Tensor("f")
     fd=EpsilonTensor([μ=>upper, ν=>upper, ρ=>upper, σ=>upper])*Tensor("f")
     # @test ⋆(f,spacetime_indices)==fd #failed also...
-    @test ⋆(f, spacetime_indices)-fd==Alakazam.zero()
+    @test rename_dummies(⋆(f, spacetime_indices)-fd)==Alakazam.zero()
 
     #######
     #now, suppose colour indices for example
@@ -91,7 +91,7 @@
     A=Tensor("A", [a=>upper, b=>upper, μ=>lower])
     Ad=EpsilonTensor([μ=>upper, ν=>upper, ρ=>upper, τ=>upper])*Tensor("A", [a=>upper, b=>upper, τ=>lower])
     # @test ⋆(A)==Ad #failed for some reason... need to fix equality logic
-    @test ⋆(A)-Ad==Alakazam.zero()
+    @test rename_dummies(⋆(A)-Ad)==Alakazam.zero()
 
 
     #now, in 6D for example
@@ -116,11 +116,11 @@
     # 2-form in 6D
     F=Tensor("F", [a=>upper, μ=>lower, ν=>lower], YoungTableau([1, 1], [2, 3]))#only antisym in ST inds
     Fd=1//2*EpsilonTensor([μ=>upper, ν=>upper, ρ=>upper, σ=>upper, α=>upper, β=>upper])*Tensor("F", [a=>upper, α=>lower, β=>lower], YoungTableau([1, 1], [2, 3]))
-    @test ⋆(F)-Fd==Alakazam.zero()
+    @test rename_dummies(⋆(F)-Fd)==Alakazam.zero()
     #3-form H in 6D
     H=Tensor("H", [a=>upper, μ=>lower, ν=>lower, σ=>lower], YoungTableau([1, 1, 1], [2, 3, 4]))
-    Hd=1//factorial(3)*EpsilonTensor([μ=>upper, ν=>upper, ρ=>upper, α=>upper, β=>upper, γ=>upper])*Tensor("H", [a=>upper, α=>lower, β=>lower, γ=>lower], YoungTableau([1, 1, 1], [2, 3, 4]))
-    @test ⋆(H)==Hd
+    Hd=1//factorial(3)*EpsilonTensor([μ=>upper, ν=>upper, σ=>upper, ρ=>upper, α=>upper, β=>upper])*Tensor("H", [a=>upper, ρ=>lower, α=>lower, β=>lower], YoungTableau([1, 1, 1], [2, 3, 4]))
+    @test rename_dummies(⋆(H)-Hd)==Alakazam.zero()
 
 
     V=Tensor("v", [μ=>lower])

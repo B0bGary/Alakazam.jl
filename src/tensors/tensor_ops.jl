@@ -24,7 +24,7 @@ Two tensors are equal when they are the same type carrying the same name, indice
 coordinate dependence, tableaux and labels.
 """
 function ==(a::TensorSuperType, b::TensorSuperType)#name first since easiest discriminator
-    if ( name(a) == name(b) && typeof(a) == typeof(b)  && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
+    if (name(a) == name(b) && typeof(a) == typeof(b) && indices(a) == indices(b) && _same_coords(function_of(a), function_of(b)) && tableaux(a)==tableaux(b) && labels(a)==labels(b))
         # println("apparnetly equl inds")
         return true
     else
@@ -34,7 +34,7 @@ function ==(a::TensorSuperType, b::TensorSuperType)#name first since easiest dis
 end
 
 function Base.hash(d::TensorSuperType, h::UInt)::UInt
-    h = hash(typeof(d), h)  
+    h = hash(typeof(d), h)
     h = hash(name(d), h)
     @inbounds for p in indices(d)
         h = hash(p[1].uid, hash(p[2].position, h))
@@ -157,7 +157,7 @@ function hard_equals(a::TensorTerm, b::TensorTerm)
 end
 
 function hard_equals_graded(a::TensorTerm, b::TensorTerm; g1=nothing, g2=nothing,
-                            ws1=nothing, ws2=nothing)
+    ws1=nothing, ws2=nothing)
     return same_tensorterm_mod_syms_grade(a, b; g1, g2, ws1, ws2)
 end
 
@@ -418,7 +418,7 @@ function update_indices!(T::TensorTerm, n::Int=-1)
         nnl += 1
         mask |= _bit(p[1])
     end
- if count_ones(mask) != nnl
+    if count_ones(mask) != nnl
         if nnl <= _EXACT_SCAN_CUTOFF
             @inbounds for i in eachindex(inds)
                 idx = inds[i][1]
@@ -557,7 +557,7 @@ computed here and passed down.
 function _map_free_positions(tt::TensorTerm, f)
     dums = Set{UInt64}(d.uid for d in dummies(tt))
     return prod(set_indices_deep!(copy(t),
-                    IndexPair[(p[1].uid in dums ? p : (p[1] => f(p[2]))) for p in indices(t)])
+        IndexPair[(p[1].uid in dums ? p : (p[1] => f(p[2]))) for p in indices(t)])
                 for t in terms(tt))
 end
 function _map_free_positions(ex::TensorExpression, f)
@@ -691,7 +691,7 @@ function rename_dummies(T::TensorTerm)
     return T
 end
 
-function rename_recursive!(T::TensorExpression,replacements)
+function rename_recursive!(T::TensorExpression, replacements)
     s = summands(T)
     isempty(s) && return T
     out = CoeffPair[]
@@ -983,8 +983,8 @@ function simplify(TEx::TensorExpression)
     return new_exp
 end
 
-canonicalise(T::Tensorial) = canonicalise(TensorExpression(T),true)
-function canonicalise(TEx::TensorExpression,cp=false)
+canonicalise(T::Tensorial) = canonicalise(TensorExpression(T), true)
+function canonicalise(TEx::TensorExpression, cp=false)
     cp==false && (TEx=copy(TEx))
     TEx=merge_sum_syms(TEx)
     return sort(TEx)
@@ -1040,7 +1040,7 @@ such as the first Bianchi identity. That test is exponential in the number of sy
 so it is opt-in and bounded by `multiterm_budget`; see [`multiterm_equal`](@ref).
 """
 function hard_simplify(TEx::TensorExpression; multiterm::Bool=false,
-                       multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
+    multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
     return hard_merge(sort(collect_terms(TEx)); multiterm, multiterm_budget)
 end
 
@@ -1062,7 +1062,7 @@ function term_fingerprint(T::TensorTerm)
 end
 
 function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
-                    multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
+    multiterm_budget::Int=DEFAULT_MULTITERM_BUDGET)
     src = TEx.summands
     n = length(src)
     n == 0 && return zero()
@@ -1070,7 +1070,7 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
     out = Vector{CoeffPair}(undef, n)
     fps = Vector{UInt}(undef, n)          # fingerprint of each kept summand
     # the graph of each kept summand, built once here rather than twice inside every comparison
-    gs  = Vector{LabeledMultiGraph}(undef, n)
+    gs = Vector{LabeledMultiGraph}(undef, n)
     ivs = Vector{UInt}(undef, n)          # isomorphism-invariant hash of that graph
     m = 0
 
@@ -1100,13 +1100,13 @@ function hard_merge(TEx::TensorExpression; multiterm::Bool=false,
                 for q in k:(m-1)
                     out[q] = out[q+1]
                     fps[q] = fps[q+1]
-                    gs[q]  = gs[q+1]
+                    gs[q] = gs[q+1]
                     ivs[q] = ivs[q+1]
                 end
                 m -= 1
             else
                 out[k] = CoeffPair(c, t)   # same fingerprint as before, fps[k] still valid
-                gs[k]  = g                 
+                gs[k] = g
                 ivs[k] = iv
             end
             found = true;
@@ -1159,10 +1159,10 @@ function _contraction_colours(T::TensorTerm)
     end
     S = off[n+1]
 
-    uid  = Vector{UInt64}(undef, S)
-    fac  = Vector{Int}(undef, S)
-    slt  = Vector{Int}(undef, S)
-    psn  = Vector{Bool}(undef, S)
+    uid = Vector{UInt64}(undef, S)
+    fac = Vector{Int}(undef, S)
+    slt = Vector{Int}(undef, S)
+    psn = Vector{Bool}(undef, S)
     live = Vector{Bool}(undef, S)               # lightcone indices take no part
     @inbounds for i in 1:n, s in eachindex(ind[i])
         k = off[i] + s
@@ -1175,7 +1175,7 @@ function _contraction_colours(T::TensorTerm)
     end
 
     # occurrences of each index, and the other end when there are exactly two
-    cnt     = zeros(Int, S)
+    cnt = zeros(Int, S)
     partner = zeros(Int, S)
     @inbounds for k in 1:S
         live[k] || continue
@@ -1284,7 +1284,7 @@ function canonical_form(T::TensorTerm)
     _freely_reorderable(ts) || return (1, rename_dummies(T))
     col = _contraction_colours(T)
     perm = collect(1:n)
-    sort!(perm, by = i -> (col[i], i))       # ties keep source order, so this is deterministic
+    sort!(perm, by=i -> (col[i], i))       # ties keep source order, so this is deterministic
     if perm == 1:n
         return (1, rename_dummies(T))
     end
@@ -1356,7 +1356,7 @@ function _exchange_vanishes(tt::TensorTerm)
         e = get(ends, idx.uid, _NO_ENDS)
         ends[idx.uid] = e[1] == 0 ? (1, i, k, 0, 0) :
                         e[1] == 1 ? (2, e[2], e[3], i, k) :
-                                    (3, e[2], e[3], e[4], e[5])
+                        (3, e[2], e[3], e[4], e[5])
     end
 
     @inbounds for i in 1:(n-1), j in (i+1):n
@@ -1370,7 +1370,8 @@ function _exchange_vanishes(tt::TensorTerm)
         blocked = false
         for m in (i+1):(j-1)
             if !can_swap(ts[i], ts[m]) || !can_swap(ts[j], ts[m])
-                blocked = true; break
+                blocked = true;
+                break
             end
         end
         blocked && continue
@@ -1380,21 +1381,21 @@ function _exchange_vanishes(tt::TensorTerm)
         for k in 1:ri
             # the two factors must agree on index level slot by slot: swapping an upper index for
             # a lower one is not a relabelling, so such a pair is not exchangeable at all
-            indices(ts[i])[k][2] == indices(ts[j])[k][2] || (ok = false; break)
+            indices(ts[i])[k][2] == indices(ts[j])[k][2] || (ok=false; break)
             u = indices(ts[i])[k][1].uid
             v = indices(ts[j])[k][1].uid
             eu = get(ends, u, _NO_ENDS)
             ev = get(ends, v, _NO_ENDS)
             # both must be dummies: a free index cannot be relabelled. A count other than 2 covers
             # the absent case too, so no separate nothing check is needed
-            (eu[1] != 2 || ev[1] != 2) && (ok = false; break)
+            (eu[1] != 2 || ev[1] != 2) && (ok=false; break)
             pu = (eu[2] == i && eu[3] == k) ? (eu[4], eu[5]) : (eu[2], eu[3])
             pv = (ev[2] == j && ev[3] == k) ? (ev[4], ev[5]) : (ev[2], ev[3])
-            pu[1] == pv[1] || (ok = false; break)      # must land on the same partner factor
-            (pu[1] == i || pu[1] == j) && (ok = false; break)   # partner is one of the pair
+            pu[1] == pv[1] || (ok=false; break)      # must land on the same partner factor
+            (pu[1] == i || pu[1] == j) && (ok=false; break)   # partner is one of the pair
             part = ts[pu[1]]
             sgn = isAntisymmetric(part) ? -1 : isSymmetric(part) ? 1 : 0
-            sgn == 0 && (ok = false; break)            # partner relates those slots by no symmetry
+            sgn == 0 && (ok=false; break)            # partner relates those slots by no symmetry
             total *= sgn
         end
         ok && total == -1 && return true
@@ -1474,7 +1475,7 @@ function canonical_signature(T::TensorTerm)
     sgn = 1
     if n > 1 && _freely_reorderable(ts)
         col = _contraction_colours(T)
-        sort!(perm, by = i -> (col[i], i))
+        sort!(perm, by=i -> (col[i], i))
         perm == 1:n || (sgn = _graded_perm_sign(ts, perm))
     end
     dums = dummy_uids(T)
@@ -1758,19 +1759,19 @@ function Base.show(io::IO, T::TensorSuperType)
     print(io, tens2str(T))
 end
 #for future use with bras and kets to hijack the rendering
-function show_factor(io::IO, T::TensorSuperType,pos::Int64,TT::TensorTerm)
+function show_factor(io::IO, T::TensorSuperType, pos::Int64, TT::TensorTerm)
     show(io, T)
 end
 
 function Base.show(io::IO, T::TensorTerm)
     for tens in 1:length(terms(T))
-        show_factor(io,terms(T)[tens], tens, T)
+        show_factor(io, terms(T)[tens], tens, T)
     end
 end
 _unwrapnum(x) = SymbolicUtils.isconst(x) ? SymbolicUtils.unwrap_const(x) : x
 function coef_string(c, T::TensorExpression)
     c = Symbolics.simplify(Symbolics.expand(c))
-    c = _unwrapnum(c)  
+    c = _unwrapnum(c)
     isequal(c, 1) && !is_const(T) && return ""
     isequal(c, -1) && !is_const(T) && return "-"
     if c isa Number
@@ -2097,10 +2098,20 @@ function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
 end
 
 
+"""
+LaTeX for one factor of a product, given where it sits.
+
+The counterpart of `show_factor`: a factor whose markup depends on its neighbours -
+a bra followed by a ket, which together are one `\\braket` - needs to see the term
+it belongs to. Everything else ignores the position and defers to `to_latex`.
+"""
+to_latex_factor(T, pos::Int64, TT::TensorTerm) = to_latex(T)
+
 function to_latex(T::TensorTerm)
     out = ""
-    for tens in terms(T)
-        out *= to_latex(tens)
+    fs = terms(T)
+    for tens in eachindex(fs)
+        out *= to_latex_factor(fs[tens], tens, T)
     end
     return Base.replace(out * " ", "\$" => "")
 end
@@ -2115,24 +2126,30 @@ function latex_coeff(c)
     return needs_parentheses(c) ? "\\left(" * s * "\\right)" : s
 end
 
-function to_latex(T::TensorExpression)
-    out = ""
+"""
+A coefficient split into its sign and the LaTeX of its magnitude.
 
+The sign has to be pulled out before latexifying for fractions.
+"""
+function _latex_signed_coeff(cs::AbstractString)
+    neg = startswith(cs, "-")
+    mag = neg ? String(SubString(cs, 2)) : String(cs)
+    return neg, (isempty(mag) ? "" : latex_coeff(mag))
+end
+
+function to_latex(T::TensorExpression)
     summandss = summands(T)
-    n = length(summandss)
     isempty(summandss) && return "0"
-    cs = latex_coeff(coef_string(summandss[1][1], T))
+    out = ""
     for (i, tens) in enumerate(summandss)
-        out*=cs*" "
-        out*=to_latex(tens[2])
-        if i < n
-            cs = coef_string(summandss[i+1][1], T)
-            if !startswith(cs, "-")
-                # @show cs
-                out *= "+"
-            end
-            cs=latexify(cs)
+        neg, tex = _latex_signed_coeff(coef_string(tens[1], T))
+        if i == 1
+            neg && (out *= "-")
+        else
+            out *= neg ? "-" : "+"
         end
+        out *= tex * " "
+        out *= to_latex(tens[2])
     end
     return Base.replace(out * " ", "\$" => "")
 end
@@ -2158,7 +2175,8 @@ function uni_to_TeX(charr::String)
     end
 end
 
-function to_latex(T::TensorSuperType)
+#allow for outer layer overwrite
+function _to_latex(T::TensorSuperType)
     out = ""
     if name(T) != ""
         out *= uni_to_TeX(name(T)) * " "
@@ -2226,6 +2244,11 @@ function to_latex(T::TensorSuperType)
         end
     end
     return Base.replace(out * " ", "\$" => "")
+
+end
+
+function to_latex(T::TensorSuperType)
+    _to_latex(T)
 end
 
 
@@ -2851,7 +2874,7 @@ function copy(T::TensorExpression)
     out = CoeffPair[]
     sizehint!(out, length(s))
     @inbounds for i in eachindex(s)
-        isZero(s[i][1]) && continue     
+        isZero(s[i][1]) && continue
         push!(out, CoeffPair(s[i][1], copy(s[i][2])))
     end
     isempty(out) && return TensorExpression()

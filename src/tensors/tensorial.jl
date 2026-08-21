@@ -270,6 +270,8 @@ function RiemannTensor(name::String, args...)
     return t
 end
 
+const Riemann=RiemannTensor
+
 
 #######
 # common tableaux generation functions

@@ -21,11 +21,16 @@
     #d of a two-form is three terms, alternating
     @test length(summands(exterior_derivative(FF, xx, xa))) == 3
 
-    #the result is totally antisymmetric, so swapping two slots flips the sign
     if 1==1
         dab = exterior_derivative(Tensor("A", [xb=>lower], xx), xx, xa)
         dba = exterior_derivative(Tensor("A", [xa=>lower], xx), xx, xb)
-        @test isZeroTens(simplify(apply_derivative(dab + dba)))
+        @test isZeroTens(simplify(apply_derivative(dab - dba)))
+
+        #and that component is the curl, which is manifestly antisymmetric in xa, xb
+        hand = PartialDerivative("∂", xx, xa=>lower)(Tensor("A", [xb=>lower], xx)) -
+               PartialDerivative("∂", xx, xb=>lower)(Tensor("A", [xa=>lower], xx))
+        @test isZeroTens(simplify(apply_derivative(dab - hand)))
+        @test !isZeroTens(simplify(apply_derivative(dab + hand)))
     end
 
     #d is nilpotent, the property that fixes the signs. the derivative has to
@@ -97,6 +102,33 @@
         @test length(summands(exterior_derivative(Psi, xx, xc))) == 3
         @test isZeroTens(simplify(apply_derivative(
             exterior_derivative(exterior_derivative(Psi, xx, xc), xx, xd))))
+    end
+
+    #d with the coordinate left implicit, so that 𝖽(α∧β) can be written directly. The set
+    #comes off the slots and the coordinate from what the form is a function of, falling
+    #back to the registry when it is a function of nothing.
+    if 1==1
+        Ai = Tensor("Ai", [xb=>lower], xx)
+        Bi = Tensor("Bi", [xc=>lower], xx)
+
+        #inferring the coordinate gives the same answer as naming it
+        @test isZeroTens(simplify(apply_derivative(𝖽(Ai, xa)
+                                                   - 𝖽(Ai, xx, xa))))
+        @test isZeroTens(simplify(apply_derivative(exterior_derivative(Ai, xa)
+                                                   - exterior_derivative(Ai, xx, xa))))
+
+        #the reported case: a wedge, with no coordinate to hand
+        @test !isZeroTens(simplify(apply_derivative(𝖽(Ai ∧ Bi))))
+        @test isZeroTens(simplify(apply_derivative(𝖽(𝖽(Ai)))))
+
+        #a form that is a function of nothing differentiates to zero rather than refusing:
+        #there is no dependence to read, and every coordinate gives the same answer
+        @test isZeroTens(simplify(apply_derivative(𝖽(Tensor("Ci", [xb=>lower])))))
+
+        #but a set carrying no coordinate at all has nothing to differentiate along
+        bare = IndexSet("bare_ext", 4, (0,4), lower)
+        @test_throws Alakazam.InvalidDifferentialForm 𝖽(
+            Tensor("Di", [Index("bi", bare)=>lower]))
     end
 
 end

@@ -54,6 +54,7 @@ mutable struct EpsilonTensor <: EpsilonTensorSuperType
         #     throw(InvalidEpsilonIndices()) #should be both upper or both lower
         # end
         #any length of indices
+        #Levels must be uniform
         if length(unique(idx.index_set for (idx, pos) in i)) != 1
             throw(InvalidEpsilonIndices(i, "all indices must belong to the same index set"))
         elseif length(unique(pos for (idx, pos) in i)) != 1
@@ -661,6 +662,8 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
             temptens = tens
             flag && break
             metric isa EpsilonTensorSuperType && tens isa KroneckerSuperType && continue
+            #Do not let a metric raise or lower an epsilon's indices. Kronecker is exempt
+            !(metric isa KroneckerSuperType) && tens isa EpsilonTensorSuperType && continue
 
             if tens isa OperatorSuperType
                 opinds = op_indices(tens)
@@ -877,6 +880,14 @@ Eliminate the Levi-Civita epsilon tensor by contracting indices or taking traces
 """
 eliminate_epsilon(T::TensorExpression) = eliminate_kronecker(contract_metrics(T, EpsilonTensorSuperType))
 
+"""
+Contract a pair of epsilons, expanding only over the slots that are actually free.
+
+    ε_{a₁…a_k c₁…c_{n-k}} ε^{a₁…a_k d₁…d_{n-k}} = sgn(det η) · k! · δ^{[d₁…d_{n-k}]}_{[c₁…c_{n-k}]}
+
+A pair sharing k indices therefore needs a sum over (n-k)! permutations with k! in front,
+not over all n!.
+"""
 function reduce_epsilon(tens::EpsilonTensorSuperType, metric::EpsilonTensorSuperType)
     # @show tens,metric
     inds_t = indices(tens)
@@ -902,38 +913,57 @@ function reduce_epsilon(tens::EpsilonTensorSuperType, metric::EpsilonTensorSuper
                                                  free_m[1] => free_m[2]])))
     end
 
-    extra_deltas = zero()
-    for σ in permutations(1:n)
-        sgn = perm_sign(σ)
-        deltas = TensorSuperType[]
-        for i in 1:n
-            r_t = inds_t[σ[i]]
-            r_m = inds_m[i]
-            if r_t[2] == r_m[2]
-                (r_t[1].index_set.metric_type===nothing || r_t[1].index_set.metric_type <: AntisymMetricSuperType) && return (false, 1, 1) #skip if metrics are more epsilons etc
-                # same position: use metric to lower/raise
-                if r_t[2] == upper
-                    mt = generate_metric(r_t[1] => upper, r_m[1] => upper)
-                    if mt === nothing
-                        error("Invalid reduction of epsilons (index set not supported)")
-                    end
-                    push!(deltas, mt)
-                else
-                    mt = generate_metric(r_t[1] => lower, r_m[1] => lower)
-                    if mt === nothing
-                        error("Invalid reduction of epsilons (index set not supported)")
-                    end
-                    push!(deltas, mt)
-                end
-            else
-                push!(deltas, KroneckerDelta([r_t[1] => r_t[2], r_m[1] => r_m[2]]))
-            end
+    shared_t = Int[]
+    shared_m = Int[]
+    for (j, r_t) in enumerate(inds_t)
+        i = findfirst(q -> q[1] == r_t[1] && q[2] != r_t[2], inds_m)
+        if i !== nothing && !(i in shared_m)
+            push!(shared_t, j)
+            push!(shared_m, i)
         end
-        extra_deltas += sgn * TensorTerm(deltas)
+    end
+    free_t = Int[j for j in 1:n if !(j in shared_t)]
+    free_m = Int[i for i in 1:n if !(i in shared_m)]
+    k = length(shared_t)
+    #Writing each epsilon with its shared slots last costs the sign of that reordering.
+    presign = perm_sign(vcat(free_t, shared_t)) * perm_sign(vcat(free_m, shared_m))
+
+    extra_deltas = zero()
+    if k == n
+        extra_deltas += 1
+    else
+        for σ in permutations(1:(n - k))
+            sgn = perm_sign(σ)
+            deltas = TensorSuperType[]
+            for l in 1:(n - k)
+                r_t = inds_t[free_t[σ[l]]]
+                r_m = inds_m[free_m[l]]
+                if r_t[2] == r_m[2]
+                    (r_t[1].index_set.metric_type===nothing || r_t[1].index_set.metric_type <: AntisymMetricSuperType) && return (false, 1, 1) #skip if metrics are more epsilons etc
+                    # same position: use metric to lower/raise
+                    if r_t[2] == upper
+                        mt = generate_metric(r_t[1] => upper, r_m[1] => upper)
+                        if mt === nothing
+                            error("Invalid reduction of epsilons (index set not supported)")
+                        end
+                        push!(deltas, mt)
+                    else
+                        mt = generate_metric(r_t[1] => lower, r_m[1] => lower)
+                        if mt === nothing
+                            error("Invalid reduction of epsilons (index set not supported)")
+                        end
+                        push!(deltas, mt)
+                    end
+                else
+                    push!(deltas, KroneckerDelta([r_t[1] => r_t[2], r_m[1] => r_m[2]]))
+                end
+            end
+            extra_deltas += sgn * TensorTerm(deltas)
+        end
     end
     #det of the metric
     dt=det(inds_t[1][1]) * (inds_t[1][1].index_set.metric_type <: AntisymMetricSuperType ? -1 : 1)
-    return (true, dt, extra_deltas)
+    return (true, dt * presign * factorial(k), extra_deltas)
 end
 
 

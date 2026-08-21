@@ -179,11 +179,15 @@ Rank of a Clifford basis element: the number of spacetime vector indices it carr
 clifford_rank(t) = _clifford_rank_inds(indices(t))
 
 """
-Spacetime sets are those carrying a symmetric metric, which is what distinguishes them from
-internal ones such as an SU(2) R-symmetry set. A set with no declared metric is taken to be
-spacetime, since that is the common case for a plain vector index.
+A set named "spacetime" is taken at its word, that being what the usual set-up calls it.
+
+Failing the name, spacetime sets are those carrying a symmetric metric, which is what
+distinguishes them from internal ones such as an SU(2) R-symmetry set. A set with no
+declared metric is taken to be spacetime, since that is the common case for a plain vector
+index
 """
 function _is_spacetime_set(S::IndexSet)
+    S.name == "spacetime" && return true
     S.metric_type === nothing && return true
     return S.metric_type <: SymMetricSuperType
 end
@@ -663,8 +667,40 @@ function match_and_apply_rule(pattern_terms, actual_terms, rhs_template, full_te
 end
 
 """
+The dimension a rule actually matched: the range of the nearest spacetime-like index
+the matched terms carry. This is what `:dim` in an `@mrule` right-hand side resolves to.
+
+A set named "spacetime" settles it outright, so every slot is searched for one of those
+before `_is_spacetime_set` is consulted. Sweeping the whole term first is what makes the
+difference: that test also passes an internal set which never declared a metric, and on a
+term carrying both such a set would otherwise win merely by sitting first.
+"""
+function _matched_dimension(actual_terms)
+    for pick in (S -> S.name == "spacetime", _is_spacetime_set)
+        for t in actual_terms
+            for (idx, _) in indices(t)
+                pick(idx.index_set) && return idx.index_set.range
+            end
+        end
+    end
+    #Nothing spacetime-like: fall back to whatever slot there is
+    for t in actual_terms
+        inds = indices(t)
+        isempty(inds) || return inds[1][1].index_set.range
+    end
+    return nothing
+end
+
+"""
 Macro to generate a function reduce_matrix that reduces a product of matrices.
 This also defines rules for reducing traces.
+
+The right-hand side may use `:dim` for anything dimension-dependent. It is a placeholder,
+not a variable. At each application it becomes the dimension of the terms the rule
+actually matched, the range of the nearest spacetime-like index they carry.
+
+    @mrule g1*g3 = :dim                 # d, whichever set the gammas came from
+    @mrule g1*g2*g3 = (2 - :dim)*g2
 """
 macro mrule(expr)
     @assert expr.head == :(=)
@@ -689,6 +725,18 @@ macro mrule(expr)
     lhs_terms = extract_terms(lhs)
     n = length(lhs_terms)
 
+    #`:dim` on the right stands for a dimension not known until the rule is applied.
+    dimvar = gensym(:dim)
+    function sub_dim(ex)
+        ex isa QuoteNode && ex.value === :dim && return dimvar
+        ex isa Expr && return Expr(ex.head, map(sub_dim, ex.args)...)
+        return ex
+    end
+    rhs = sub_dim(rhs)
+    #Only pay for the lookup when a rule actually asks for it.
+    dim_assign = rhs == expr.args[2] ? Expr(:block) :
+                 :($(esc(dimvar)) = Alakazam._matched_dimension(actual_terms))
+
     arg_names = [gensym() for _ in 1:n]
     type_exprs = [:(typeof($(esc(t)))) for t in lhs_terms]
 
@@ -702,6 +750,7 @@ macro mrule(expr)
         function $fname($(args_with_types...), tterm::Alakazam.TensorTerm)
             pattern_terms = TensorSuperType[$(map(esc, lhs_terms)...)]
             actual_terms = TensorSuperType[$(arg_names...)]
+            $dim_assign
             rhs_template = TensorExpression($(esc(rhs)))
             return match_and_apply_rule(
                 pattern_terms,
@@ -714,4 +763,37 @@ macro mrule(expr)
         precompile($fname,
                    ($(type_exprs...), Alakazam.TensorTerm))
     end
+end
+
+
+function to_latex(T::KetSuperType)
+    out="\\ket{"
+    out*=_to_latex(T)
+    out*="}"
+    return out
+end
+
+function to_latex(T::BraSuperType)
+    out="\\bra{"
+    out*=_to_latex(T)
+    out*="}"
+    return out
+end
+
+#A bra immediately followed by a ket is one inner product, and the braket package
+#writes it as a single \braket{ψ|ϕ}
+_ket_follows_bra(pos::Int64, TT::TensorTerm) =
+    pos < length(terms(TT)) && terms(TT)[pos + 1] isa KetSuperType
+
+_bra_precedes_ket(pos::Int64, TT::TensorTerm) =
+    pos > 1 && terms(TT)[pos - 1] isa BraSuperType
+
+function to_latex_factor(T::BraSuperType, pos::Int64, TT::TensorTerm)
+    _ket_follows_bra(pos, TT) || return to_latex(T)
+    return "\\braket{" * _to_latex(T) * "|"
+end
+
+function to_latex_factor(T::KetSuperType, pos::Int64, TT::TensorTerm)
+    _bra_precedes_ket(pos, TT) || return to_latex(T)
+    return _to_latex(T) * "}"
 end

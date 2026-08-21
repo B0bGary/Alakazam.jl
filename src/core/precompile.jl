@@ -77,6 +77,8 @@ const TEST_FILES = [
     "test_epsdelta.jl",
     # test_matrices.jl now not included, could override userfacing commutators and reduce methods etc
     "test_lie.jl",
+    # "test_conjugation.jl",
+    "test_spin.jl",
     "test_serialise.jl",
     "test_serialise_load.jl",
     "test_algebras.jl",
@@ -85,6 +87,9 @@ const TEST_FILES = [
     "test_superspace.jl",
     "test_superspace_adv.jl",
     "test_lightcone.jl",
+    "test_forms.jl",
+    # "test_compton.jl",
+    "test_latex.jl"
 ]
 
 _TESTDIR = mktempdir(cleanup=false)
