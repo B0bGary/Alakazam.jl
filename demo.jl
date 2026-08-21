@@ -1,225 +1,226 @@
-using Main.Alakazam
+####################################################################################
+#  Alakazam — a sample of the package
+#
+#      julia --project=. demo.jl
+#
+#  This follows the shape of the manual: fundamentals, special tensors, operations,
+#  operators, pattern matching, variational calculus, differential geometry,
+#  conjugation, superspace, serialisation. Each part is a taste rather than a
+#  treatment. For complete calculations see the demo/ folder:
+#      demo/compton_spinor.jl   Compton scattering, with trace reduction rules
+#      demo/ttbar2DN02.jl       an N=(0,2) superspace constraint analysis
+####################################################################################
 
-######################################
-######################################
-## setup and definitions
-######################################
+using Alakazam, Symbolics
 
-#define index sets
-flavour_indices = IndexSet("flavour", 2,lower)
-spinor_indices = IndexSet("spinor", 2)
-spacetime_indices = IndexSet("spacetime", 4,lower)
-spinor_conj_indices = IndexSet("spinor_conj", 2,lower)
+section(t) = println("\n", "─"^76, "\n  ", t, "\n", "─"^76)
+out(l, v) = println("  ", rpad(l, 28), v)
 
-#define indices
+####################################################################################
+section("Fundamentals — index sets, indices, coordinates, tensors")
+####################################################################################
 
-# these indices are of grading 0 (bosonic)
-i = Index("i", flavour_indices,0)
-j = Index("j", flavour_indices)
-k = Index("k", flavour_indices)
-l = Index("l", flavour_indices)
-m = Index("m", flavour_indices)
-n = Index("n", flavour_indices)
-p = Index("p", flavour_indices)
-q = Index("q", flavour_indices)
-r = Index("r", flavour_indices)
-s = Index("s", flavour_indices)
-t = Index("t", flavour_indices)
+# An index set fixes a dimension, a signature and where indices sit by default.
+st = IndexSet("spacetime", 4, lower)
+μ, ν, ρ, σ, τ, λ, κ, χ = Index(["μ", "ν", "ρ", "σ", "τ", "λ", "κ", "χ"], st)
+x = Coordinate("x", st)                          # tensors may be fields of x
 
-# these indices are of grading 1 (ie ibjects with an odd number of these are fermionic)
-α = Index("α", spinor_indices, 1)
-β = Index("β", spinor_indices, 1)
-γ = Index("γ", spinor_indices, 1)
-μ = Index("μ", spinor_indices, 1)
-ν = Index("ν", spinor_indices, 1)
-ρ = Index("ρ", spinor_indices, 1)
-τ = Index("τ", spinor_indices, 1)
-σ = Index("σ", spinor_indices, 1)
+out("a tensor", Tensor("T", μ => upper, ν => lower, τ => upper))
+out("a tensor field", Tensor("A", μ => lower, x))
+# a repeated index is summed, and the name of a dummy is not observable
+out("A^μ B_μ ≅ A^ν B_ν", Tensor("A", μ => upper) * Tensor("B", μ => lower) ≅
+                          Tensor("A", ν => upper) * Tensor("B", ν => lower))
 
-αdot = Index("̇α", spinor_conj_indices, 1)
-βdot = Index("̇β", spinor_conj_indices, 1)
-γdot = Index("̇γ", spinor_conj_indices, 1)
-ρdot = Index("̇ρ", spinor_conj_indices, 1)
-μdot = Index("̇μ", spinor_conj_indices, 1)
-νdot = Index("̇ν", spinor_conj_indices, 1)
-τdot = Index("̇τ", spinor_conj_indices, 1)
-σdot = Index("̇σ", spinor_conj_indices, 1)
+####################################################################################
+section("Building tensors — macros, T-strings, LaTeX, and back out again")
+####################################################################################
 
+out("@Tensor", @Tensor T_μν^τ)
+out("T-string", T"T_μν^τ")
+out("from LaTeX", LT"T_{\mu\nu}^{\tau}")
+out("to LaTeX", to_latex(T"T_μν^τ"))
 
-a = Index("a", spacetime_indices, 0)
-b = Index("b", spacetime_indices)
-c = Index("c", spacetime_indices)
-d = Index("d", spacetime_indices)
-e = Index("e", spacetime_indices)
-f = Index("f", spacetime_indices)
-g = Index("g", spacetime_indices)
+####################################################################################
+section("Special tensors")
+####################################################################################
 
-#define coordinates, tensors will be functions of these, ie tensor fields. these are useful for taking derivatives
-x = Coordinate("x", spacetime_indices)
-θ = Coordinate("θ", [flavour_indices, spinor_indices])
-θbar = Coordinate("Θ", [flavour_indices, spinor_conj_indices])
+out("metric", Metric(μ => lower, ν => lower))
+out("Kronecker", KroneckerDelta(μ => upper, ν => lower))
+out("epsilon", EpsilonTensor(μ => lower, ν => lower, ρ => lower, σ => lower))
+out("raising an index", contract_metrics(Metric(ν => upper, ρ => upper) *
+                                         Tensor("T", μ => upper, ν => lower)))
 
-# define our grassman basis ̄θ for use in superfield expansions 
-θiα=Tensor("θ",[i=>lower, α=>upper],θ)
-barθαi=Tensor("Θ",[i=>upper,αdot=>lower],θbar)
-barθij=Tensor("Θ",[i=>lower, νdot=>upper],θbar)*Tensor("Θ",[j=>lower,
-νdot=>lower],θbar)
-barθupij=Tensor("Θ",[i=>upper, μdot=>upper],θbar)*Tensor("Θ",
-[j=>upper, μdot=>lower],θbar)
-θij=Tensor("θ",[i=>lower, ν=>upper],θ)*Tensor("θ",[j=>lower,
-ν=>lower],θ)
-θupij=Tensor("θ",[i=>upper, μ=>upper],θ)*Tensor("θ",[j=>upper,
-μ=>lower],θ)
+####################################################################################
+section("Symmetries — Young tableaux, and the Bianchi identity")
+####################################################################################
 
+# Rows symmetrise, columns antisymmetrise. This is the Riemann window.
+riemann_tableau = YoungTableau([2, 2], [1, 3, 2, 4])
+R(i, j, k, l) = Tensor("R", i => lower, j => lower, k => lower, l => lower,
+                       riemann_tableau)
+out("R_μνρσ", R(μ, ν, ρ, σ))
+out("R_μνρσ = -R_νμρσ", isZeroTens(simplify(R(μ, ν, ρ, σ) + R(ν, μ, ρ, σ))))
+# the first Bianchi identity is a multi-term symmetry: no single term is zero,
+# only the cyclic sum, which hard_simplify finds
+out("first Bianchi identity", hard_simplify(R(μ, ν, σ, τ) + R(μ, σ, τ, ν) +
+                                            R(μ, τ, ν, σ); multiterm = true))
 
+####################################################################################
+section("Operations on expressions")
+####################################################################################
 
-# θjα=Tensor("θ",[j=>lower, α=>upper],θ)
-# θ4=Tensor("θ",[m=>lower, ν=>upper],θ)*Tensor("θ",[n=>lower, 
-# ν=>lower],θ)*Tensor("θ",[m=>upper, μ=>upper],θ)*Tensor("θ",[n=>upper,
-# μ=>lower],θ)
-# θbar4=Tensor("Θ",[p=>lower, νdot=>upper],θbar)*Tensor("Θ",[q=>lower,
-# νdot=>lower],θbar)*Tensor("Θ",[p=>upper, μdot=>upper],θbar)*Tensor("Θ",
-# [q=>upper, μdot=>lower],θbar)
-# θᵅᵝ=Tensor("θ",[y=>upper, α=>upper],θ)*Tensor("θ",[y=>lower,
-# β=>upper],θ)
-# θᵦᵧ =Tensor("θ",[y=>upper, β=>lower],θ)*Tensor("θ",[y=>lower,
-# γ=>lower],θ)
-# barθᵅᵝ=Tensor("Θ",[z=>upper, αdot=>upper],θbar)*Tensor("Θ",
-# [z=>lower, βdot=>upper],θbar)
-# barθᵦᵧ =Tensor("Θ",[z=>upper, βdot=>lower],θbar)*Tensor("Θ",
-# [z=>lower, γdot=>lower],θbar)
-# θiβ=Tensor("θ",[i=>lower, β=>upper],θ)
-# barθjα=Tensor("Θ",[j=>upper,αdot=>lower],θbar)
-# barθjk=Tensor("Θ",[j=>lower, νdot=>upper],θbar)*Tensor("Θ",[k=>lower,
-# νdot=>lower],θbar)
-# θjk=Tensor("θ",[j=>lower, ν=>upper],θ)*Tensor("θ",[k=>lower, ν=>lower],θ)
-# θʲᵏ=Tensor("θ",[j=>upper, ν=>upper],θ)*Tensor("θ",[k=>upper, ν=>lower],θ)
+W = AntisymmetricTensor("W", [μ => lower, ν => lower])
+S = SymmetricTensor("S", [μ => upper, ν => upper])
+out("symmetric × antisymmetric", hard_simplify(S * W))
+out("raise every index", raise_all(Tensor("T", μ => lower, ν => lower)))
+out("canonical dummy names", rename_dummies(Tensor("A", λ => upper) *
+                                            Tensor("B", λ => lower)))
 
+####################################################################################
+section("Matrices — gamma, Pauli, traces, bras and kets")
+####################################################################################
 
+out("γ^μ γ_μ", contract_adjacent(Gamma(μ => upper) * Gamma(μ => lower), Gamma))
+out("γ^μ γ^ν γ_μ", contract_adjacent(Gamma(μ => upper) * Gamma(ν => upper) *
+                                     Gamma(μ => lower), Gamma))
+out("tr(γ_μ γ_ν)", simplify(eliminate_trace(Trace(Gamma(μ => lower) *
+                                                  Gamma(ν => lower)))))
 
+st2 = IndexSet("spacetime10", 10, lower)
+M,N,P,Q = Index(["M", "N", "P", "Q"], st2)
+println("dimension aware:")
+out("γ^M γ_M", contract_adjacent(Gamma(M => upper) * Gamma(M => lower), Gamma))
+out("γ^M γ^N γ_M", contract_adjacent(Gamma(M => upper) * Gamma(N => upper) *
+                                     Gamma(M => lower), Gamma))
+out("tr(γ_M γ_N)", simplify(eliminate_trace(Trace(Gamma(M => lower) *
+                                                  Gamma(N => lower)))))                                     
 
+out("a Pauli matrix", Pauli(μ => upper))
+out("an inner product", Bra("ψ") * Ket("ϕ"))
 
-# defining the derivative operators of our theory
-# each type of derivative should be given a different symbol
-# note that  zero() here is just the placeholder 0 tensor expression and will be replaced when
-# the derivative is evaluated later
-# the 3rd parameter is which coordinates the derivative is w/r to (it will annihilate tensors that are not
-# functions of these coordinates)
-# the 4th parameter are the indices associated with the derivative
-grassman_deriv_normalrep=Derivative("∂",Alakazam. zero(), [θ], [j => upper, β => lower])
-grassman_deriv_conjrep=Derivative("𝛛",Alakazam. zero(), [θbar], [j => lower, βdot => upper])
-spatial_deriv=Derivative("∇",Alakazam. zero(), [x], [b => lower])
+# Matrices do not commute until told. Declared relations feed back into simplify.
+X, P = Mat("X", μ => upper), Mat("P", ν => upper)
+@commutator [X, P] = im * Metric(μ => upper, ν => upper)
+out("XP - PX", simplify(X * P - P * X))
 
-#define the action of our derivatives on some tensors
-#note that the derivative isn't defined on literally "θiα", but on tensors, with the same name and index structure (mod index names)
-# its important that the action is defined on a tensor with different indices to the deriv indices, else the 
-# software will interpret the action to only be for a contraction
-add_derivative_action(grassman_deriv_normalrep,θiα,KroneckerDelta([i=>lower,j=>upper])*KroneckerDelta([β=>lower,α=>upper]))
-add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>lower, α=>lower],θ),KroneckerDelta([i=>lower,j=>upper])*EpsilonTensor([α=>lower,β=>lower]))
-add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>upper],θ),EpsilonTensor([i=>upper,j=>upper])*KroneckerDelta([β=>lower,α=>upper]))
-add_derivative_action(grassman_deriv_normalrep,Tensor("θ",[i=>upper, α=>lower],θ),EpsilonTensor([i=>upper,j=>upper])*EpsilonTensor([α=>lower,β=>lower]))
-add_derivative_action(grassman_deriv_conjrep,barθαi,KroneckerDelta([i=>upper,j=>lower])*KroneckerDelta([βdot=>upper,αdot=>lower]))
-add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>lower,αdot=>lower],θbar),EpsilonTensor([i=>lower,j=>lower])*KroneckerDelta([βdot=>upper,αdot=>lower]))
-add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>upper,αdot=>upper],θbar),KroneckerDelta([i=>upper,j=>lower])*EpsilonTensor([αdot=>upper,βdot=>upper]))
-add_derivative_action(grassman_deriv_conjrep,Tensor("Θ",[i=>lower,αdot=>upper],θbar),EpsilonTensor([i=>lower,j=>lower])*EpsilonTensor([αdot=>upper,βdot=>upper]))
+####################################################################################
+section("Lie brackets and algebra generators")
+####################################################################################
 
+out("[X,P]", @Lie [X, P])
+out("{X,P}", @Lie {X, P})
 
-#create our superfield expansion (just a few terms to illustrate)
+# the conformal algebra in 4D, as generators that act on fields
+println("Representations of algebras - conformal weights:")
+P4, M4, D4, K4 = generate_conformal_algebra(4)
+@syms Δ
+Φ = Ket("Φ", x)
+@action D4(Φ) = im * Δ * Φ
+@action M4(Φ) = 0
+out("|Φ⟩ is an eigenstate of D", derive(D4(Φ)))
+out("[D, P]|Φ⟩  raises weight", derive(commute(D4(P4(Φ)))))
 
-SUPERFIELD=(Tensor("j", x)+θiα*Tensor("ψ",[i=>upper, α=>lower],x)+θij*Tensor("F",[i=>upper, j=>upper],x,[YoungTableau([2],[1,2])]))
+####################################################################################
+section("Derivatives, the product rule, and integration by parts")
+####################################################################################
 
-# note that here, F is a symmetric tensor. To encode this information, we use a vector of Young tableaux (since our tensor might be reducible rep).
-# a tableau is a tiling pattern of squares. Squares in the same row denote indices that are symmetric,
-# squares in the same column are antisymmetric. 
-# When creating a tableau, the first vector is the length of each row. The 2nd vector is labeling the squares with indices,
-# left to right, top to bottom. 
+∂ = PD("∂", [x], [μ => lower])
+A, B = Tensor("A", [ν => lower], x), Tensor("B", [ρ => lower], x)
+out("∂_μ(AB)", apply_derivative(∂(A * B)))
+out("∂_μ of a constant", apply_derivative(PD("∂", Tensor("k", [ν => lower]), x,
+                                             μ => lower)))
+# modulo total derivatives, a derivative may be moved from one factor to the other
+out("(∂A)B + A(∂B) ≃ 0", drop_total_derivatives(∂(A) * B + A * ∂(B)))
+out("(∂A)B ≃ -A(∂B)", drop_total_derivatives(∂(A) * B))
 
-# For example, a totally symmetric tesnor, eg S^{μνστ} would have a Young tableau
-# YoungTableau([4],[1,2,3,4]):
-# [1][2][3][4]
+####################################################################################
+section("Pattern matching with wildcard indices")
+####################################################################################
 
-# a totally antisym tensor A^{μνστ} can be encoded in a tableau YoungTableau([1,1,1,1],[1,2,3,4]):
-# [1]
-# [2]
-# [3]
-# [4]
+# ?α is a wildcard slot: the rule fires wherever F appears, whatever it is indexed on
+α̂, β̂ = DummyPatternIndex(["α", "β"], st)
+Fdef = (PD("∂", Tensor("A", [β̂ => lower], x), x, α̂ => lower)
+        - PD("∂", Tensor("A", [α̂ => lower], x), x, β̂ => lower))
+out("F_μν → ∂A - ∂A", replace_pattern(T"F_[μν]{x}", "F_{?α?β}", Fdef))
 
-# tensor M^{μνστ}  that is symmetric in the first two, symmetric in the last two, but antisymmetric under swaps 1<->3, and 2<->4
-# can be encoded in a tableau YoungTableau([2,2],[1,2,3,4]):
-# [1][2]
-# [3][4]
+####################################################################################
+section("Variational calculus — a Lagrangian gives back its field equations")
+####################################################################################
 
+dirac = IndexSet("dirac", 4, upper, fermionic)
+i, j = Index(["i", "j"], dirac)
+@syms m e
+ψ = Tensor("ψ", [i => lower], x)
+L = (-1//4 * AntisymmetricTensor("F", [μ => upper, ν => upper], x)
+             * AntisymmetricTensor("F", [μ => lower, ν => lower], x)
+     + Tensor("̄ψ", [i => upper], x) *
+       (im * Gamma(μ => upper) * (PD("∂", ψ, x, [μ => lower])
+                                  + im * e * Tensor("A", [μ => lower], x) * ψ) - m * ψ))
+println("  L = ", L)
+LA = simplify(replace_pattern(replace_pattern(L, "F_{?α?β}", Fdef), "F^{?α?β}",
+    PD("∂", Tensor("A", [β̂ => upper], x), x, α̂ => upper)
+    - PD("∂", Tensor("A", [α̂ => upper], x), x, β̂ => upper)))
+println("  δL/δA_ρ  = ", Alakazam.hard_simplify(EL(LA, Tensor("A", [ρ => upper], x),
+                                                   PD("∂", x, [τ => upper]))))
+println("  δL/δ̄ψ    = ", Alakazam.hard_simplify(EL(LA, Tensor("̄ψ", [j => lower], x),
+                                                   PD("∂", x, [ρ => upper]))))
 
-custom_sort_order!(["θ","Θ","ϵ"])
+####################################################################################
+section("Differential geometry — ⋆, ⨼, ∧, 𝖽")
+####################################################################################
 
+V = Tensor("V", [μ => lower])
+ω = AntisymmetricTensor("ω", [μ => lower, ν => lower])
+out("⋆ω", ⋆(ω))
+out("V ⨼ ω", V ⨼ ω)
+out("A ∧ B", Tensor("A", [μ => lower]) ∧ Tensor("B", [ν => lower]))
+out("𝖽A", 𝖽(Tensor("A", μ => lower, x)))
+out("𝖽𝖽A = 0", isZeroTens(simplify(apply_derivative(𝖽(𝖽(Tensor("A", μ => lower, x)))))))
 
-######################################
-######################################
-## computing the constraint equations
-######################################
+####################################################################################
+section("Complex conjugation — reality follows from the indices")
+####################################################################################
 
-# to make expressions simple, we can have a cov. derivative eg D, but then expand it out in terms of the full expression
-covar=Derivative("D",Alakazam. zero(), [x,θ], [j => upper, β => lower])
-covar_expansion=grassman_deriv_normalrep-im*Tensor("σ",[b =>upper, γdot=>upper, β =>lower])*Tensor("Θ",[j=>upper,γdot=>lower],θbar)*spatial_deriv
+# the number field decides how a spacetime field conjugates
+out("real field", Tensor("A", μ => lower, ℝ)')
+out("imaginary field", Tensor("B", μ => lower, iℝ)')
+out("complex field", Tensor("c", μ => lower, ℂ)')
 
-covar_bar=Derivative("̄D",Alakazam. zero(), [x,θbar], [j => lower, βdot => upper])
-covar_expansion_bar=grassman_deriv_conjrep-im*Tensor("σ",[b =>upper,βdot=>upper, β =>lower])*Tensor("θ",[j=>lower,β=>upper],θ)*spatial_deriv
+# and for internal indices, the algebra decides
+su2 = IndexSet("su2", 2, lower, SUAlgebra(2))
+@conjugates su2
+a, b = Index(["a", "b"], su2)               # internal indices stay Latin
+out("SU(2) doublet", Tensor("λ", a => lower)')
+out("...with index raised", Tensor("λ", a => upper)')
 
-println("our superfield expansions is: ", SUPERFIELD)
+####################################################################################
+section("Superspace — expanding a superfield in Grassmann coordinates")
+####################################################################################
 
-#apply our derivative
-# in this example, we'll compute the 2nd derivative, but symmetrised in indices
- println("Computing Symmetrised deriv: ")
+spinor = IndexSet("spinor", 2, lower, EpsilonTensor, fermionic)
+α, β = Index(["α", "β"], spinor)            # spinor indices Greek
+flavour = IndexSet("flavour", 2, upper)
+k, l = Index(["k", "l"], flavour)           # internal indices Latin
+θc = Coordinate("θ", spinor)
 
-D_SUPERFIELD=Derivative("D",SUPERFIELD, [x,θbar], [s => upper, τ => lower])
-# out=expand_derivative(D_SUPERFIELD,covar,covar_expansion)
-# out=apply_derivative(out)
-# out=simplify(out)
-DD_SUPERFIELD=Derivative("D",D_SUPERFIELD,[x,θbar], [r => upper, ρ => lower])
-out=expand_derivative(DD_SUPERFIELD,covar,covar_expansion)
-out=apply_derivative(out)
-out=EpsilonTensor([τ=>upper,ρ=>upper])*out
-out=eliminate_epsilon(out)
+θα = Tensor("θ", [α => lower], θc)
+out("grading(θ)", grading(θα))
+# the expansion terminates on its own: θ is Grassmann, so it closes at θ²
+out("superfield in θ_α", generate_superfield_naive("X", [θα], x))
+# internal indices ride along beside the spinor ones, untouched
+out("spinor × flavour", Tensor("ψ", [α => lower, k => upper], x))
 
-# D_SUPERFIELD2=Derivative("D",SUPERFIELD, [x,θbar], [r => upper, τ => lower])
-# out2=expand_derivative(D_SUPERFIELD2,covar,covar_expansion)
-# out2=apply_derivative(out2)
-# out2=simplify(out2)
-# DD_SUPERFIELD2=Derivative("D",out2,[x,θbar], [s => upper, ρ => lower])
-# out2=expand_derivative(DD_SUPERFIELD2,covar,covar_expansion)
-# out2=apply_derivative(out2)
-# out2=EpsilonTensor([τ=>upper,ρ=>upper])*out2
-# out2=eliminate_epsilon(out2)
+####################################################################################
+section("Serialisation — save the state, clear it, load it back")
+####################################################################################
 
+expr = Tensor("Q", [μ => lower], x) * Tensor("R", [μ => upper], x)
+path = joinpath(tempdir(), "alakazam_demo_expr")
+save(TensorExpression(expr), path, true)          # true: include the global header
+out("saved", expr)
+out("loaded back", load(path))
+out("round trip agrees", load(path) == TensorExpression(expr))
 
-# println("Result:")
-# res2=simplify(out+out2)/2
-# println(res2)
-
-
-# #example extraction of a constraint
-
-# #theta=2, thetabar=0 term in expansion:
-# tt=2
-# tb=0
-# constraint=rename_dummies(get_weighted_terms(get_weighted_terms(res2,
-# "θ",tt),"Θ",tb))
-# #get the constraint on the 2nd independant structure associated with θ^2
-# constraint=project_component(constraint,θ,[i=>upper, α=>lower],tt,tb,θbar,
-# [i=>lower, αdot=>upper],2,1)
-# constraint=rename_dummies(contract_metrics(simplify(
-# eliminate_epsilon(eliminate_kronecker(constraint)))))
-
-
-# ######################################
-# ######################################
-# ## compute the supercurrent squared
-# ######################################
-
-
-# SC²=SUPERFIELD × SUPERFIELD
-# out=get_weighted_terms(get_weighted_terms(SC²,"θ",4),"Θ",4)
-# #integrate over superspace to obtain the supercurrent-squared term
-# ttb=project_component(out,θ,[i=>upper, α=>lower],4,4,θbar,[i=>lower,
-# αdot=>upper],1,1)
-# println(ttb)
+println("\n", "─"^76)
+println("  See demo/ for complete calculations, and the paper for the full manual.")
+println("─"^76)
