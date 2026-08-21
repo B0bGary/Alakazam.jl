@@ -107,8 +107,10 @@
                 nm = mark * string(ch)
                 # skip anything already claimed elsewhere, which the markup cannot disambiguate
                 Alakazam._find_registered_index(nm) === nothing || continue
-                t = Tensor("A", Index(nm, wide) => lower)
-                @test parse_latex(to_latex(t)) == t
+                #a name of its own: a global `t` exists, and assigning to it from inside
+                #this loop is a soft-scope ambiguity Julia warns about on every build
+                tens = Tensor("A", Index(nm, wide) => lower)
+                @test parse_latex(to_latex(tens)) == tens
             end
         end
     end
