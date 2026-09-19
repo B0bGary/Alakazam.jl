@@ -23,11 +23,18 @@
     ###############################################
     @test ca(g(μ) * g(μ, lower)) == TensorExpression(4)
     @test ca(g(μ) * g(ν) * g(μ, lower)) == -2 * g(ν)
-    @test Alakazam.simplify(ca(g(μ) * g(ν) * g(ρ) * g(μ, lower))) ==
-          4 * Metric([ν => upper, ρ => upper])
-    # the recursion continues to longer runs: γ^μγ^νγ^ργ^σγ_μ = -2γ^σγ^ργ^ν in four dimensions
-    @test Alakazam.simplify(ca(g(μ) * g(ν) * g(ρ) * g(σ) * g(μ, lower))) ==
-          Alakazam.simplify(-2 * g(σ) * g(ρ) * g(ν))
+    # The four- and five-gamma identities in closed form, asserted on what contract_adjacent itself
+    # returns. These used to be checked through simplify, which canonicalises the unreduced
+    # 2γ^ργ^ν + 2γ^νγ^ρ into 4η^{νρ} - so they passed while contract_adjacent was handing back the
+    # three-gamma rule applied recursively rather than the identity.
+    @test ca(g(μ) * g(ν) * g(ρ) * g(μ, lower)) == TensorExpression(4 * Metric([ν => upper, ρ => upper]))
+    @test ca(g(μ) * g(ν) * g(ρ) * g(σ) * g(μ, lower)) == TensorExpression(-2 * g(σ) * g(ρ) * g(ν))
+    # longer runs recurse onto those, and the six-gamma case comes out as its standard identity
+    @test ca(g(μ) * g(ν) * g(ρ) * g(σ) * g(τ) * g(μ, lower)) ==
+          2 * g(τ) * g(ν) * g(ρ) * g(σ) + 2 * g(σ) * g(ρ) * g(ν) * g(τ)
+    # one index raised against one lowered is a delta rather than a metric
+    @test ca(g(μ) * g(ν) * g(ρ, lower) * g(μ, lower)) ==
+          TensorExpression(4 * KroneckerDelta([ν => upper, ρ => lower]))
 
     ###############################################
     ### traces, with nothing loaded
@@ -55,6 +62,13 @@
     @test big.range == 10
     @test ca(Gamma(a => upper) * Gamma(a => lower)) == TensorExpression(10)
     @test ca(Gamma(a => upper) * Gamma(b => upper) * Gamma(a => lower)) == -8 * Gamma(b => upper)
+    # the (d-4) parts of the closed forms survive away from four dimensions
+    @test ca(Gamma(a => upper) * Gamma(b => upper) * Gamma(c => upper) * Gamma(a => lower)) ==
+          4 * Metric([b => upper, c => upper]) + 6 * Gamma(b => upper) * Gamma(c => upper)
+    @test ca(Gamma(a => upper) * Gamma(b => upper) * Gamma(c => upper) * Gamma(d => upper) *
+             Gamma(a => lower)) ==
+          -2 * Gamma(d => upper) * Gamma(c => upper) * Gamma(b => upper) -
+          6 * Gamma(b => upper) * Gamma(c => upper) * Gamma(d => upper)
     # the 4d set is unaffected
     @test ca(g(μ) * g(μ, lower)) == TensorExpression(4)
     # and the Clifford relation adapts to the other set too

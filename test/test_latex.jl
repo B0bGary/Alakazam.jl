@@ -195,4 +195,35 @@
         @test_throws ErrorException parse_latex("A_\\mu ]")
     end
 
+    @testset "writing: coefficients, special objects, operators" begin
+        T = Tensor("T")
+        tex(x) = strip(to_latex(x))
+        @syms q         # one letter: latexify sets a longer symbol name in \mathtt
+
+        # A coefficient is written from its value. The display string attaches factors by
+        # juxtaposition, `2//3i`, and read back as Julia that binds as 2//(3i).
+        @test tex(2//3 * im * T) == "\\frac{2i}{3} T"
+        @test tex(-2//3 * im * T) == "-\\frac{2i}{3} T"
+        @test tex(2//3 * T) == "\\frac{2}{3} T"
+        @test tex(im * T) == "i T"
+        # the same flaw for a symbol, which would have come out as 1/(2m)
+        @test tex(1//2 * q * T) == "\\frac{q}{2} T"
+        @test tex((1//2 + 2//3 * im) * T) == "\\left(\\frac{1}{2} + \\frac{2i}{3}\\right) T"
+        # and the display string itself is left as it was
+        @test string(2//3 * im * T) == "2//3iT"
+
+        # γ5 carries its 5 as a label, so only the letter is its name
+        @test tex(Gamma5()) == "\\gamma { }^{5}"
+        # a word, not the product T·r
+        @test startswith(tex(Trace(Gamma(m => lower) * Gamma(n => lower))), "\\mathrm{Tr}")
+
+        # An operator keeps the order of its raised and lowered slots, as a tensor does. They used
+        # to be collected into one group each, and these two different operators printed the same.
+        d1 = Derivative("D", Tensor("B", x), [x], [m => upper, n => lower])
+        d2 = Derivative("D", Tensor("B", x), [x], [n => lower, m => upper])
+        @test startswith(tex(d1), "D{ }^{\\mu}{ }_{\\nu}")
+        @test startswith(tex(d2), "D{ }_{\\nu}{ }^{\\mu}")
+        @test tex(d1) != tex(d2)
+    end
+
 end

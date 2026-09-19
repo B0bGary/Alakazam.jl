@@ -10,6 +10,9 @@ mutable struct Trace <: TraceSuperType
     Trace(d::OperatorData) = new(d)
 end
 
+#"Tr" is a word, and set in math italic it reads as the product T·r
+_latex_op_name(::TraceSuperType) = "\\mathrm{Tr}"
+
 """Eliminate traces by expanding applying matrix reduction rules."""
 eliminate_trace(T::Tensorial)=reduce_trace(factor_trace(T))
 

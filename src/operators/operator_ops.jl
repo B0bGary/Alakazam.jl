@@ -193,33 +193,14 @@ end
 ##############################################################################################################################
 
 # printing and display
+
+"""The operator's name as LaTeX. Specialised where the name is a word rather than a symbol."""
+_latex_op_name(T::OperatorSuperType) = uni_to_TeX(name(T))
+
 function to_latex(T::OperatorSuperType)
-    out = "" * uni_to_TeX(name(T))
-    if !isempty(op_indices(T))
-        lowers = ""
-        uppers = ""
-        lowersempt::Bool = 1
-        uppersempt::Bool = 1
-        # println("oper inds")
-        # println(T.operator_indices)
-        for (ind, pos) in op_indices(T)
-            if pos.position == 0
-                uppers = uppers * uni_to_TeX(ind.name)
-                uppersempt = 0
-                lowers = lowers * ""
-            else
-                uppers = uppers * ""
-                lowersempt = 0
-                lowers = lowers * uni_to_TeX(ind.name)
-            end
-        end
-        if !uppersempt
-            out *= "^{" * uppers * "}"
-        end
-        if !lowersempt
-            out *= "_{" * lowers * "}"
-        end
-    end
+    #the same spacer groups as a tensor's indices: collecting the uppers and lowers into one group
+    #each printed D^{μ}{}_{ν} and D_{ν}{}^{μ} identically
+    out = _latex_op_name(T) * _latex_indices(op_indices(T))
     out *= "\\left("
     out *= to_latex(operand(T))
     out *= "\\right)"

@@ -2137,8 +2137,11 @@ function _latex_signed_coeff(cs::AbstractString)
     return neg, (isempty(mag) ? "" : latex_coeff(mag))
 end
 
-"""LaTeX for a value on its own, without the dollar delimiters latexify adds."""
-_tex(x) = Base.replace(string(latexify(x)), "\$" => "")
+"""
+LaTeX for a value on its own, with no delimiters. `env=:raw` matters: latexify wraps a number in
+`\$…\$` but a Symbolics expression in a whole `equation` environment.
+"""
+_tex(x) = Base.replace(string(latexify(x; env=:raw)), "\$" => "")
 
 """
 `x` times the LaTeX `extra`, with anything multiplying a fraction written into its numerator as it
@@ -2242,49 +2245,33 @@ function uni_to_TeX(charr::String)
     end
 end
 
+"""
+An index list as LaTeX, one spacer group per index.
+
+The spacers are what keep the order of raised and lowered slots: `T^{a}{}_{b}` and `T_{b}{}^{a}`
+are different objects, and collecting the uppers and lowers into one group each would print them
+the same. Tensors and operators both come through here, so neither can lose that order.
+"""
+function _latex_indices(inds)
+    out = ""
+    for (ind, pos) in inds
+        tex = ind.name == "±" ? "\\pm" : ind.name == "∓" ? "\\mp" : uni_to_TeX(ind.name)
+        mark = ind isa DummyPatternIndex ? "?" : ""
+        out *= (pos.position == 0 ? "{ }^{" : "{ }_{") * mark * tex * "}"
+    end
+    return out
+end
+
 #allow for outer layer overwrite
 function _to_latex(T::TensorSuperType)
     out = ""
     if name(T) != ""
-        out *= uni_to_TeX(name(T)) * " "
+        #γ5 is named "γ5" and also carries its 5 as a label, so only the letter is the name - the
+        #same trim `tens2str` makes for display. Rendering the whole name gave γ5^5.
+        nm = T isa Gamma5 ? string(first(name(T))) : name(T)
+        out *= uni_to_TeX(nm) * " "
     end
-    if !isempty(indices(T))
-        for (ind, pos) in indices(T)
-            if ind.name == "±"
-                ntemp = "\\pm"
-            elseif ind.name == "∓"
-                ntemp = "\\mp"
-            else
-                ntemp = uni_to_TeX(ind.name)
-            end
-            if pos.position == 0
-
-                out *= "{ }^{"
-
-                if typeof(ind) == DummyPatternIndex
-                    out *= "?"
-                end
-
-                # uppers = uppers * (ntemp) * " "
-                # uppersempt = 0
-                out *= ntemp
-                out *= "}"
-            else
-                # lowersempt = 0
-
-                out *= "{ }_{"
-
-                if typeof(ind) == DummyPatternIndex
-                    out *= "?"
-                end
-                # lowers = lowers * (ntemp) * " "
-
-                out *= ntemp
-                out *= "}"
-            end
-        end
-
-    end
+    out *= _latex_indices(indices(T))
 
     lab = labels(T)
     if !isempty(lab)
