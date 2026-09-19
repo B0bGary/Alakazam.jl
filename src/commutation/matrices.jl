@@ -288,10 +288,30 @@ We can stil cancel higher products, but there just won't be explicit rules, have
 const MAX_GAMMA_CONTRACTION = 8
 
 """
-Reursive helper function for contracting gamma products `γ^μ γ^{ν1}...γ^{νn} γ_μ` in `d` dimensions.
+Recursive helper for contracting gamma products `γ^μ γ^{ν1}...γ^{νn} γ_μ` in `d` dimensions.
+
+The two- and three-gamma interiors are given in closed form,
+
+    γ^μ γ^ν γ^ρ γ_μ      =  4η^{νρ} + (d-4) γ^ν γ^ρ
+    γ^μ γ^ν γ^ρ γ^σ γ_μ  = -2γ^σ γ^ρ γ^ν + (4-d) γ^ν γ^ρ γ^σ
+
+rather than left to the recursion. The recursion only ever anticommutes the last gamma past `γ_μ` -
+the three-gamma rule applied repeatedly - so on its own it lands on equivalent but unreduced forms
+such as `2γ^ργ^ν + (d-2)γ^νγ^ρ`. Longer interiors still recurse, but onto these, and the four-gamma
+interior then comes out as the standard `2(γ^λγ^νγ^ργ^σ + γ^σγ^ργ^νγ^λ) + (d-4)γ^νγ^ργ^σγ^λ` with
+no rule of its own.
 """
 function _gamma_sandwich(mid::Vector{TensorSuperType}, d)
-    isempty(mid) && return TensorExpression(d)
+    n = length(mid)
+    n == 0 && return TensorExpression(d)
+    if n == 2
+        (i1, p1), (i2, p2) = indices(mid[1])[1], indices(mid[2])[1]
+        out = TensorExpression(4 * _gamma_pair(i1, p1, i2, p2))
+        return d == 4 ? out : out + (d - 4) * TensorTerm(mid)
+    elseif n == 3
+        out = TensorExpression(-2 * TensorTerm(TensorSuperType[mid[3], mid[2], mid[1]]))
+        return d == 4 ? out : out + (4 - d) * TensorTerm(mid)
+    end
     lastg = mid[end]
     head = TensorSuperType[mid[i] for i in 1:(length(mid)-1)]
     lead = isempty(head) ? TensorExpression(2 * lastg) : 2 * lastg * TensorTerm(head)

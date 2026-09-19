@@ -2137,12 +2137,79 @@ function _latex_signed_coeff(cs::AbstractString)
     return neg, (isempty(mag) ? "" : latex_coeff(mag))
 end
 
+"""LaTeX for a value on its own, without the dollar delimiters latexify adds."""
+_tex(x) = Base.replace(string(latexify(x)), "\$" => "")
+
+"""
+`x` times the LaTeX `extra`, with anything multiplying a fraction written into its numerator as it
+would be by hand: `\\frac{2i}{3}` rather than `\\frac{2}{3} i`.
+"""
+function _latex_times(x::Number, extra::AbstractString)
+    if x isa Rational && denominator(x) != 1
+        n = numerator(x)
+        top = isempty(extra) ? string(n) : (isone(n) ? extra : string(n) * extra)
+        return "\\frac{" * top * "}{" * string(denominator(x)) * "}"
+    end
+    x isa Rational && (x = numerator(x))
+    isempty(extra) && return _tex(x)
+    return isone(x) ? extra : _tex(x) * extra
+end
+
+"""A numeric coefficient times the LaTeX `extra` of its symbolic factors, split from its sign."""
+function _latex_number(c::Number, extra::AbstractString="")
+    isreal(c) && return (real(c) < 0, _latex_times(abs(real(c)), extra))
+    re, ip = real(c), imag(c)
+    unit = isempty(extra) ? "i" : "i " * extra
+    iszero(re) && return (ip < 0, _latex_times(abs(ip), unit))
+    body = "\\left(" * _tex(re) * (ip < 0 ? " - " : " + ") * _latex_times(abs(ip), "i") *
+           "\\right)"
+    return (false, isempty(extra) ? body : body * " " * extra)
+end
+
+"""
+A coefficient as LaTeX, split into sign and magnitude, built from its value.
+
+`coef_string` is for display, and attaches factors by juxtaposition - `2//3i`, `1//2m` - which reads
+naturally but which Julia's parser binds tighter than `//`. Handing that string to latexify therefore
+computed `2//(3i)` and printed `\\frac{2}{3i}`. Working from the value keeps the numeric and symbolic
+parts apart until the LaTeX is assembled. Shapes not recognised here fall back to the display string.
+"""
+function _latex_coef(c, T::TensorExpression; drop_unit::Bool=true)
+    c = _unwrapnum(Symbolics.simplify(Symbolics.expand(c)))
+    #a unit coefficient on a tensor is not written, but inside a sum it is a term like any other
+    if drop_unit && !is_const(T)
+        isequal(c, 1) && return (false, "")
+        isequal(c, -1) && return (true, "")
+    end
+    c isa Number && return _latex_number(c)
+    try
+        op = SymbolicUtils.operation(c)
+        args = _unwrapnum.(SymbolicUtils.arguments(c))
+        if op === (+)
+            out = ""
+            for (k, a) in enumerate(args)
+                neg, tex = _latex_coef(a, T; drop_unit=false)
+                out *= k == 1 ? (neg ? "-" : "") : (neg ? " - " : " + ")
+                out *= tex
+            end
+            return (false, "\\left(" * out * "\\right)")
+        elseif op === (*)
+            nums = filter(a -> a isa Number, args)
+            syms = filter(a -> !(a isa Number), args)
+            symtex = isempty(syms) ? "" : _tex(length(syms) == 1 ? syms[1] : op(syms...))
+            return _latex_number(isempty(nums) ? 1 : prod(nums), symtex)
+        end
+    catch
+    end
+    return _latex_signed_coeff(coef_string(c, T))
+end
+
 function to_latex(T::TensorExpression)
     summandss = summands(T)
     isempty(summandss) && return "0"
     out = ""
     for (i, tens) in enumerate(summandss)
-        neg, tex = _latex_signed_coeff(coef_string(tens[1], T))
+        neg, tex = _latex_coef(tens[1], T)
         if i == 1
             neg && (out *= "-")
         else
