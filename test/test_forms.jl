@@ -376,4 +376,30 @@
         end
     end
 
+    #The Hodge star of a summand with no indices to infer the form index set from.
+    #`⋆` on a lone tensor says so plainly; on a PRODUCT of index-free tensors the
+    #index set came back as `nothing` and reached `_star_term`, which has no
+    #method for it, so the user saw a MethodError naming a private function
+    #instead of the message the same situation gives one factor along.
+    if 1==1
+        xstar = Coordinate("x_star", euclidean)
+        sq = Tensor("q_star", xstar)
+        sh = Tensor("h_star", xstar)
+
+        #a lone index-free tensor already asked for the index set
+        @test_throws Alakazam.InvalidDifferentialForm ⋆(sq)
+        #and a product of them must ask the same way, not throw a MethodError
+        @test_throws Alakazam.InvalidDifferentialForm ⋆(sq * sh)
+        @test_throws Alakazam.InvalidDifferentialForm ⋆(2 * sq * sh)
+
+        #given the index set, both take the star and agree with each other
+        @test !isZeroTens(simplify(⋆(sq, euclidean)))
+        @test isZeroTens(simplify(⋆(sq * sh, euclidean) - ⋆(sh * sq, euclidean)))
+        #and starring a 0-form twice recovers it, which is the round trip that
+        #ran into the MethodError: the middle result is a top form, and starring
+        #that leaves an index-free summand for the third star to look at
+        @test isZeroTens(simplify(⋆(⋆(sq, euclidean)) - sq))
+        @test_throws Alakazam.InvalidDifferentialForm ⋆(simplify(⋆(⋆(sq, euclidean))) * sh)
+    end
+
 end
