@@ -594,6 +594,14 @@ function apply_derivative(TEX::TensorExpression)
     isempty(out) && return zero()
     return TensorExpression(out)
 end
+# A single product, or a lone tensor, is not a `TensorExpression`, so neither
+# matched a method and an identity written as one product raised a MethodError
+# while the same identity written as a difference went through. Both delegate,
+# so the semantics are the ones the expression method already has: a term with
+# no derivative in it comes back unchanged.
+apply_derivative(TT::TensorTerm) = apply_derivative(TensorExpression(TT))
+apply_derivative(T::TensorSuperType) = apply_derivative(TensorExpression(T))
+
 #apply the derivative and cancel terms that are annihilated
 function apply_derivative(D::DerivativeSuperType)
     Dx = product_rule(D)

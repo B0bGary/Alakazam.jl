@@ -45,5 +45,22 @@
 
     @test (simplify(D(X));true)
 
+    ###############################################
+    # apply_derivative on a single PRODUCT, not a sum. `TensorTerm` matched no
+    # method, so an identity written as one product raised a MethodError while
+    # the same identity written as a difference went through.
+    p = Tensor("p", x)
+    q = Tensor("q", x)
+    Dm = Partial("∂", x, μ => lower)
+    @test apply_derivative(p * Dm(q)) == p * Dm(q)
+    Dn = Partial("∂", x, ν => lower)
+    @test apply_derivative(Dm(p) * Dn(q)) == Dm(p) * Dn(q)
+    # a metric or a delta alongside the derivative is the case that surfaced it
+    @test (apply_derivative(Metric([μ => upper, ν => upper]) * Dm(q)); true)
+    # a term with no derivative in it at all is returned unchanged
+    @test apply_derivative(p * q) == p * q
+    @test apply_derivative(p) == p
+    # and the sum form keeps working, so the new methods shadow nothing
+    @test apply_derivative(p * Dm(q) - p * Dm(q)) == zero()
 
 end
