@@ -118,9 +118,11 @@
         #An algebra with no quadratic invariant - SU(N≥3), whose ε is invariant but not a metric -
         #gives a set with no metric. Its indices cannot be raised or lowered, and whatever would need
         #to either declines or says why, rather than failing somewhere else.
-        nm = IndexSet("nometric_su3", upper, SLAlgebra(3))
-        na, nb, nc = Index(["na", "nb", "nc"], nm)
-        @test nm.metric_type === nothing
+        #not `nm`: the precompile workload replays these files at top level, where that name would
+        #become a global that test_latex.jl's loop variable then collides with
+        nomet = IndexSet("nometric_su3", upper, SLAlgebra(3))
+        na, nb, nc = Index(["na", "nb", "nc"], nomet)
+        @test nomet.metric_type === nothing
 
         #asked for directly, a metric is refused with a reason rather than handed back as nothing
         @test_throws ArgumentError Metric(na => upper, nb => upper)
@@ -140,7 +142,7 @@
             EpsilonTensor([na => upper, nb => upper, nc => upper]))))
 
         #flavour, not spacetime: beside a real vector index, :dim is taken from the vector one
-        @test !Alakazam._is_spacetime_set(nm)
+        @test !Alakazam._is_spacetime_set(nomet)
         vset = IndexSet("nometric_vec", 7, lower)
         vμ = Index("vμ", vset)
         @test Alakazam._matched_dimension([Tensor("G", [na => upper, vμ => upper])]) == 7
@@ -166,7 +168,7 @@
         @test isZeroTens(simplify(apply_derivative(VariationalDerivative(L, Tensor("φ", [nb => upper])))))
 
         #and so has nothing to depend on a coordinate
-        @test_throws ErrorException metric_function!(nm, xm)
+        @test_throws ErrorException metric_function!(nomet, xm)
     end
 
     @testset "a metric depending on coordinates" begin
