@@ -76,6 +76,23 @@ function _star_term(T, tinds::IndexSet)
 end
 
 """
+Form index set a summand's star is taken with respect to.
+
+`_form_index_set` gives back `nothing` when the summand has no free indices to
+read one off, and `_star_term` has no method for that, so a product of index-free
+tensors reached it and the caller saw a `MethodError` naming a private function.
+A LONE index-free tensor in the same position is already told what to do, and a
+product is told the same thing here.
+"""
+function _star_index_set(T, index_type::Union{IndexSet,Nothing})
+    index_type === nothing || return index_type
+    tinds = _form_index_set(free_indices_ordered(T), nothing, nothing)
+    tinds === nothing && throw(InvalidDifferentialForm(
+        "This summand has no indices, please specify the spacetime indices for the Hodge star."))
+    return tinds
+end
+
+"""
 Hodge star of an expression, summand by summand.
 """
 function ⋆(T::TensorExpression, index_type::Union{IndexSet,Nothing}=nothing)
@@ -85,9 +102,7 @@ function ⋆(T::TensorExpression, index_type::Union{IndexSet,Nothing}=nothing)
         if f isa TensorSuperType
             out += coef * ⋆(f, index_type)
         else
-            tinds = index_type === nothing ?
-                _form_index_set(free_indices_ordered(f), nothing, nothing) : index_type
-            out += coef * _star_term(f, tinds)
+            out += coef * _star_term(f, _star_index_set(f, index_type))
         end
     end
     out
@@ -96,9 +111,7 @@ end
 function ⋆(T::TensorTerm, index_type::Union{IndexSet,Nothing}=nothing)
     f = _lone_factor(T)
     f isa TensorSuperType && return ⋆(f, index_type)
-    tinds = index_type === nothing ?
-        _form_index_set(free_indices_ordered(f), nothing, nothing) : index_type
-    _star_term(f, tinds)
+    _star_term(f, _star_index_set(f, index_type))
 end
 
 """Take the Hodge star of a form.
