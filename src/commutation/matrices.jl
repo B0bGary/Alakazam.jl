@@ -182,13 +182,12 @@ clifford_rank(t) = _clifford_rank_inds(indices(t))
 A set named "spacetime" is taken at its word, that being what the usual set-up calls it.
 
 Failing the name, spacetime sets are those carrying a symmetric metric, which is what
-distinguishes them from internal ones such as an SU(2) R-symmetry set. A set with no
-declared metric is taken to be spacetime, since that is the common case for a plain vector
-index
+distinguishes them from internal ones such as an SU(2) R-symmetry set.
+
 """
 function _is_spacetime_set(S::IndexSet)
     S.name == "spacetime" && return true
-    S.metric_type === nothing && return true
+    S.metric_type === nothing && return false
     return S.metric_type <: SymMetricSuperType
 end
 
@@ -352,12 +351,10 @@ function reduce_matrix(σ1::PauliSuperType, σ2::PauliSuperType, tterm::TensorTe
             if refindex[2] != indices(σ2)[1][2] #different pos
                 return (false,  zero())
             end
+            _can_raise_lower(refindex[1].index_set) || return (false, zero())
             spare = get_unused_indices(tterm, refindex[1].index_set)
             newind = safe_pop!(spare,refindex[1].index_set)
             mt = generate_metric(indices(σ1)[1], indices(σ2)[1])
-            if mt === nothing
-                error("Reduction of index set not supported.")
-            end
             metind=safe_pop!(spare,refindex[1].index_set)
             res = mt + im * EpsilonTensor(vcat(indices(σ1), indices(σ2), newind => refindex[2])) * generate_metric(newind => op_pos(refindex[2]),metind=>op_pos(refindex[2]))*Pauli(metind => (refindex[2]))
             return (true, res)
@@ -626,6 +623,10 @@ If there is a simplification rule found, manipulate by raising and lowering indi
 function match_and_apply_rule(pattern_terms, actual_terms, rhs_template, full_term)
     if length(free_indices_ordered(TensorTerm(pattern_terms))) != length(free_indices_ordered(TensorTerm(actual_terms)))
         return (false,  zero())
+    end
+    # a slot whose level differs from the pattern's is bridged with a metric
+    for (pat, act) in zip(pattern_terms, actual_terms), (pp, ap) in zip(indices(pat), indices(act))
+        pp[2] != ap[2] && !_can_raise_lower(ap[1].index_set) && return (false, zero())
     end
     substitution = Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
 

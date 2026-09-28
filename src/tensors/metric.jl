@@ -33,10 +33,10 @@ mutable struct Metric <: SymMetricSuperType
     #     return new(d, signature)
     # end
     function Metric(id1::Pair{I1,IndexPosition}, id2::Pair{I2,IndexPosition}) where {I1<:IndexSuperType,I2<:IndexSuperType}
-        return generate_metric(id1, id2)
+        return _metric_or_error(id1, id2)
     end
     function Metric(id::Vector{Pair{I1,IndexPosition}}) where I1<:IndexSuperType
-        return generate_metric(id[1], id[2])
+        return _metric_or_error(id[1], id[2])
     end
 end
 
@@ -128,22 +128,49 @@ const Delta = KroneckerDelta
 """Create a metric of the correct type, based on the type of indices. This could probably be moved to the constructor... (maybe - ϵ)"""
 function generate_metric(id1::Pair{I1,IndexPosition}, id2::Pair{I2,IndexPosition}) where {I1<:IndexSuperType,I2<:IndexSuperType}
     # @show id1, id2
+    #the set's metric_function, so every metric built here agrees with a user's g(x)
+    fo = metric_function(id1[1].index_set)
     if id1[1].index_set.metric_type===nothing
         metric=nothing
     elseif id1[1].index_set.metric_type <: SymMetricSuperType
-        if id1[1].index_set.signature[1] == 0 #euclidean signature
+        if !isempty(fo) #varies, so must never be mistaken for a constant η or δ
+            metric = id1[1].index_set.metric_type("g", [id1, id2], fo)
+        elseif id1[1].index_set.signature[1] == 0 #euclidean signature
             metric = id1[1].index_set.metric_type("δ", [id1, id2])
         else
             metric = id1[1].index_set.metric_type("η", [id1, id2])
         end
     elseif id1[1].index_set.metric_type <: AntisymMetricSuperType ### should be careful about which inds to pop... should perhaps check grading etc!!!
-        metric = id1[1].index_set.metric_type([id1, id2])
+        metric = id1[1].index_set.metric_type([id1, id2], fo)
     else #if hermitian etc, need to be more careful, maybe don't want to pop
         metric = nothing
     end
     return metric
 end
 
+
+"""
+Whether indices of `S` can be raised and lowered: exactly when `generate_metric` builds a metric for it.
+A set with no metric (SU(N≥3), whose ε is invariant but not a metric) cannot, nor one whose metric is
+neither symmetric nor antisymmetric.
+"""
+_can_raise_lower(S::IndexSet) = S.metric_type !== nothing &&
+    (S.metric_type <: SymMetricSuperType || S.metric_type <: AntisymMetricSuperType)
+
+"""
+The metric on two indices, for a caller that asked for one by name.
+"""
+function _metric_or_error(id1, id2)
+    m = generate_metric(id1, id2)
+    m === nothing || return m
+    S = id1[1].index_set
+    S.metric_type === nothing && throw(ArgumentError(
+        "index set '$(S.name)' has no metric, so its indices cannot be raised or lowered. An upper " *
+        "index still contracts with a lower one directly; to raise and lower, declare a metric type " *
+        "on the set."))
+    throw(ArgumentError("index set '$(S.name)' has a metric of type $(S.metric_type), which cannot " *
+        "be built from a pair of indices."))
+end
 
 """"Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
 """
@@ -290,6 +317,65 @@ function _pop_metric(T::TensorSuperType, claimed::Vector{IndexTypes})
         new_index_pattern[pos] = dummy[1] => iset.default_position
     end
     return tensor * T
+end
+
+"""A metric of the kind popping produces, as opposed to any other factor it leaves behind."""
+_is_popped_metric(g) = g isa SymMetricSuperType || g isa AntisymMetricSuperType
+
+"""
+Pop the metrics off a derivative's operand. Each is popped next to its tensor, inside the derivative,
+and carried out past it only where `commutes_with_metric` allows
+"""
+function _pop_metric(O::DerivativeSuperType, claimed::Vector{IndexTypes})
+    s = summands(operand(O))
+    length(s) == 1 || return _pop_metric_per_summand(O, claimed)
+    c, tt = s[1]
+    outside = TensorSuperType[]
+    inside = TensorSuperType[]
+    popped = false
+    for f in terms(tt)
+        p = _pop_metric(f, claimed)
+        if p === f
+            push!(inside, f)
+            continue
+        end
+        popped = true
+        #a nested derivative's result carries whatever it let out; those may go further still
+        for g in terms(isTensorTerm(p))
+            _is_popped_metric(g) && commutes_with_metric(O, g) ? push!(outside, g) : push!(inside, g)
+        end
+    end
+    popped || return O
+    Oc = copy(O)
+    set_operand!(Oc, c * TensorTerm(inside))
+    return isempty(outside) ? Oc : TensorTerm(outside) * Oc
+end
+
+"""
+With several summands in the operand no metric is common to all of them, so each summand has its
+metrics popped where it stands and none leave the derivative.
+"""
+function _pop_metric_per_summand(O::DerivativeSuperType, claimed::Vector{IndexTypes})
+    n = length(claimed)
+    taken = IndexTypes[]
+    new_operand = zero()
+    for (c, tt) in summands(operand(O))
+        #a dummy is private to its summand, so every summand may reuse the same fresh names
+        trial = copy(claimed)
+        new_term = 1
+        for f in terms(tt)
+            new_term *= _pop_metric(f, trial)
+        end
+        new_operand += c * new_term
+        for i in @view trial[(n + 1):end]
+            i in taken || push!(taken, i)
+        end
+    end
+    isempty(taken) && return O
+    append!(claimed, taken)
+    Oc = copy(O)
+    set_operand!(Oc, new_operand)
+    return Oc
 end
 
 """
@@ -543,6 +629,33 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
     return resultout
 end
 
+"""
+Apply `metric`'s contraction to `tens`, descending through whatever operators it wraps.
+Returns whether the metric was consumed, and the sign the replacement cost.
+"""
+function _contract_into_operand!(tens, metric, rie)
+    t = isTensor(tens)
+    t === nothing && return (false, 1)      #a sum, which this contraction does not descend into
+    sign = 1
+    if t isa OperatorSuperType
+        opinds = op_indices(t)
+        for k in eachindex(opinds)
+            (flag, sgn) = contraction_replacement!(opinds, k, metric, rie)
+            sign *= sgn
+            flag && return (true, sign)
+        end
+        (flag, sgn) = _contract_into_operand!(operand(t), metric, rie)
+        return (flag, sign * sgn)
+    end
+    tins = indices(t)
+    for k in eachindex(tins)
+        (flag, sgn) = contraction_replacement!(tins, k, metric, rie)
+        sign *= sgn
+        flag && return (true, sign)
+    end
+    return (false, sign)
+end
+
 function _contract_metrics_term(T::TensorTerm, typ::Type)
     ts = terms(T)
     any(t -> t isa typ, ts) || return (1, 1, 1, T)
@@ -666,32 +779,8 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
             !(metric isa KroneckerSuperType) && tens isa EpsilonTensorSuperType && continue
 
             if tens isa OperatorSuperType
-                opinds = op_indices(tens)
-                for indpairnum in eachindex(opinds)
-                    flag && break
-                    (flag, sgn) = contraction_replacement!(opinds, indpairnum, metric, rie)
-                    sign *= sgn
-                end
-                op = isTensor(operand(tens))
-                if !flag && !(op === nothing)
-                    while isTensor(op) isa OperatorSuperType
-                        oppinds = op_indices(isTensor(op))
-                        flag && break
-                        for indpairnum in eachindex(oppinds)
-                            flag && break
-                            (flag, sgn) = contraction_replacement!(oppinds, indpairnum, metric, rie)
-                            sign *= sgn
-                        end
-                        flag && break
-                        op = operand(isTensor(op))
-                    end
-                    flag && break
-                    for indpairnum in eachindex(indices(op))
-                        flag && break
-                        (flag, sgn) = contraction_replacement!(indices(op), indpairnum, metric, rie)
-                        sign *= sgn
-                    end
-                end
+                (flag, sgn) = _contract_into_operand!(tens, metric, rie)
+                sign *= sgn
             else
                 tins = indices(tens)
                 for indpairnum in eachindex(tins)
@@ -961,8 +1050,9 @@ function reduce_epsilon(tens::EpsilonTensorSuperType, metric::EpsilonTensorSuper
             extra_deltas += sgn * TensorTerm(deltas)
         end
     end
-    #det of the metric
-    dt=det(inds_t[1][1]) * (inds_t[1][1].index_set.metric_type <: AntisymMetricSuperType ? -1 : 1)
+    #det of the metric.
+    mt = inds_t[1][1].index_set.metric_type
+    dt = det(inds_t[1][1]) * ((mt !== nothing && mt <: AntisymMetricSuperType) ? -1 : 1)
     return (true, dt * presign * factorial(k), extra_deltas)
 end
 

@@ -218,11 +218,14 @@ to_dict(x::IndexSet) = Dict(
     # to its bare fields with the TYPE discarded, so it came back as an anonymous Dict that the
     # IndexSet constructor rejected outright.
     "algebra" => (x.algebra === nothing ? nothing : to_dict(x.algebra)),
+    # by NAME, like the conjugate: a coordinate holds its sets, so nesting it would recurse. Relinked
+    # by `import_header` once the coordinates exist.
+    "metric_function" => [c.name for c in x.metric_function],
     # the remaining fields stay RAW: `IndexSet` has `from_field` handlers matched to those exact
     # forms (metric_type as a type name, default_position, grading), and wrapping them here would
     # hand those handlers a shape they do not expect.
     (string(f) => getfield(x, f)
-     for f in fieldnames(typeof(x)) if f ∉ (:indices, :conjugate, :algebra))...
+     for f in fieldnames(typeof(x)) if f ∉ (:indices, :conjugate, :algebra, :metric_function))...
 )
 
 to_dict(x::Pair{I,IndexPosition}) where I<:IndexSuperType = Dict("index"=>to_dict(x[1]), "position"=>x[2].position)
@@ -439,6 +442,21 @@ function import_header(s, into::Module=Main)
     for key in keys(data)
         key == "index_sets" ? continue : reconstruct_header(data[key], Val(Symbol(key)), into)
     end
+    # last: a set's metric_function names coordinates, which exist only once the loop above is done
+    "index_sets" in keys(data) && _relink_metric_functions(data["index_sets"])
+end
+
+"""Resolve the coordinate names each stored index set's metric depends on. Files written before
+metric_function existed have no entry and stay flat."""
+function _relink_metric_functions(s)
+    data = s["value"]
+    for key in keys(data)
+        names = get(data[key], "metric_function", nothing)
+        (names === nothing || isempty(names) || !haskey(SET_REGISTRY, key)) && continue
+        all(n -> haskey(COORD_REGISTRY, n), names) ||
+            error("index set \"$key\" has a metric depending on $(join(names, ", ")), but not all of these coordinates were found.")
+        metric_function!(SET_REGISTRY[key], [COORD_REGISTRY[n] for n in names])
+    end
 end
 
 #needed function for each header info
@@ -606,6 +624,8 @@ Deferred: the partner may not exist yet when this set is built, so the link is m
 pass by `reconstruct_header(::Val{:index_sets})` once all of them are present.
 """
 from_field(::Type{IndexSet}, ::Val{:conjugate}, v, into::Module=Main) = nothing
+"""Deferred for the same reason: coordinates are built after the sets, see `_relink_metric_functions`."""
+from_field(::Type{IndexSet}, ::Val{:metric_function}, v, into::Module=Main) = nothing
 
 """Rebuild the algebra from its recorded type rather than the anonymous field dump."""
 function from_field(::Type{IndexSet}, ::Val{:algebra}, v, into::Module=Main)
@@ -716,7 +736,8 @@ end
 function reconstruct(::Type{IndexSet}, d, into::Module=Main)
     args = [
         from_field(IndexSet, Val(f), d[string(f)], into)
-        for f in fieldnames(IndexSet) if f != :indices
+        #a field missing from an older file is left at its default: the constructor reads by type, not position
+        for f in fieldnames(IndexSet) if f != :indices && haskey(d, string(f))
     ]
     iset = IndexSet(args...)
     for name in d["indices"]

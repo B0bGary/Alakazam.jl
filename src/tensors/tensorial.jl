@@ -466,6 +466,11 @@ TensorExpression(A::TensorSuperType, E::TensorExpression) = _prepend_merged(1, T
 # https://docs.julialang.org/en/v1/manual/metaprogramming/
 Base.@doc "Usage: `@Tensor A^μν_ρ^τ{x,y,z}` where `A` is a symbol, `μ,ν,ρ,τ` are indices, and x,y,z are coordinates."
 macro Tensor(expr::Expr)
+    if expr.head == :curly
+        expr.args[1] isa Symbol || error("Cannot parse `@Tensor $expr`: index groups are not braced, " *
+                                         "write them bare after ^ or _ (e.g. `@Tensor A_μν{x}`).")
+        return _tensor_macro(expr.args[1], Symbol.(expr.args[2:end]))
+    end
     functionof = Symbol[]
 
     symbol = string(first(string(expr)))  # Unicode-safe
@@ -587,8 +592,12 @@ end
 
 Base.@doc"Usage: `@Tensor A_bc` where `A` is a symbol and `b`/`c` are indices."
 macro Tensor(expr::Symbol)
+    return _tensor_macro(expr, Symbol[])
+end
+
+"""The expression `@Tensor A_bc{x,...}` expands to: a name, lower indices and the coordinates."""
+function _tensor_macro(expr::Symbol, functionof::Vector{Symbol})
     s = string(expr)
-    length(s) == 1 && return Tensor(s)
 
     # The macro binds a variable named after the tensor, so the binding keeps the spelling that was
     # typed: a decorated name is not a valid identifier, since an identifier cannot begin with a
@@ -602,7 +611,8 @@ macro Tensor(expr::Symbol)
     return quote
         $(esc(var)) = Tensor(
             $tname,
-            [$([:($(esc(Symbol(t))) => lower) for t in toks]...)]
+            [$([:($(esc(Symbol(t))) => lower) for t in toks]...)],
+            $(Expr(:vect, map(esc, functionof)...))
         )
     end
 end

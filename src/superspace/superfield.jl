@@ -164,11 +164,8 @@ function generate_superfield(name::String, extra_inds::Vector{Pair{I,IndexPositi
                         fl2inds = (flt2 == flt1 || flt2 === nothing) ? [] :
                                   [i for i in freeinds if i[1].index_set == flt2]
                         combined_inds = Pair{IndexSuperType,IndexPosition}[vcat(extra_inds, sp1inds, sp2inds, fl1inds, fl2inds)...]
-                        new_tab = YoungTableau[]
-                        append_offset!(new_tab, sp1; base=nextra)
-                        append_offset!(new_tab, sp2; base=nextra)
-                        append_offset!(new_tab, fl1; base=nextra)
-                        append_offset!(new_tab, fl2; base=nextra)
+                        new_tab = _place_tableaux(nextra, [(sp1, _nslots(t1, spt1)), (sp2, _nslots(t2, spt2)),
+                                                           (fl1, _nslots(t1, flt1)), (fl2, _nslots(t2, flt2))])
                         ψ = Tensor(name, combined_inds, new_tab, xc, "(" * string(o1) * "," * string(o2) * ")" => lower)
                         tex += newterm * ψ
                     end
@@ -181,9 +178,7 @@ function generate_superfield(name::String, extra_inds::Vector{Pair{I,IndexPositi
                 fl1inds = flt1 === nothing ? [] :
                           [i for i in freeinds if i[1].index_set == flt1]
                 combined_inds = Pair{IndexSuperType,IndexPosition}[vcat(extra_inds, sp1inds, fl1inds)...]
-                new_tab = YoungTableau[]
-                append_offset!(new_tab, sp1; base=nextra)
-                append_offset!(new_tab, fl1; base=nextra)
+                new_tab = _place_tableaux(nextra, [(sp1, _nslots(t1, spt1)), (fl1, _nslots(t1, flt1))])
                 ψ = Tensor(name, combined_inds, new_tab, xc, "(" * string(o1) * ")" => lower)
                 tex += newterm * ψ
             end
@@ -201,6 +196,8 @@ group_symbol(::SUAlgebra) = :SU
 group_symbol(::SOAlgebra) = :SO
 group_symbol(::SpAlgebra) = :Sp
 group_symbol(::LieAlgebraSuperType) = :none
+#an index set declared without an algebra, such as the lightcone set, has no group to decompose over
+group_symbol(::Nothing) = :none
 
 """
 Checks group consistency - makes sure index range matches the group dim etc.
@@ -242,11 +239,14 @@ function generate_independent_structure(term::TensorTerm; S_type=nothing, F_type
     t1 = terms(term)[1]
     ninds = length(indices(t1))
     spinor_set = indices(t1)[1][1].index_set
-    spinor_dim = dimension(indices(t1)[1][1])
+    #Independent Grassmann directions, not the range of the set. They differ for the lightcone: ℓ⁺
+    #lives in a two-dimensional set but is one component, as the Superspace constructor already
+    #counts it. With a single direction there is no spinor structure to decompose.
+    spinor_dim = grassmann_dimension(indices(t1)[1])
     flav_set = ninds > 1 ? indices(t1)[2][1].index_set : nothing
     flav_dim = ninds > 1 ? dimension(indices(t1)[2][1]) : 0
 
-    S = derived_group(spinor_set, S_type, spinor_dim)
+    S = spinor_dim == 1 ? :none : derived_group(spinor_set, S_type, spinor_dim)
     F = flav_set === nothing ? :none : derived_group(flav_set, F_type, flav_dim)
 
     # one index Pair per θ copy, opposite position, indexable by θ label
@@ -257,10 +257,11 @@ function generate_independent_structure(term::TensorTerm; S_type=nothing, F_type
     tex = []
     for s in structs
         nt = copy(term)
-        nt = apply_structure_side(nt, s.spinor, epsspininds, spinor_set, "spinor", pair_tensor)
+        spinor_dim == 1 ||
+            (nt = apply_structure_side(nt, s.spinor, epsspininds, spinor_set, "spinor", pair_tensor))
         nt = apply_structure_side(nt, s.flavour, epsflavinds, flav_set, "flavour", pair_tensor)
         push!(tex, (eliminate_epsilon(nt),
-            residual_tableau(s.spinor),
+            spinor_dim == 1 ? nothing : residual_tableau(s.spinor),
             residual_tableau(s.flavour)))
     end
     return tex
@@ -313,11 +314,32 @@ end
 
 
 """
+A component's residual tableaux, each placed on the slots its own side occupies.
+"""
+function _place_tableaux(nextra::Int, sides)
+    tabs = YoungTableau[]
+    off = nextra
+    for (tab, n) in sides
+        if tab !== nothing
+            length(tab.index_assignment) == n || error(
+                "a residual tableau covers $(length(tab.index_assignment)) slots but its side holds $n")
+            push!(tabs, offset_tableau(tab, off))
+        end
+        off += n
+    end
+    return tabs
+end
+
+"""The number of slots `t` holds in the index set `s`."""
+_nslots(t, s) = s === nothing ? 0 : count(p -> p[1].index_set == s, free_indices_ordered(t))
+
+"""
 Reconstruct the coefficient tableau from the grassmann helper structure.
 """
 function residual_tableau(side)
     (side === nothing || side.residual_rows === nothing || isempty(side.residual_rows)) && return nothing
     shape = [length(r) for r in side.residual_rows]
     k = sum(shape)
+    k <= 1 && return nothing
     return YoungTableau(shape, collect(1:k), k)
 end

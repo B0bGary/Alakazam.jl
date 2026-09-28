@@ -64,8 +64,9 @@ function apply_derivative(D::VariationalSuperType)
                                 derived = true
                                 for inds in zip(indices(tens), indices(tensor.var))
                                     if inds[1][2] != inds[2][2] #check if the positions are the same
-                                        #positions not same, use metric...
-                                        term*=Metric(inds[1][1] => inds[1][2], inds[2][1] => inds[1][2])
+                                        #positions not same, use metric (or none)
+                                        term *= _can_raise_lower(inds[1][1].index_set) ?
+                                                Metric(inds[1][1] => inds[1][2], inds[2][1] => inds[1][2]) : zero()
                                     else
                                         term *= KroneckerDelta(inds[1][1]=>inds[1][2], inds[2][1] => op_pos(inds[2][2]))
                                     end
@@ -83,7 +84,9 @@ function apply_derivative(D::VariationalSuperType)
                     #replace with delta functions for the indices
                     for inds in zip(indices(tens), indices(tensor.var))
                         if inds[1][2] != inds[2][2] #check if the positions are the same
-                            term*=Metric(inds[1][1] => inds[1][2], inds[2][1] => inds[1][2])
+                            #as above: with no metric, a different level is a different field
+                            term *= _can_raise_lower(inds[1][1].index_set) ?
+                                    Metric(inds[1][1] => inds[1][2], inds[2][1] => inds[1][2]) : zero()
                         else
                             term *= KroneckerDelta(inds[1][1]=>inds[1][2], inds[2][1] => op_pos(inds[2][2]))
                         end

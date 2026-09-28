@@ -29,6 +29,7 @@ mutable struct IndexSet
    conjugate::Union{IndexSet,Nothing}
    algebra::Union{LieAlgebraSuperType,Nothing}
    islightcone::Bool
+   metric_function::Vector{CoordinateSuperType} #the coordinates the set's metric depends on; empty if flat. See metric_function!
    function IndexSet(name::String, args...)
       range = 4
       metric_type = Metric
@@ -92,7 +93,7 @@ mutable struct IndexSet
       else
          range = signature[1] + signature[2]
       end
-      res=new(name, range, signature, metric_type, Vector{IndexSuperType}(), default_position, grading, conjugate,algebra,islightcone)
+      res=new(name, range, signature, metric_type, Vector{IndexSuperType}(), default_position, grading, conjugate,algebra,islightcone, CoordinateSuperType[])
       global SET_REGISTRY
       SET_REGISTRY[name]=res
       return res
@@ -178,7 +179,7 @@ mutable struct DummyPatternIndex <: IndexSuperType
    end
 end
 
-mutable struct Coordinate
+mutable struct Coordinate <: CoordinateSuperType
    name::String
    index_set::Vector{IndexSet}
    function Coordinate(name::String, index_set2::IndexSet)
@@ -256,6 +257,38 @@ macro conjugates(args...)
         "other's conjugate; got $(length(args)).")
     return esc(:($(conjugates!)($(args...))))
 end
+
+#############################################################################
+# Declaring what an index set's metric depends on
+#############################################################################
+
+"""
+    metric_function!(S::IndexSet, x::Coordinate...) -> S
+    metric_function!(S::IndexSet)                    -> S
+
+Declare the coordinates the metric of `S` is a function of. With no
+coordinates the metric is constant again, which is the default.
+
+    st = IndexSet("spacetime", 4)
+    x  = Coordinate("x", st)
+    metric_function!(st, x)      # every metric on st is now g(x)
+"""
+function metric_function!(S::IndexSet, xs::Coordinate...)
+    isempty(xs) || S.metric_type !== nothing || error(
+        "index set \"$(S.name)\" has no metric, so there is nothing to depend on $(join((x.name for x in xs), ", ")).")
+    #name order, the same as a tensor's function_of
+    S.metric_function = CoordinateSuperType[unique(x -> x.name, sort(collect(xs), by = x -> x.name))...]
+    return S
+end
+metric_function!(S::IndexSet, xs::AbstractVector{<:Coordinate}) = metric_function!(S, xs...)
+
+"""
+    metric_function(S::IndexSet) -> Vector{Coordinate}
+
+The coordinates the metric of `S` depends on; empty when it is constant. Set by [`metric_function!`](@ref).
+"""
+metric_function(S::IndexSet) = Coordinate[x for x in S.metric_function]
+metric_function(i::IndexSuperType) = metric_function(i.index_set)
 
 const SET_REGISTRY=Dict{String,IndexSet}()
 const COORD_REGISTRY=Dict{String,Coordinate}()

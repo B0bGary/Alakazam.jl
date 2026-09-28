@@ -32,8 +32,9 @@ if true
         "test_forms.jl",
         "test_exterior.jl",
         "test_latex.jl",
-        "test_compton.jl",
-    ]
+        "test_metric_compatible.jl",
+        "test_compton.jl"
+            ]
     _TESTDIR = mktempdir(cleanup=false)
     _TESTFILE1 = joinpath(_TESTDIR, "test_expression")
     _TESTFILE2 = joinpath(_TESTDIR, "test_expression_headers")

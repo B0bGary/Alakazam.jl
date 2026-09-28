@@ -115,9 +115,9 @@ function set_op_indices!(O::OperatorSuperType, inds::Vector{<:Pair{<:IndexSuperT
 end
 
 function set_indices_deep!(O::OperatorSuperType, rep_guide::Dict{<:Pair{<:IndexSuperType,IndexPosition},<:Pair{<:IndexSuperType,IndexPosition}})# where {M<:IndexSuperType}
-    op_repl_inds=[k in keys(rep_guide) ? rep_guide[k] : k for k in op_indices(O)]
+    #Typed, because a slot kept as stored is a Pair{IndexTypes,…}
+    op_repl_inds = IndexPair[k in keys(rep_guide) ? rep_guide[k] : k for k in op_indices(O)]
     set_op_indices!(O, op_repl_inds)
-    # @show op_repl_inds
     set_indices_deep!(operand(O), rep_guide)
     update_indices!(O)
     return O

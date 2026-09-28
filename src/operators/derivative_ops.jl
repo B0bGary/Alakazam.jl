@@ -175,6 +175,7 @@ derivative_actions = Dict{DerivativeSuperType,Dict{TensorSuperType,TensorExpress
 Same as == currently.
 """
 function hard_equals(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    (a isa PartialDerivative || b isa PartialDerivative) && return a == b
     if name(a) == name(b) && op_indices(a) == op_indices(b) && operand(a) == operand(b) #basic check
         return true
     end
@@ -193,7 +194,66 @@ function hard_equals(a::DerivativeSuperType, b::DerivativeSuperType)#check to se
 end
 
 
+"""
+    metric_compatible(D::Type, g::Type) -> Bool
+
+Whether derivatives of type `D` annihilate metrics of type `g` whatever those depend on, as a
+Levi-Civita connection does its own metric. False unless declared with [`@compatible`](@ref).
+
+Such a derivative carries the metric out past itself when popping, and `apply_derivative` sets its
+action on the metric to zero.
+"""
+metric_compatible(::Type, ::Type) = false
+metric_compatible(O::DerivativeSuperType, g::TensorSuperType) = metric_compatible(typeof(O), typeof(g))
+
+"""
+    @compatible D g
+
+Declare derivatives of type `D` compatible with metrics of type `g`, and with any of their
+subtypes: it defines [`metric_compatible`](@ref) to be true for them.
+
+    @compatible Derivative Metric          # ∇g = 0
+    @compatible CovDerivSuperType Metric   # every covariant derivative
+"""
+macro compatible(args...)
+    # `@compatible D, g` arrives as a single tuple expression rather than as two arguments
+    if length(args) == 1 && args[1] isa Expr && args[1].head === :tuple
+        args = Tuple(args[1].args)
+    end
+    length(args) == 2 || error("@compatible takes a derivative type and a metric type; got $(length(args)) arguments.")
+    D, g = esc(args[1]), esc(args[2])
+    return quote
+        $(_check_compatible)($D, $g)
+        (::typeof($metric_compatible))(::Type{<:$D}, ::Type{<:$g}) = true
+        nothing
+    end
+end
+
+function _check_compatible(D, g)
+    (D isa Type && D <: DerivativeSuperType) ||
+        throw(ArgumentError("@compatible: $D is not a derivative type."))
+    (g isa Type && g <: MetricSuperType) ||
+        throw(ArgumentError("@compatible: $g is not a metric type."))
+    return nothing
+end
+
+"""
+    commutes_with_metric(O, g) -> Bool
+
+Whether the metric `g` may be carried out past the derivative `O`: whether `O(g·T) = g·O(T)`, which
+holds exactly when `O` annihilates `g`: `O` is `metric_compatible` with it, or `g` does not depend
+on what `O` differentiates. `pop_metric` consults this before moving a metric it has popped off an
+operand out through the derivative.
+"""
+commutes_with_metric(O::DerivativeSuperType, g) =
+    metric_compatible(O, g) || isdisjoint(function_of(g), coord(O))
+# commutes_with_metric(::DerivativeSuperType, g) = false
+
 function ==(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    #partials: the whole chain up to allowed swaps, so that equality is transitive (and hash agrees)
+    if a isa PartialDerivative || b isa PartialDerivative
+        return a isa PartialDerivative && b isa PartialDerivative && _chain_equal(a, b)
+    end
     # @show "using dervi"
     if name(a) == name(b) && op_indices(a) == op_indices(b) && operand(a) == operand(b) #basic check
         # @show name(a) == name(b)
@@ -217,6 +277,7 @@ function ==(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if deri
     return false
 end
 function Base.hash(d::DerivativeSuperType, h::UInt)
+    d isa PartialDerivative && return _chain_hash(d, h)
     h = hash(name(d), h)
     @inbounds for p in op_indices(d)
         h = hash(p[1].uid, hash(p[2].position, h))
@@ -225,9 +286,29 @@ function Base.hash(d::DerivativeSuperType, h::UInt)
 end
 
 """
+Hash a partial by its whole chain, ignoring the order: equal chains may be ordered differently.
+The root is left out, which only makes the hash coarser than the equality, never inconsistent.
+"""
+function _chain_hash(d::PartialDerivative, h::UInt)
+    acc = zero(UInt)
+    for op in get_operator_chain(d, PartialDerivative)
+        hh = hash(name(op))
+        @inbounds for p in op_indices(op)
+            hh = hash(p[1].uid, hash(p[2].position, hh))
+        end
+        acc += hh                                  #a sum does not see the order
+    end
+    return hash(acc, hash(:partial_chain, h))
+end
+
+"""
 Checks if two derivative expressions are the same, up to an overall sign.
 """
 function signed_equals(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
+    if a isa PartialDerivative || b isa PartialDerivative
+        (a isa PartialDerivative && b isa PartialDerivative) || return (false, 0)
+        return _chain_signed_equals(a, b)
+    end
     if name(a) == name(b) && op_indices(a) == op_indices(b) && operand(a) == operand(b) #basic check
         return (true, 1)
     end
@@ -393,6 +474,7 @@ Checks to see if derivatives commute, up to a sign.
 """
 function derivatives_commute_signed(D1::DerivativeSuperType, D2::DerivativeSuperType)
     if typeof(D1) <: PartialDerivative && typeof(D2) <: PartialDerivative
+        _partials_swap(D1, D2) || return (false, 0)
         #use grading of the derivative itself, not the grading of full object since we commute ops not expressions
         if (op_grading(D1) * op_grading(D2) == 0) #commute if bb or fb
             return (true, 1) #regular partial derivatives commute
@@ -408,6 +490,105 @@ end
 
 function derivatives_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
     return derivatives_commute_signed(D1, D2) == (true, 1)
+end
+
+"""
+Whether two partials may be exchanged. A partial's own level is opposite to its set's default
+position: with x^μ upper by default, ∂_μ. An index at the default position hides a metric,
+∂^a = g^{ab}∂_b, so the partials swap only if each hidden metric passes through the other
+derivative, as a constant metric does. Two at their own level always may.
+"""
+function _partials_swap(D1::DerivativeSuperType, D2::DerivativeSuperType)
+    return _hidden_metrics_pass(op_indices(D1), D2) && _hidden_metrics_pass(op_indices(D2), D1)
+end
+
+function _hidden_metrics_pass(inds, D::DerivativeSuperType)
+    for (i, pos) in inds
+        S = i.index_set
+        pos == S.default_position || continue      #at the partial's own level: nothing hidden
+        S.metric_type === nothing && continue      #nothing to raise with, so nothing hidden
+        #as commutes_with_metric, for the metric the set would build
+        (metric_compatible(typeof(D), S.metric_type) || isdisjoint(metric_function(S), coord(D))) || return false
+    end
+    return true
+end
+
+"""
+    _partial_chain(D) -> (chain, root)
+
+The partials stacked directly on each other at the head of `D`, outermost first, and what they act
+on: the first operand that is not exactly one partial with coefficient 1. The root is an arbitrary
+expression, compared by the usual equality.
+"""
+function _partial_chain(D::PartialDerivative)
+    chn = get_operator_chain(D, PartialDerivative)
+    return (chn, operand(chn[end]))
+end
+
+"""The same derivative, as a letter of a chain: the same name and operator indices."""
+_same_letter(A, B) = name(A) == name(B) && op_indices(A) == op_indices(B)
+
+"""
+    _chains_signed_equal(u, v) -> (Bool, sign)
+
+Whether two chains of partials are the same up to allowed swaps (`_partials_swap`), and the graded
+sign of the reordering
+"""
+function _chains_signed_equal(u, v)
+    n = length(u)
+    n == length(v) || return (false, 0)
+    #the k-th occurrence of a derivative in u is the k-th in v: repeats then never cross
+    p = zeros(Int, n)
+    used = falses(n)
+    for i in 1:n
+        j = findfirst(k -> !used[k] && _same_letter(u[i], v[k]), 1:n)
+        j === nothing && return (false, 0)
+        used[j] = true
+        p[i] = j
+    end
+    sign = 1
+    for i in 1:n, j in (i + 1):n
+        p[i] < p[j] && continue
+        _partials_swap(u[i], u[j]) || return (false, 0)
+        sign *= (-1)^(op_grading(u[i]) * op_grading(u[j]))
+    end
+    return (true, sign)
+end
+
+"""Equality of two partials: chains the same up to allowed swaps, with no sign, and the roots equal."""
+function _chain_equal(a::PartialDerivative, b::PartialDerivative)
+    (ca, ra), (cb, rb) = _partial_chain(a), _partial_chain(b)
+    return _chains_signed_equal(ca, cb) == (true, 1) && ra == rb
+end
+
+"""As `_chain_equal`, up to a sign, and a root that is a single tensor may differ by its dummies."""
+function _chain_signed_equals(a::PartialDerivative, b::PartialDerivative)
+    (ca, ra), (cb, rb) = _partial_chain(a), _partial_chain(b)
+    ok, s = _chains_signed_equal(ca, cb)
+    ok || return (false, 0)
+    ra == rb && return (true, s)
+    ta, tb = isTensor(ra), isTensor(rb)
+    if ta !== nothing && tb !== nothing && !(ta isa DerivativeSuperType) && !(tb isa DerivativeSuperType)
+        val = same_tensor_mod_dummies(ta, tb)
+        return isZero(val) ? (false, 0) : (true, s * val)
+    end
+    return (false, 0)
+end
+
+"""
+Split a chain of partials into runs, each of which may be freely reordered: every member swaps
+with every other. Nothing crosses from one run to the next.
+"""
+function _swap_blocks(chn)
+    blocks = Vector{Int}[]
+    for k in eachindex(chn)
+        if !isempty(blocks) && all(j -> _partials_swap(chn[j], chn[k]), blocks[end])
+            push!(blocks[end], k)
+        else
+            push!(blocks, [k])
+        end
+    end
+    return blocks
 end
 
 
@@ -622,9 +803,10 @@ function apply_derivative(D::DerivativeSuperType)
                         break;
                     end
                 end
-                if !hit
+                #∂ of what it does not depend on, or a compatible metric: the whole summand vanishes
+                if !hit || metric_compatible(tensor, tens)
                     annihilated = true
-                    break                      # whole summand vanishes
+                    break
                 end
                 res = perform_derivative_action(tensor)
                 if res isa TensorSuperType
@@ -903,6 +1085,7 @@ function product_rule(O::LeibnizOperatorSuperType)
                         break
                     end
                 end
+                annihilates |= metric_compatible(O, t)
             end
             if !annihilates
                 grd = (-1)^grad
@@ -931,17 +1114,18 @@ _with_operand(O::LieBracketSuperType, newop::TensorExpression) =
 _with_operand(O::VariationalSuperType, newop::TensorExpression) =
     typeof(O)(OperatorData(op_data(O), op_indices(O), newop), O.var)
 """
-Perform a symmetrisation of nested partial derivatives. Sometimes useful for simplifications.
+Put every chain of nested partial derivatives into its canonical order.
+
 """
 function symmetrise_partials(TEX::TensorExpression)
     s = summands(TEX)
     isempty(s) && return TEX
 
-    # nothing to symmetrise, return unchanged, no rebuild
+    # nothing to reorder, return unchanged, no rebuild
     found = false
     @inbounds for k in eachindex(s)
         for t in terms(s[k][2])
-            if t isa PartialSuperType
+            if t isa PartialDerivative
                 found = true;
                 break
             end
@@ -950,45 +1134,57 @@ function symmetrise_partials(TEX::TensorExpression)
     end
     found || return TEX
 
-    new_summand = zero()
-    for summand in s
-        nterm = summand[1]
-        for term in summand[2].terms
-            if term isa PartialSuperType
-                symd = symmetrise_partials(term)
-                temp = zero()
-                for par in symd
-                    temp = temp ⨥ (nterm * par) // length(symd)
-                end
-                nterm = temp
-            else
-                nterm *= term
-            end
-        end
-        new_summand += nterm
+    out = zero()
+    for (c, tt) in s
+        out += c * symmetrise_partials(tt)
     end
-    return new_summand
+    return out
 end
 
 function symmetrise_partials(TT::TensorTerm)
     ts = terms(TT)
-    any(t -> t isa PartialSuperType, ts) || return TensorExpression(TT)#so we always have some output type to help the compiler
+    any(t -> t isa PartialDerivative, ts) || return TensorExpression(TT)#so we always have some output type to help the compiler
 
     new_term = 1
     for term in ts
-        if term isa PartialSuperType
-            trm = symmetrise_partials(term)
-            sum = zero()
-            for t in trm
-                sum += t
-            end
-            new_term *= sum // length(trm)
-        else
-            new_term *= term
-        end
+        new_term *= (term isa PartialDerivative ? canonical_partials(term) : term)
     end
-    return new_term
+    return TensorExpression(new_term)
 end
+
+"""
+    canonical_partials(D::PartialDerivative) -> TensorExpression
+
+`D` with its chain of partials in canonical order, times the graded sign of the reordering, and the
+chains inside what it acts on likewise.
+"""
+function canonical_partials(D::PartialDerivative)
+    chn, root = _partial_chain(D)
+    root = symmetrise_partials(root)
+    frees = Set(p[1] for p in free_indices_ordered(D))
+    keys = [_letter_key(op, frees) for op in chn]
+    remaining = collect(eachindex(chn))
+    order = Int[]
+    while !isempty(remaining)
+        best = 0
+        for (r, k) in enumerate(remaining)
+            #it may move to the front only past partials it swaps with
+            all(j -> _partials_swap(chn[j], chn[k]), @view remaining[1:(r - 1)]) || continue
+            (best == 0 || isless(keys[k], keys[best])) && (best = k)
+        end
+        push!(order, best)
+        deleteat!(remaining, findfirst(==(best), remaining))
+    end
+    _, sign = _chains_signed_equal(chn[order], chn)
+    return sign * TensorExpression(rebuild_nested(chn[order], root))
+end
+
+"""
+The order of partials in a canonical chain. A dummy is keyed by where it sits, not its name, which
+a relabelling may change; ties keep their order.
+"""
+_letter_key(op, frees) =
+    (name(op), [(i.index_set.name, pos.position, i in frees ? i.name : "") for (i, pos) in op_indices(op)])
 
 """Innermost operand of a nest of derivatives, partial or covariant."""
 function root_oprnd(D::DerivativeSuperType)
@@ -1009,7 +1205,8 @@ function symmetrise_partials(D::PartialSuperType)
     # @show op
     # @show op_indices(op)
     inds = [op_indices(op)[1][1] for op in chn]
-    swps = graded_swaps(chn)
+    #only reorderings within runs that may swap: a raised partial whose metric varies stays put
+    swps = graded_swaps(chn, _swap_blocks(chn))
     term = []
     # indpermsfor = graded_swaps_opinds(chn)
     # indpermsforpass = [(inds[swp[1]], swp[2]) for swp in indpermsfor]
@@ -1101,6 +1298,17 @@ function graded_swaps(ops)
     end
 
     return results
+end
+
+"""Reorderings of `ops` within each block (see `_swap_blocks`), with their graded signs."""
+function graded_swaps(ops, blocks::Vector{Vector{Int}})
+    length(blocks) == 1 && return graded_swaps(ops)
+    perms = [collect(eachindex(ops))]
+    for b in blocks
+        length(b) == 1 && continue
+        perms = [(p2 = copy(p); p2[b] = b[q]; p2) for p in perms for q in permutations(eachindex(b))]
+    end
+    return [(ops[p], graded_sign(p, ops)) for p in perms]
 end
 
 function graded_swaps_opinds(ops)

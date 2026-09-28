@@ -45,5 +45,34 @@
 
     @test (simplify(D(X));true)
 
-
+    ###############################################
+    #nested partials compare up to any allowed reordering of the chain, not one swap at a time,
+    #whatever the chain acts on
+    ∂dv(i, T) = PartialDerivative("∂", T, [x], [i])
+    ∂θv(i, T) = PartialDerivative("∂", T, [θ], [i])
+    Xs, Ys, Zs = Tensor("X", x), Tensor("Y", x), Tensor("Z", x)
+    #deep enough that single swaps no longer connect every ordering
+    @test isZeroTens(simplify(∂dv(λ => lower, ∂dv(μ => lower, ∂dv(ν => lower, ∂dv(ρ => lower, Xs)))) -
+                              ∂dv(ρ => lower, ∂dv(ν => lower, ∂dv(μ => lower, ∂dv(λ => lower, Xs))))))
+    box2 = ∂dv(μ => lower, ∂dv(ν => lower, ∂dv(μ => upper, ∂dv(ν => upper, Xs))))
+    @test isZeroTens(simplify(box2 - ∂dv(ν => upper, ∂dv(μ => upper, ∂dv(ν => lower, ∂dv(μ => lower, Xs))))))
+    #a single term stays a single term, rather than an average of its orderings
+    let s = summands(simplify(box2))
+        @test length(s) == 1 && isequal(s[1][1], 1)
+    end
+    #the root is an arbitrary expression
+    @test isZeroTens(simplify(∂dv(μ => lower, ∂dv(ν => lower, Xs * Ys + Zs)) - ∂dv(ν => lower, ∂dv(μ => lower, Ys * Xs + Zs))))
+    #and may hold chains of its own
+    @test isZeroTens(simplify(∂dv(μ => lower, Ys * ∂dv(ν => lower, ∂dv(λ => lower, Xs))) -
+                              ∂dv(μ => lower, Ys * ∂dv(λ => lower, ∂dv(ν => lower, Xs)))))
+    #fermionic partials anticommute
+    ψs = Tensor("ψ", [x, θ])
+    @test isZeroTens(simplify(∂θv(i => lower, ∂θv(j => lower, ψs)) + ∂θv(j => lower, ∂θv(i => lower, ψs))))
+    @test !isZeroTens(simplify(∂θv(i => lower, ∂θv(j => lower, ψs)) - ∂θv(j => lower, ∂θv(i => lower, ψs))))
+    #and a bosonic one commutes past them
+    @test isZeroTens(simplify(∂dv(μ => lower, ∂θv(i => lower, ψs)) - ∂θv(i => lower, ∂dv(μ => lower, ψs))))
+    #reorderings that are equal hash alike, as merging relies on
+    let p = ∂dv(λ => lower, ∂dv(μ => lower, ∂dv(ν => lower, Xs))), q = ∂dv(ν => lower, ∂dv(λ => lower, ∂dv(μ => lower, Xs)))
+        @test p == q && hash(p) == hash(q)
+    end
 end

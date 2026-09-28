@@ -52,6 +52,7 @@ export TensorData, TensorDataSuperType, Tensorial, TensorTerm, Tensor, TensorExp
 export SymmetricTensor, AntisymmetricTensor, RiemannTensor, Riemann
 export Boson, Fermion
 export @Tensor, @T_str, @LT_str, parse_latex, @conjugates, conjugates!
+export metric_function!, metric_function, metric_compatible, @compatible
 
 ##########################
 #all supertypes

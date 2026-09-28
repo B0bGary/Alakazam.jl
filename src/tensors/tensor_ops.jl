@@ -1901,7 +1901,7 @@ end
 function is_less_mod_dummies(T1::TensorSuperType, T2::TensorSuperType, dummies)
     if dummies === nothing
         return T1 < T2
-    elseif length(dummies) == length(indices(T1))
+    elseif length(dummies) == length(indices(T1)) && length(indices(T1)) == length(indices(T2))
         i1 = indices(T1)
         i2 = indices(T2)
 
@@ -2083,6 +2083,9 @@ function bubble_sort_index_with_grading!(T::TensorSuperType, mapping::Dict)
             if mapping[i+1] < mapping[i]
                 #compute grading
                 for tab in tableaux(T)
+                    #adj_matrix is indexed by slot but reaches only the highest slot the tableau
+                    #covers, so a tableau on part of a tensor is smaller than it.
+                    i + 1 <= size(tab.adj_matrix, 1) || continue
                     if tab.adj_matrix[i, i+1] != 0
                         mapping[i], mapping[i+1] = mapping[i+1], mapping[i]
                         swaps *= tab.adj_matrix[i, i+1]

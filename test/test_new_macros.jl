@@ -18,6 +18,22 @@
     @test Tensor("A", [a => lower, b => upper, c=>lower, d=>upper], x) == @Tensor A_a^b_c^d{x}
     @test Tensor("A", [a => lower, b => upper, c=>lower, d=>upper], [x, θ]) == @Tensor A_a^b_c^d{x,θ}
 
+    # with no ^, A_b{x} is a bare curly rather than a call, and used to run off the end of it
+    let t = @Tensor A_b{x}
+        @test t == Tensor("A", [b => lower], x) && function_of(t) == [x]
+    end
+    let t = @Tensor A_bc{x,θ}
+        @test t == Tensor("A", [b => lower, c => lower], [x, θ]) && Set(function_of(t)) == Set([x, θ])
+    end
+    # a bare name binds too, like every other form
+    let t = @Tensor Z
+        @test Z === t && t == Tensor("Z")
+    end
+    let t = @Tensor A{x}
+        @test isempty(indices(t)) && function_of(t) == [x]
+    end
+    @test_throws LoadError eval(:(@Tensor A_{b}{x}))   # index groups are not braced
+
 
     #string parsing
     @test Tensor("A", [a => lower, b => lower]) ≅ @Tensor "A_ab"

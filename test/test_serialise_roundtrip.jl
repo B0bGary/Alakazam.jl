@@ -200,6 +200,29 @@ end
     end
 
     ###########################################################################
+    # a metric depending on coordinates, which are built after the sets
+    ###########################################################################
+    clear_global!(); Alakazam.clear_commutators!()
+    let cs = IndexSet("curvedst", 4, lower, Metric)
+        cx = Coordinate("cx", cs)
+        metric_function!(cs, cx)
+        save(TensorExpression(Tensor("V", [Index("cv", cs) => lower])), _RT, true)
+    end
+    clear_global!()
+    _ = @load _RT
+    let back = SET_REGISTRY["curvedst"]
+        @test [c.name for c in metric_function(back)] == ["cx"]
+        @test metric_function(back)[1] === COORD_REGISTRY["cx"]   # the registry object, not a copy
+    end
+    # a file written before the field existed loads flat
+    let d = Alakazam.to_dict(SET_REGISTRY["curvedst"])
+        delete!(d, "metric_function")
+        clear_global!()
+        #through JSON, as a file would be: the raw dict still holds metric_type as a Type
+        @test isempty(metric_function(Alakazam.from_dict(Alakazam.JSON.parse(Alakazam.JSON.json(d)))))
+    end
+
+    ###########################################################################
     # an index-set ALGEBRA, whose signature lives in TYPE PARAMETERS
     ###########################################################################
     clear_global!(); Alakazam.clear_commutators!()

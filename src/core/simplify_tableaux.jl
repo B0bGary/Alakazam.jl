@@ -823,5 +823,28 @@ function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
     out = bubble_sort_index_with_grading!(copy_owned(T2), ISO)
     grad = out[1]
     grad *= to_dumless_same_tensor_mod_syms(T1, T3)
+    #exchanging the slots of a contracted pair is free over a symmetric metric but not over an ε
+    grad *= _antisym_contraction_sign(ISO, contractions2)
     return grad
+end
+
+"""
+The sign that exchanging the two slots of a self-contracted pair costs.
+"""
+function _antisym_contraction_sign(ISO, contractions)
+    sgn = 1
+    seen = Set{Tuple{Int,Int}}()
+    for (x, y) in contractions
+        x[2][2] === upper || continue           #visit each pair once, from its raised slot
+        su, sl = x[1], y[1]
+        key = (min(su, sl), max(su, sl))
+        key in seen && continue
+        push!(seen, key)
+        mu, ml = get(ISO, su, su), get(ISO, sl, sl)
+        (su < sl) == (mu < ml) && continue      #slot order kept, so nothing to pay
+        mt = x[2][1].index_set.metric_type
+        mt === nothing && continue
+        mt <: AntisymMetricSuperType && (sgn = -sgn)
+    end
+    return sgn
 end

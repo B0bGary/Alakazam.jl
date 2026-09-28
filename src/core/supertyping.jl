@@ -9,6 +9,7 @@ const SymorNum = Union{
     Number}
 
 abstract type IndexSuperType end
+abstract type CoordinateSuperType end
 #Supertype of tensor, term, expression etc to allow common functions
 abstract type Tensorial end
 abstract type TensorSuperType <: Tensorial end
