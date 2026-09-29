@@ -770,9 +770,10 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
             end
         end
 
-        temptens = nothing
+        #the tensor the metric went into, whose cached indices then need refreshing: an operator's
+        #op_indices are edited in place, but its full index list is a separate cache
+        contracted = nothing
         for tens in non_metrics
-            temptens = tens
             flag && break
             metric isa EpsilonTensorSuperType && tens isa KroneckerSuperType && continue
             #Do not let a metric raise or lower an epsilon's indices. Kronecker is exempt
@@ -789,9 +790,10 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
                     sign *= sgn
                 end
             end
+            flag && (contracted = tens)
         end
         flag || push!(uncontr_mets, metric)
-        temptens === nothing || update_indices!(temptens)
+        contracted === nothing || update_indices!(contracted)
     end
 
     n = length(uncontr_mets) + length(non_metrics)

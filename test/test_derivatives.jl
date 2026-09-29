@@ -93,4 +93,24 @@
     @test apply_derivative(p) == p
     # and the sum form keeps working, so the new methods shadow nothing
     @test apply_derivative(p * Dm(q) - p * Dm(q)) == zero()
+
+    ###############################################
+    # a metric raising a derivative's own index must refresh THAT derivative's cached indices. The
+    # refresh used to land on the factor after it, so ∂^b kept the cache of ∂_a: the term then had no
+    # dummies, was never relabelled, and two equal terms never merged
+    let s2 = IndexSet("c2_contract", (0, 2), lower)
+        ka, kb, kc, kd = Index(["ka", "kb", "kc", "kd"], s2)
+        kx = Coordinate("kx", [s2])
+        kp = Tensor("kp", kx)
+        Dk(i) = PartialDerivative("∂", kp, [kx], [i => lower])
+        gu(i, j) = Metric([i => upper, j => upper])
+        gl(i, j) = Metric([i => lower, j => lower])
+        w = gu(kc, kd) * Dk(kc) * Dk(kd)
+        @test isZeroTens(simplify(gu(ka, kb) * gl(ka, kb) * w - 2 * w))
+        @test isZeroTens(simplify(gu(ka, kb) * (-2 * Dk(ka) * Dk(kb)) + gu(ka, kb) * gl(ka, kb) * w))
+        let tt = summands(Alakazam.contract_metrics(TensorExpression(gu(ka, kb) * Dk(ka) * Dk(kb)), Metric))[1][2]
+            @test all(t -> indices(t) == op_indices(t), terms(tt))
+            @test length(dummies(tt)) == 1
+        end
+    end
 end
