@@ -75,6 +75,9 @@
     let p = ∂dv(λ => lower, ∂dv(μ => lower, ∂dv(ν => lower, Xs))), q = ∂dv(ν => lower, ∂dv(λ => lower, ∂dv(μ => lower, Xs)))
         @test p == q && hash(p) == hash(q)
     end
+    #and symmetrise_partials puts both orders of a chain in the same canonical one
+    @test symmetrise_partials(∂dv(μ => lower, ∂dv(ρ => lower, Tensor("A", [ν => lower], x)))) ==
+          symmetrise_partials(∂dv(ρ => lower, ∂dv(μ => lower, Tensor("A", [ν => lower], x))))
 
     ###############################################
     # apply_derivative on a single PRODUCT, not a sum. `TensorTerm` matched no

@@ -6,9 +6,9 @@
 
 Symbolic tensor algebra for field theory, in Julia.
 
-Alakazam is designed to perform symbolic algebraic manipulations of tensors and tensor equations, with field theories and quantum mechanics in mind.
-In particular, it includes the ability to raise and lower tensor indices with a metric, simplify expressions using symmetries of tensors, and perform covariant differentiation.
-For those working on supersymmetric theories, Alakazam supports grading natively, and can handle covariant derivatives with multiple indices, perform superspace integration, and more.
+Alakazam is designed to perform symbolic algebraic manipulations of tensors and tensor equations, with field theories and quantum mechanics in mind. It offers notable speed improvements over analogous operations in other packages like Cadabra and xAct.
+In particular, Alakazam features the ability to raise and lower tensor indices with a metric, simplify expressions using symmetries of tensors, and perform covariant differentiation.
+For those working on supersymmetric theories, Alakazam supports grading natively, and can handle covariant derivatives with multiple indices, perform superspace integration, and more. 
 
 
 ## Getting started
@@ -38,7 +38,7 @@ Alakazam can also parse tensors in a variety of ways, including from LaTeX, usin
 ```julia
 T = @Tensor T_μν^τ
 T = T"T_μν^τ"
-T = LT"T_\\mu\\nu^\\tau"
+T = LT"T_\mu\nu^\tau"
     # T^{μ∘τ}_{∘ν∘}
 ```
 
@@ -84,7 +84,7 @@ The `demo/` folder has complete, non-trivial calculations:
 - **`demo/compton_spinor.jl`** — Compton scattering end to end, with matrix reduction rules and substitutions
 - **`demo/ttbar2DN02.jl`** — an 𝒩=(0,2) superspace constraint analysis, with covariant derivatives, superfield expansions and Grassmann coefficients.
 
-For a more comprehensive description of these demos, see the paper _"Alakazam: Symbolic Tensor Algebra for Field Theory in Julia"_.
+For a more comprehensive description of these demos, see the paper [_"Alakazam: Symbolic Tensor Algebra for Field Theory in Julia"_](https://arxiv.org/abs/2608.20452).
 
 ## Support
 
@@ -92,7 +92,7 @@ If you'd like to support me and future development of this project, please donat
 
 ## License
 Alakazam is available under the conditions of the GNU General Public License. 
-If you use this software in part of your work, please cite: _"Alakazam: Symbolic Tensor Algebra for Field Theory in Julia"_, and _"Decomposing Grassmann Monomials for Superfield Expansions"_ if using the `generate_superfield` function.
+If you use this software in part of your work, please cite: [_"Alakazam: Symbolic Tensor Algebra for Field Theory in Julia"_](https://arxiv.org/abs/2608.20452), and [_"Decomposing Grassmann Monomials for Superfield Expansions"_](https://arxiv.org/abs/2608.20455) if using the `generate_superfield` function.
 
 ## Contributing
 If you'd like to contribute, or have any questions in general, please get in touch at <jesse.woods@unibe.ch> :)

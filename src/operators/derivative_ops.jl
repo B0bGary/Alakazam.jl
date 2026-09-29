@@ -252,7 +252,7 @@ commutes_with_metric(O::DerivativeSuperType, g) =
 function ==(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if derivatives commute
     #partials: the whole chain up to allowed swaps, so that equality is transitive (and hash agrees)
     if a isa PartialDerivative || b isa PartialDerivative
-        return a isa PartialDerivative && b isa PartialDerivative && _chain_equal(a, b)
+        return a isa PartialDerivative && b isa PartialDerivative && _chain_signed_equals(a, b, false) == (true, 1)
     end
     # @show "using dervi"
     if name(a) == name(b) && op_indices(a) == op_indices(b) && operand(a) == operand(b) #basic check
@@ -276,29 +276,21 @@ function ==(a::DerivativeSuperType, b::DerivativeSuperType)#check to see if deri
     end
     return false
 end
-function Base.hash(d::DerivativeSuperType, h::UInt)
-    d isa PartialDerivative && return _chain_hash(d, h)
-    h = hash(name(d), h)
-    @inbounds for p in op_indices(d)
-        h = hash(p[1].uid, hash(p[2].position, h))
-    end
-    return h
-end
+"""
+A partial is hashed by its whole chain, whose order equality ignores, so the hashes are summed.
 
 """
-Hash a partial by its whole chain, ignoring the order: equal chains may be ordered differently.
-The root is left out, which only makes the hash coarser than the equality, never inconsistent.
-"""
-function _chain_hash(d::PartialDerivative, h::UInt)
+function Base.hash(d::DerivativeSuperType, h::UInt)
+    chn = d isa PartialDerivative ? get_operator_chain(d, PartialDerivative) : (d,)
     acc = zero(UInt)
-    for op in get_operator_chain(d, PartialDerivative)
+    for op in chn
         hh = hash(name(op))
         @inbounds for p in op_indices(op)
             hh = hash(p[1].uid, hash(p[2].position, hh))
         end
-        acc += hh                                  #a sum does not see the order
+        acc += hh
     end
-    return hash(acc, hash(:partial_chain, h))
+    return hash(acc, h)
 end
 
 """
@@ -493,55 +485,35 @@ function derivatives_commute(D1::DerivativeSuperType, D2::DerivativeSuperType)
 end
 
 """
-Whether two partials may be exchanged. A partial's own level is opposite to its set's default
-position: with x^μ upper by default, ∂_μ. An index at the default position hides a metric,
+Whether two partials may be exchanged. An index at the default position hides a metric,
 ∂^a = g^{ab}∂_b, so the partials swap only if each hidden metric passes through the other
-derivative, as a constant metric does. Two at their own level always may.
+derivative, as `commutes_with_metric` decides for the metric the set builds.
 """
 function _partials_swap(D1::DerivativeSuperType, D2::DerivativeSuperType)
-    return _hidden_metrics_pass(op_indices(D1), D2) && _hidden_metrics_pass(op_indices(D2), D1)
-end
-
-function _hidden_metrics_pass(inds, D::DerivativeSuperType)
-    for (i, pos) in inds
+    for (D, E) in ((D1, D2), (D2, D1)), (i, pos) in op_indices(D)
         S = i.index_set
-        pos == S.default_position || continue      #at the partial's own level: nothing hidden
-        S.metric_type === nothing && continue      #nothing to raise with, so nothing hidden
-        #as commutes_with_metric, for the metric the set would build
-        (metric_compatible(typeof(D), S.metric_type) || isdisjoint(metric_function(S), coord(D))) || return false
+        (pos == S.default_position && S.metric_type !== nothing) || continue   #nothing hidden
+        (metric_compatible(typeof(E), S.metric_type) || isdisjoint(metric_function(S), coord(E))) || return false
     end
     return true
 end
 
 """
-    _partial_chain(D) -> (chain, root)
+    _chain_signed_equals(a, b, mod_dummies=true) -> (Bool, sign)
 
-The partials stacked directly on each other at the head of `D`, outermost first, and what they act
-on: the first operand that is not exactly one partial with coefficient 1. The root is an arbitrary
-expression, compared by the usual equality.
+Whether two partials are equal up to a sign. The chains are the same up to allowed swaps
+(`_partials_swap`) when they hold the same derivatives and every pair that may not swap keeps its
+relative order
 """
-function _partial_chain(D::PartialDerivative)
-    chn = get_operator_chain(D, PartialDerivative)
-    return (chn, operand(chn[end]))
-end
-
-"""The same derivative, as a letter of a chain: the same name and operator indices."""
-_same_letter(A, B) = name(A) == name(B) && op_indices(A) == op_indices(B)
-
-"""
-    _chains_signed_equal(u, v) -> (Bool, sign)
-
-Whether two chains of partials are the same up to allowed swaps (`_partials_swap`), and the graded
-sign of the reordering
-"""
-function _chains_signed_equal(u, v)
+function _chain_signed_equals(a::PartialDerivative, b::PartialDerivative, mod_dummies::Bool=true)
+    u, v = get_operator_chain(a, PartialDerivative), get_operator_chain(b, PartialDerivative)
     n = length(u)
     n == length(v) || return (false, 0)
     #the k-th occurrence of a derivative in u is the k-th in v: repeats then never cross
     p = zeros(Int, n)
     used = falses(n)
     for i in 1:n
-        j = findfirst(k -> !used[k] && _same_letter(u[i], v[k]), 1:n)
+        j = findfirst(k -> !used[k] && name(u[i]) == name(v[k]) && op_indices(u[i]) == op_indices(v[k]), 1:n)
         j === nothing && return (false, 0)
         used[j] = true
         p[i] = j
@@ -552,43 +524,15 @@ function _chains_signed_equal(u, v)
         _partials_swap(u[i], u[j]) || return (false, 0)
         sign *= (-1)^(op_grading(u[i]) * op_grading(u[j]))
     end
-    return (true, sign)
-end
-
-"""Equality of two partials: chains the same up to allowed swaps, with no sign, and the roots equal."""
-function _chain_equal(a::PartialDerivative, b::PartialDerivative)
-    (ca, ra), (cb, rb) = _partial_chain(a), _partial_chain(b)
-    return _chains_signed_equal(ca, cb) == (true, 1) && ra == rb
-end
-
-"""As `_chain_equal`, up to a sign, and a root that is a single tensor may differ by its dummies."""
-function _chain_signed_equals(a::PartialDerivative, b::PartialDerivative)
-    (ca, ra), (cb, rb) = _partial_chain(a), _partial_chain(b)
-    ok, s = _chains_signed_equal(ca, cb)
-    ok || return (false, 0)
-    ra == rb && return (true, s)
+    ra, rb = operand(u[end]), operand(v[end])
+    ra == rb && return (true, sign)
+    mod_dummies || return (false, 0)
     ta, tb = isTensor(ra), isTensor(rb)
     if ta !== nothing && tb !== nothing && !(ta isa DerivativeSuperType) && !(tb isa DerivativeSuperType)
         val = same_tensor_mod_dummies(ta, tb)
-        return isZero(val) ? (false, 0) : (true, s * val)
+        return isZero(val) ? (false, 0) : (true, sign * val)
     end
     return (false, 0)
-end
-
-"""
-Split a chain of partials into runs, each of which may be freely reordered: every member swaps
-with every other. Nothing crosses from one run to the next.
-"""
-function _swap_blocks(chn)
-    blocks = Vector{Int}[]
-    for k in eachindex(chn)
-        if !isempty(blocks) && all(j -> _partials_swap(chn[j], chn[k]), blocks[end])
-            push!(blocks[end], k)
-        else
-            push!(blocks, [k])
-        end
-    end
-    return blocks
 end
 
 
@@ -1155,22 +1099,21 @@ function symmetrise_partials(TT::TensorTerm)
 
     new_term = 1
     for term in ts
-        new_term *= (term isa PartialDerivative ? canonical_partials(term) : term)
+        new_term *= (term isa PartialDerivative ? symmetrise_partials(term) : term)
     end
     return TensorExpression(new_term)
 end
 
 """
-    canonical_partials(D::PartialDerivative) -> TensorExpression
-
 `D` with its chain of partials in canonical order, times the graded sign of the reordering, and the
 chains inside what it acts on likewise.
 """
-function canonical_partials(D::PartialDerivative)
-    chn, root = _partial_chain(D)
-    root = symmetrise_partials(root)
+function symmetrise_partials(D::PartialDerivative)
+    chn = get_operator_chain(D, PartialDerivative)
+    root = symmetrise_partials(operand(chn[end]))
     frees = Set(p[1] for p in free_indices_ordered(D))
-    keys = [_letter_key(op, frees) for op in chn]
+    keys = [(name(op), [(i.index_set.name, pos.position, i in frees ? i.name : "") for (i, pos) in op_indices(op)])
+            for op in chn]
     remaining = collect(eachindex(chn))
     order = Int[]
     while !isempty(remaining)
@@ -1183,16 +1126,8 @@ function canonical_partials(D::PartialDerivative)
         push!(order, best)
         deleteat!(remaining, findfirst(==(best), remaining))
     end
-    _, sign = _chains_signed_equal(chn[order], chn)
-    return sign * TensorExpression(rebuild_nested(chn[order], root))
+    return graded_sign(order, chn) * TensorExpression(rebuild_nested(chn[order], root))
 end
-
-"""
-The order of partials in a canonical chain. A dummy is keyed by where it sits, not its name, which
-a relabelling may change; ties keep their order.
-"""
-_letter_key(op, frees) =
-    (name(op), [(i.index_set.name, pos.position, i in frees ? i.name : "") for (i, pos) in op_indices(op)])
 
 """Innermost operand of a nest of derivatives, partial or covariant."""
 function root_oprnd(D::DerivativeSuperType)
@@ -1202,29 +1137,6 @@ function root_oprnd(D::DerivativeSuperType)
     else
         return operand(D)
     end
-end
-
-"""
-ADD A STEP TO REBUILD WEIGHTS ETC!!!
-"""
-function symmetrise_partials(D::PartialSuperType)
-    root = root_oprnd(D)
-    chn = get_operator_chain(D, PartialSuperType) #only partials may be exchanged by index
-    # @show op
-    # @show op_indices(op)
-    inds = [op_indices(op)[1][1] for op in chn]
-    #only reorderings within runs that may swap: a raised partial whose metric varies stays put
-    swps = graded_swaps(chn, _swap_blocks(chn))
-    term = []
-    # indpermsfor = graded_swaps_opinds(chn)
-    # indpermsforpass = [(inds[swp[1]], swp[2]) for swp in indpermsfor]
-    for swp in swps
-        permuted = swp[1]
-        sign = swp[2]
-        push!(term, sign * rebuild_nested(permuted, root))
-    end
-    # @show term
-    return term#, indpermsforpass)
 end
 
 
@@ -1294,42 +1206,6 @@ function graded_swap(ops, perm)
     perm_full = ops[perm2]
     sign = graded_sign(perm, ops)
     return (perm_full, sign)
-end
-
-function graded_swaps(ops)
-    results = Tuple{typeof(ops),Int}[]
-    n = length(ops)
-    for p in permutations(1:n)
-        permuted = ops[p]
-        sign = graded_sign(p, ops)
-        push!(results, (permuted, sign))
-    end
-
-    return results
-end
-
-"""Reorderings of `ops` within each block (see `_swap_blocks`), with their graded signs."""
-function graded_swaps(ops, blocks::Vector{Vector{Int}})
-    length(blocks) == 1 && return graded_swaps(ops)
-    perms = [collect(eachindex(ops))]
-    for b in blocks
-        length(b) == 1 && continue
-        perms = [(p2 = copy(p); p2[b] = b[q]; p2) for p in perms for q in permutations(eachindex(b))]
-    end
-    return [(ops[p], graded_sign(p, ops)) for p in perms]
-end
-
-function graded_swaps_opinds(ops)
-    results = []
-    n = length(ops)
-    for p in permutations(1:n)
-        # println("permutation: ", p)
-        permuted = ops[p]
-        sign = graded_sign(p, ops)
-        push!(results, (p, sign))
-    end
-
-    return results
 end
 
 """

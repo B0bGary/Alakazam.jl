@@ -284,38 +284,46 @@ function _fresh_index(iset::IndexSet, claimed::Vector{IndexTypes})
     return nid
 end
 
-function _pop_metric(T::TensorSuperType, claimed::Vector{IndexTypes})
+"""
+`target(set)` is the level each index is moved to: a tensor's set's default position unless given. A
+derivative asks for its own indices with its own level, opposite that; any other operator is skipped.
+"""
+function _pop_metric(T::TensorSuperType, claimed::Vector{IndexTypes}, target=nothing)
     # skip types
     (T isa AntisymMetricSuperType || T isa SymMetricSuperType ||
-     T isa OperatorSuperType || T isa KroneckerSuperType) && return T
+     (T isa OperatorSuperType && target === nothing) || T isa KroneckerSuperType) && return T
+    target === nothing && (target = S -> S.default_position)
     # need popping?
-    inds = indices(T)
+    inds = T isa OperatorSuperType ? op_indices(T) : indices(T)
     needs = false
     @inbounds for p in inds
         iset = p[1].index_set          # one load; islightcone and default_position both live here
         iset.islightcone && continue
-        if p[2] != iset.default_position
+        if p[2] != target(iset)
             needs = true
             break
         end
     end
     needs || return T                      # no copy needed etc to save
-    T = copy_owned(T)
     tensor = 1
-    new_index_pattern = indices(T)
-    @inbounds for pos in eachindex(new_index_pattern)
-        index = new_index_pattern[pos]
+    rep = Dict{IndexPair,IndexPair}()
+    @inbounds for index in inds
         iset = index[1].index_set
         iset.islightcone && continue
-        index[2] == iset.default_position && continue
+        index[2] == target(iset) && continue
         use_this = _fresh_index(iset, claimed)
-        dummy = use_this => (iset.default_position == upper ? lower : upper)
+        dummy = use_this => op_pos(target(iset))
         push!(claimed, use_this)
         metric = generate_metric(index, dummy)
         metric === nothing && continue
         tensor = tensor * metric
-        new_index_pattern[pos] = dummy[1] => iset.default_position
+        rep[index] = dummy[1] => target(iset)
     end
+    isempty(rep) && return T
+    #copy on write: a fresh shell whose indices are replaced, never edited, so whatever shares them
+    #is untouched; set_indices_deep! also refreshes an operator's cached full index list
+    T = copy(T)
+    set_indices_deep!(T, rep)
     return tensor * T
 end
 
@@ -323,32 +331,48 @@ end
 _is_popped_metric(g) = g isa SymMetricSuperType || g isa AntisymMetricSuperType
 
 """
-Pop the metrics off a derivative's operand. Each is popped next to its tensor, inside the derivative,
-and carried out past it only where `commutes_with_metric` allows
+Pop the metrics off a derivative and its operand. Each is popped next to its tensor, inside the
+derivative, and carried out past it only where `commutes_with_metric` allows.
 """
 function _pop_metric(O::DerivativeSuperType, claimed::Vector{IndexTypes})
     s = summands(operand(O))
-    length(s) == 1 || return _pop_metric_per_summand(O, claimed)
-    c, tt = s[1]
     outside = TensorSuperType[]
-    inside = TensorSuperType[]
-    popped = false
-    for f in terms(tt)
-        p = _pop_metric(f, claimed)
-        if p === f
-            push!(inside, f)
-            continue
+    D = if length(s) != 1
+        _pop_metric_per_summand(O, claimed)
+    else
+        c, tt = s[1]
+        inside = TensorSuperType[]
+        popped = false
+        #a metric written in the operand may come out as one popped there does, unless it is all
+        #the operand holds: moving that would leave a derivative of a number
+        body = any(t -> !_is_popped_metric(t), terms(tt))
+        for f in terms(tt)
+            p = _pop_metric(f, claimed)
+            if p === f
+                if body && _is_popped_metric(f) && commutes_with_metric(O, f)
+                    push!(outside, f)
+                    popped = true
+                else
+                    push!(inside, f)
+                end
+                continue
+            end
+            popped = true
+            #a nested derivative's result carries whatever it let out; those may go further still
+            for g in terms(isTensorTerm(p))
+                _is_popped_metric(g) && commutes_with_metric(O, g) ? push!(outside, g) : push!(inside, g)
+            end
         end
-        popped = true
-        #a nested derivative's result carries whatever it let out; those may go further still
-        for g in terms(isTensorTerm(p))
-            _is_popped_metric(g) && commutes_with_metric(O, g) ? push!(outside, g) : push!(inside, g)
+        if popped
+            Oc = copy(O)
+            set_operand!(Oc, c * TensorTerm(inside))
+            Oc
+        else
+            O
         end
     end
-    popped || return O
-    Oc = copy(O)
-    set_operand!(Oc, c * TensorTerm(inside))
-    return isempty(outside) ? Oc : TensorTerm(outside) * Oc
+    D isa PartialDerivative || (D = _pop_metric(D, claimed, S -> op_pos(S.default_position)))
+    return isempty(outside) ? D : TensorTerm(outside) * D
 end
 
 """
@@ -409,8 +433,34 @@ Contract all metrics of a particular type in an expression, whereever possible.
 #     contract_metrics(1 * T, typ)
 # end
 function contract_metrics(T::TensorTerm, typ::Type=Metric)
+    T = _contract_in_operands(T, typ)
     (sign, factor, extra_deltas, newterm) = _contract_metrics_term(T, typ)
     return sign * factor * (extra_deltas * newterm)
+end
+
+"""
+The term with the metrics inside each operator's operand contracted, recursively. An operator whose
+operand has nothing to contract is kept as it is, and so is the term if none has.
+"""
+function _contract_in_operands(tt::TensorTerm, typ::Type)
+    ts = terms(tt)
+    any(t -> t isa OperatorSuperType, ts) || return tt
+    changed = false
+    newts = Vector{TensorSuperType}(undef, length(ts))
+    for (k, t) in enumerate(ts)
+        if t isa OperatorSuperType && !isZeroTens(operand(t))
+            op = operand(t)
+            newop = contract_metrics(op, typ)
+            if newop !== op
+                #as applying the operator does: set_operand! also refreshes the cached indices
+                t = copy(t)
+                set_operand!(t, newop)
+                changed = true
+            end
+        end
+        newts[k] = t
+    end
+    return changed ? TensorTerm(newts) : tt
 end
 
 
@@ -596,6 +646,17 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
     s = summands(T)
     isempty(s) && return T
 
+    # inside operands first, innermost first: a metric left inside a derivative, as popping does
+    # where it cannot pass, contracts there, ∇_a(g^{ab}∇_b u) = ∇_a∇^a u
+    if any(p -> any(t -> t isa OperatorSuperType, terms(p[2])), s)
+        newtts = [_contract_in_operands(tt, typ) for (_, tt) in s]
+        #rebuilt only if something changed: the caller tells an untouched operand by identity
+        if any(k -> newtts[k] !== s[k][2], eachindex(s))
+            T = TensorExpression(CoeffPair[CoeffPair(s[k][1], newtts[k]) for k in eachindex(s)])
+            s = summands(T)
+        end
+    end
+
     # cheap scan: is there anything of this type to contract?
     found = false
     @inbounds for k in eachindex(s)
@@ -644,6 +705,8 @@ function _contract_into_operand!(tens, metric, rie)
             sign *= sgn
             flag && return (true, sign)
         end
+        #into the operand only past a derivative the metric passes: g^{ab}∂_c(A_b) is ∂_c(A^a) only if ∂_c g = 0
+        t isa DerivativeSuperType && !commutes_with_metric(t, metric) && return (false, sign)
         (flag, sgn) = _contract_into_operand!(operand(t), metric, rie)
         return (flag, sign * sgn)
     end

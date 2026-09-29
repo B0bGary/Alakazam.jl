@@ -107,7 +107,7 @@
 
     @test length(Alakazam.get_operator_chain(dtr)) == 2# encoding walks both
     @test length(Alakazam.get_operator_chain(dtr, PartialSuperType)) == 1# reordering does not
-    @test Alakazam.symmetrise_partials(dtr) == [dtr]
+    @test Alakazam.symmetrise_partials(dtr) == TensorExpression(dtr)
     @test Alakazam.simplify(dtr) == TensorExpression(dtr)
     @test Alakazam.hard_simplify(dtr) == TensorExpression(dtr)
     @test dtr ≅ dtr
@@ -116,7 +116,6 @@
     Aq = Tensor("A", [ν => lower], x)
     dd = PartialDerivative("∂", PartialDerivative("∂", Aq, x, ρ => lower), x, μ => lower)
     @test length(Alakazam.get_operator_chain(dd, PartialSuperType)) == 2
-    @test length(Alakazam.symmetrise_partials(dd)) == 2
 
     ###############################################
     ### trace relations, registered with @mrule and matched up to cyclicity

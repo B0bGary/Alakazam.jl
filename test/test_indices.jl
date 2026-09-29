@@ -194,9 +194,11 @@
         mets(e) = [t for t in terms(summands(TensorExpression(e))[1][2]) if t isa Metric]
         #popping puts g(x) beside the tensor
         @test any(t -> function_of(t) == [cx], mets(pop_metric(Tensor("A", [cμ => upper], cx))))
-        #and a derivative in x no longer moves it out, ∂(gA) ≠ g∂A, so it is popped inside, next to A
+        #and a derivative in x no longer moves it out, ∂(gA) ≠ g∂A, so it is popped inside, next to A.
+        #The derivatives here sit at their own level, upper for this set (opposite its default), so
+        #that they carry no metric of their own to pop
         cA = Tensor("A", [cμ => upper], cx)
-        ∂A = PartialDerivative("∂", cA, [cx], [cν => lower])
+        ∂A = PartialDerivative("∂", cA, [cx], [cν => upper])
         let p = isTensor(pop_metric(∂A))
             @test p isa PartialDerivative && function_of(mets(operand(p))[1]) == [cx]
             @test isempty(mets(pop_metric(∂A)))                     #nothing outside it
@@ -205,23 +207,35 @@
         end
         @test isZeroTens(simplify(∂A - ∂A)) && isZeroTens(simplify(pop_metric(∂A) - ∂A))
         #nested, it stays in the innermost derivative
-        let p = isTensor(pop_metric(PartialDerivative("∂", ∂A, [cx], [cρ => lower])))
+        let p = isTensor(pop_metric(PartialDerivative("∂", ∂A, [cx], [cρ => upper])))
             @test isempty(mets(operand(p))) && !isempty(mets(operand(isTensor(operand(p)))))
         end
         #with several summands, each is popped where it stands
-        let p = isTensor(pop_metric(PartialDerivative("∂", cA + Tensor("C", [cμ => upper], cx), [cx], [cρ => lower])))
+        let p = isTensor(pop_metric(PartialDerivative("∂", cA + Tensor("C", [cμ => upper], cx), [cx], [cρ => upper])))
             @test p isa PartialDerivative && all(s -> any(t -> t isa Metric, terms(s[2])), summands(operand(p)))
         end
         #undeclared, a covariant derivative is not compatible, so it keeps the metric too
         #(declaring one is tested in test_metric_compatible.jl, which is not replayed at precompile)
-        ∇A = Derivative("∇", cA, [cx], [cν => lower])
+        ∇A = Derivative("∇", cA, [cx], [cν => upper])
         @test !metric_compatible(∇A, g) && isTensor(pop_metric(∇A)) isa Derivative
+        #at the default level a covariant derivative hides a metric of its own, ∇_ν = g_{νρ}∇^ρ, which
+        #is exact with the metric outside, so that one does come out (a partial's chain accounts for it)
+        let p = pop_metric(Derivative("∇", cA, [cx], [cν => lower]))
+            @test length(mets(p)) == 1 && Set(free_indices(p)) == Set(free_indices(Derivative("∇", cA, [cx], [cν => lower])))
+        end
+        #copy on write: popping and contracting leave what they were given as it was
+        let D = Derivative("∇", Tensor("A", [cμ => upper], cx) * Tensor("B", [cρ => upper], cx), [cx], [cν => lower])
+            oi, ii, s = copy(op_indices(D)), copy(indices(D)), string(D)
+            pop_metric(D)
+            Alakazam.contract_metrics(TensorExpression(Metric(cν => upper, Index("cσ", cst) => upper) * D), Metric)
+            @test op_indices(D) == oi && indices(D) == ii && string(D) == s
+        end
         #nor treats it as a constant
         @test !isZeroTens(apply_derivative(PartialDerivative("∂", TensorExpression(g), [cx], [cρ => lower])))
 
         #another set is untouched, and its metric still pops out of its own derivative
         @test name(Metric(ca => lower, cb => lower)) == "η"
-        dB = PartialDerivative("∂", Tensor("B", [ca => upper], cy), [cy], [cb => lower])
+        dB = PartialDerivative("∂", Tensor("B", [ca => upper], cy), [cy], [cb => upper])
         @test !isempty(mets(pop_metric(dB)))
 
         #a partial's own level is opposite to the default position: cst is lower by default, so ∂^μ.
@@ -235,18 +249,33 @@
         @test isZeroTens(simplify(∂mf(cμ => upper, ∂mf(cν => upper, cφ)) - ∂mf(cν => upper, ∂mf(cμ => upper, cφ))))
         #and relabelling a dummy is not a swap
         @test isZeroTens(simplify(∂mf(cμ => lower, ∂mf(cμ => upper, cφ)) - ∂mf(cν => lower, ∂mf(cν => upper, cφ))))
-        #a chain is reordered only within runs that may swap
-        chn = [∂mf(cμ => lower, cφ), ∂mf(cν => upper, cφ), ∂mf(cρ => lower, cφ)]
-        @test Alakazam._swap_blocks(chn) == [[1], [2], [3]]
-        @test Alakazam._swap_blocks([∂mf(cμ => upper, cφ), ∂mf(cρ => upper, cφ), ∂mf(cν => lower, cφ)]) == [[1, 2], [3]]
-        @test Alakazam._swap_blocks([∂mf(cμ => upper, cφ), ∂mf(cν => lower, cφ), ∂mf(cρ => upper, cφ)]) == [[1], [2], [3]]
+        #the swap rule itself: one partial hiding g(x) blocks it, two at their own level do not
+        @test !Alakazam._partials_swap(∂mf(cμ => lower, cφ), ∂mf(cν => upper, cφ))
+        @test !Alakazam._partials_swap(∂mf(cμ => lower, cφ), ∂mf(cν => lower, cφ))
+        @test Alakazam._partials_swap(∂mf(cμ => upper, cφ), ∂mf(cν => upper, cφ))
+        #so a chain is reordered past only what it may swap with: ∂^μ∂^ρ may, ∂_ν between them may not
+        @test isZeroTens(simplify(∂mf(cμ => upper, ∂mf(cρ => upper, ∂mf(cν => lower, cφ))) -
+                                  ∂mf(cρ => upper, ∂mf(cμ => upper, ∂mf(cν => lower, cφ)))))
+        @test !isZeroTens(simplify(∂mf(cμ => upper, ∂mf(cν => lower, ∂mf(cρ => upper, cφ))) -
+                                   ∂mf(cρ => upper, ∂mf(cν => lower, ∂mf(cμ => upper, cφ)))))
         #a derivative in another coordinate leaves the metric alone, so the swap is allowed
         @test Alakazam._partials_swap(∂mf(cμ => lower, cφ), PartialDerivative("∂", cφ, [cy], [ca => lower]))
 
+        #a derivative's own raised index is a metric too, ∇^a = g^{ab}∇_b. With g(x) and ∇ not
+        #declared compatible, ∇_a∇^a u = ∇_a(g^{ab}∇_b u) differs from g^{ab}∇_a∇_b u by ∇_a g^{ab}
+        ∇mf(i, T) = Derivative("∇", T, [cx], [i])
+        g2 = Metric([cμ => upper, cν => upper])
+        @test !isZeroTens(simplify(g2 * ∇mf(cμ => lower, ∇mf(cν => lower, cφ)) - ∇mf(cμ => lower, ∇mf(cμ => upper, cφ))))
+        #but with the metric outside every derivative the two are the same
+        @test isZeroTens(simplify(g2 * ∇mf(cμ => lower, ∇mf(cν => lower, cφ)) - ∇mf(cμ => upper, ∇mf(cμ => lower, cφ))))
+
         #declaring no coordinates makes it constant again
         metric_function!(cst)
+        #and then the metric passes through, so all three are the same
+        @test isZeroTens(simplify(g2 * ∇mf(cμ => lower, ∇mf(cν => lower, cφ)) - ∇mf(cμ => lower, ∇mf(cμ => upper, cφ))))
+        @test isZeroTens(simplify(∇mf(cμ => lower, ∇mf(cμ => upper, cφ)) - ∇mf(cμ => upper, ∇mf(cμ => lower, cφ))))
         #and with a constant metric every level swaps
-        @test Alakazam._swap_blocks(chn) == [[1, 2, 3]]
+        @test Alakazam._partials_swap(∂mf(cμ => lower, cφ), ∂mf(cν => upper, cφ))
         @test isZeroTens(simplify(∂mf(cμ => lower, ∂mf(cμ => upper, cφ)) - ∂mf(cμ => upper, ∂mf(cμ => lower, cφ))))
         @test isempty(metric_function(cst)) && name(Metric(cμ => lower, cν => lower)) == "η"
     end
