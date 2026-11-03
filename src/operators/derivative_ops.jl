@@ -281,14 +281,17 @@ A partial is hashed by its whole chain, whose order equality ignores, so the has
 
 """
 function Base.hash(d::DerivativeSuperType, h::UInt)
-    chn = d isa PartialDerivative ? get_operator_chain(d, PartialDerivative) : (d,)
     acc = zero(UInt)
-    for op in chn
+    op = d
+    while true                                      #walked rather than collected: no allocation
         hh = hash(name(op))
         @inbounds for p in op_indices(op)
             hh = hash(p[1].uid, hash(p[2].position, hh))
         end
         acc += hh
+        d isa PartialDerivative || break
+        op = isTensor(operand(op))
+        op isa PartialDerivative || break
     end
     return hash(acc, h)
 end
@@ -493,7 +496,8 @@ function _partials_swap(D1::DerivativeSuperType, D2::DerivativeSuperType)
     for (D, E) in ((D1, D2), (D2, D1)), (i, pos) in op_indices(D)
         S = i.index_set
         (pos == S.default_position && S.metric_type !== nothing) || continue   #nothing hidden
-        (metric_compatible(typeof(E), S.metric_type) || isdisjoint(metric_function(S), coord(E))) || return false
+        isempty(S.metric_function) && continue                                  #a constant metric passes
+        (metric_compatible(typeof(E), S.metric_type) || isdisjoint(S.metric_function, coord(E))) || return false
     end
     return true
 end
@@ -804,6 +808,9 @@ Assumes already has used product rule.
 If there are rules (as defined by add_derivative_action), then the derivative will be performed, else expressions will be left alone eg ∇B
 """
 function perform_derivative_action(D::DerivativeSuperType)
+    oinds = indices(operand(D))
+    shared = [p for p in op_indices(D) if !isLightcone(p) && any(q -> q[1] == p[1], oinds)]
+    isempty(shared) || return _act_contracted(D, shared)
     oprd = terms(summands(operand(D))[1][2])[1]
     dname = name(D)
     oname = name(oprd)
@@ -831,6 +838,31 @@ function perform_derivative_action(D::DerivativeSuperType)
         end
     end
     return D
+end
+
+"""
+`perform_derivative_action` for a derivative sharing the indices `shared` with its operand: acted on
+with those renamed apart, so that a rule's distinct indices can match, and renamed back in the result.
+"""
+function _act_contracted(D::DerivativeSuperType, shared)
+    claimed = IndexTypes[]
+    collect_indices!(claimed, D)
+    apart, back = Dict{IndexPair,IndexPair}(), Dict{IndexPair,IndexPair}()
+    for p in shared
+        new = _fresh_index(p[1].index_set, claimed)
+        push!(claimed, new)
+        apart[p] = new => p[2]
+        back[new=>p[2]] = p
+        back[op_pos(new => p[2])] = op_pos(p)     #a rule may hand the index back at the other level
+    end
+    D2 = copy(D)
+    set_op_indices!(D2, IndexPair[get(apart, p, p) for p in op_indices(D)])
+    update_indices!(D2)
+    res = perform_derivative_action(D2)
+    res === D2 && return D
+    res = copy(TensorExpression(res))
+    set_indices_deep!(res, back)
+    return res
 end
 
 """
@@ -1086,31 +1118,39 @@ function symmetrise_partials(TEX::TensorExpression)
     end
     found || return TEX
 
-    out = zero()
-    for (c, tt) in s
-        out += c * symmetrise_partials(tt)
+    #what is already canonical comes back as the same object, so an expression in order is not rebuilt
+    rs = [symmetrise_partials(tt) for (_, tt) in s]
+    all(k -> rs[k] === s[k][2], eachindex(s)) && return TEX
+    acc = CoeffPair[]
+    for (k, (c, tt)) in enumerate(s)
+        rs[k] === tt ? push!(acc, s[k]) : append!(acc, summands(c * rs[k]))
     end
-    return out
+    return TensorExpression(acc)
 end
 
+"""The term with its chains in canonical order, or the term itself when they already are."""
 function symmetrise_partials(TT::TensorTerm)
     ts = terms(TT)
-    any(t -> t isa PartialDerivative, ts) || return TensorExpression(TT)#so we always have some output type to help the compiler
-
+    any(t -> t isa PartialDerivative, ts) || return TT
+    rs = [t isa PartialDerivative ? symmetrise_partials(t) : t for t in ts]
+    all(k -> rs[k] === ts[k], eachindex(ts)) && return TT
     new_term = 1
-    for term in ts
-        new_term *= (term isa PartialDerivative ? symmetrise_partials(term) : term)
+    for r in rs
+        new_term *= r
     end
     return TensorExpression(new_term)
 end
 
 """
 `D` with its chain of partials in canonical order, times the graded sign of the reordering, and the
-chains inside what it acts on likewise.
+chains inside what it acts on likewise; `D` itself when it already is.
 """
 function symmetrise_partials(D::PartialDerivative)
     chn = get_operator_chain(D, PartialDerivative)
-    root = symmetrise_partials(operand(chn[end]))
+    oldroot = operand(chn[end])
+    root = symmetrise_partials(oldroot)
+    #a lone partial has nothing to order
+    length(chn) == 1 && return root === oldroot ? D : TensorExpression(_with_operand(D, root))
     frees = Set(p[1] for p in free_indices_ordered(D))
     keys = [(name(op), [(i.index_set.name, pos.position, i in frees ? i.name : "") for (i, pos) in op_indices(op)])
             for op in chn]
@@ -1126,6 +1166,7 @@ function symmetrise_partials(D::PartialDerivative)
         push!(order, best)
         deleteat!(remaining, findfirst(==(best), remaining))
     end
+    issorted(order) && root === oldroot && return D
     return graded_sign(order, chn) * TensorExpression(rebuild_nested(chn[order], root))
 end
 

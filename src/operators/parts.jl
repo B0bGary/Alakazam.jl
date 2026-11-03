@@ -26,8 +26,10 @@ function strip_derivatives(t::TensorSuperType)
 end
 strip_derivatives(t::Tensorial) = (t, PartialSuperType[])
 
-"""Decides which of two base fields collects the derivatives; the larger key wins."""
-_ibp_key(t::TensorSuperType) = string(t)
+"""
+Decides which of two base fields collects the derivatives; the larger key wins.
+"""
+_ibp_key(t::TensorSuperType) = _graph_vertex_name(t)
 
 """
     _shift_all(bases, ops, onto) -> (sign, TensorTerm)
@@ -100,8 +102,9 @@ fields is driven to a normal form carrying all of its derivatives on one factor,
 total derivative cancels against itself and disappears. The result is zero exactly when `exp`
 was a total derivative.
 
-Terms with more than two factors fall through to `drop_total_derivatives_general`, which builds
-the total-derivative subspace explicitly instead of relying on a normal form.
+Constants are annihilated. Terms with more than two fields fall through to
+`drop_total_derivatives_general`, which builds the total-derivative subspace explicitly instead of
+relying on a normal form.
 """
 function drop_total_derivatives(exp::TensorExpression; onto::Symbol=:key)
     onto in (:key, :first, :last) || throw(ArgumentError("onto must be :key, :first or :last"))
@@ -109,10 +112,18 @@ function drop_total_derivatives(exp::TensorExpression; onto::Symbol=:key)
     acc = CoeffPair[]
     higher = CoeffPair[]
     for (c, tt) in summands(e)
-        if length(terms(tt)) > 2
+        fs = terms(tt)
+        coords = Coordinate[x for f in fs for op in strip_derivatives(f)[2] for x in coord(op)]
+        isfield = [f isa PartialSuperType || !isdisjoint(function_of(f), coords) for f in fs]
+        if count(isfield) > 2
             push!(higher, CoeffPair(c, tt))
-        else
-            append!(acc, _ibp_term(c, tt, onto))
+            continue
+        end
+        inert, fields = findall(!, isfield), findall(isfield)
+        #setting the inert factors aside costs the sign of passing them, if odd, past the fields
+        sgn = _graded_perm_sign(fs, vcat(inert, fields))
+        for (c2, t2) in _ibp_term(sgn * c, TensorTerm(fs[fields]), onto)
+            push!(acc, CoeffPair(c2, TensorTerm(vcat(fs[inert], terms(t2)))))
         end
     end
     out = isempty(acc) ? zero() : simplify(TensorExpression(acc))
@@ -275,6 +286,17 @@ function drop_total_derivatives_general(exp::TensorExpression; budget::Int=512)
     target === nothing && return exp
     all(c -> c isa Number, values(target)) || return exp
     all(r -> all(c -> c isa Number, values(r)), rows) || return exp
+    #pivot in a fixed order of the monomials rather than the order they were met in, so that equal
+    #expressions reduce to the same representative
+    function profile(m)
+        parts = [(_ibp_key(b), length(o)) for (b, o) in (strip_derivatives(f) for f in terms(m))]
+        sort!(parts; by=p -> (p[1], -p[2]))
+        return ([p[2] for p in parts], hash(m))
+    end
+    perm = sortperm(map(profile, basis); rev=true)      #each key computed once, not per comparison
+    rank = invperm(perm)
+    reindex(r) = Dict{Int,Any}(rank[k] => v for (k, v) in r)
+    target, rows, basis = reindex(target), map(reindex, rows), basis[perm]
     pivots = _echelon(rows)
     r = copy(target)
     while true

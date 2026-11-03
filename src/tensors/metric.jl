@@ -434,13 +434,15 @@ Contract all metrics of a particular type in an expression, whereever possible.
 # end
 function contract_metrics(T::TensorTerm, typ::Type=Metric)
     T = _contract_in_operands(T, typ)
+    T === nothing && return zero()
     (sign, factor, extra_deltas, newterm) = _contract_metrics_term(T, typ)
     return sign * factor * (extra_deltas * newterm)
 end
 
 """
 The term with the metrics inside each operator's operand contracted, recursively. An operator whose
-operand has nothing to contract is kept as it is, and so is the term if none has.
+operand has nothing to contract is kept as it is, and so is the term if none has. `nothing` when an
+operand contracts to zero, since the term then vanishes.
 """
 function _contract_in_operands(tt::TensorTerm, typ::Type)
     ts = terms(tt)
@@ -451,6 +453,7 @@ function _contract_in_operands(tt::TensorTerm, typ::Type)
         if t isa OperatorSuperType && !isZeroTens(operand(t))
             op = operand(t)
             newop = contract_metrics(op, typ)
+            isZeroTens(newop) && return nothing
             if newop !== op
                 #as applying the operator does: set_operand! also refreshes the cached indices
                 t = copy(t)
@@ -652,7 +655,9 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
         newtts = [_contract_in_operands(tt, typ) for (_, tt) in s]
         #rebuilt only if something changed: the caller tells an untouched operand by identity
         if any(k -> newtts[k] !== s[k][2], eachindex(s))
-            T = TensorExpression(CoeffPair[CoeffPair(s[k][1], newtts[k]) for k in eachindex(s)])
+            kept = CoeffPair[CoeffPair(s[k][1], newtts[k]) for k in eachindex(s) if newtts[k] !== nothing]
+            isempty(kept) && return zero()
+            T = TensorExpression(kept)
             s = summands(T)
         end
     end

@@ -412,10 +412,10 @@ end
 
 
 function Base.show(io::IO, C::Coordinate)
-   print(io, C.name)
+   print(io, _display_name(C.name))
    for ind in C.index_set
       print(io, "[")
-      print(io, ind.indices[1].name)
+      print(io, _display_name(ind.indices[1].name))
       print(io, "]")
    end
 
@@ -437,7 +437,7 @@ function Base.show(io::IO, I::IndexSuperType)
    if typeof(I) == DummyPatternIndex
       print(io, "?")
    end
-   print(io, I.name)
+   print(io, _display_name(I.name))
 end
 
 function Base.show(io::IO, I::IndexPosition)
@@ -448,7 +448,7 @@ function Base.show(io::IO, I::IndexSet)
    print(io, "[")
    it = Iterators.Stateful(I.indices)
    for i in it
-      print(io, i.name)
+      print(io, _display_name(i.name))
       if peek(it) != nothing
          print(io, ", ")
       end

@@ -104,7 +104,8 @@ end
 ==(N::SymorNum, T::Tensorial) = (T == N)
 ==(T::Tensorial, N::SymorNum) = TensorExpression(T) == TensorExpression(N)
 
-coeff_equal(a::Number, b::Number) = a == b            # no Symbolics path at all
+coeff_equal(a::Number, b::Number) =
+    a isa Num || b isa Num ? coeff_equal(Symbolics.unwrap(a), Symbolics.unwrap(b)) : a == b
 coeff_equal(a, b) = isequal(a, b) || _sym_equal(a, b)   # symbolic fallback
 # @noinline _sym_equal(a, b) = Symbolics.simplify(Symbolics.expand(a - b)) === 0 #1.11 version
 @noinline function _sym_equal(a, b)#1.12 version
@@ -331,61 +332,43 @@ end
 
 
 function ×(T1::Union{TensorTerm,TensorSuperType}, T2::Union{TensorTerm,TensorSuperType})
-    T2 = copy(T2)
-    t1inds = OrderedSet{IndexSuperType}()
-    t2inds = OrderedSet{Pair{Integer,IndexSuperType}}() #all indices, numbered in order
-    for inds in indices(T1)
-        push!(t1inds, inds[1])
-    end
-    for inds in eachindex(indices(T2))
-        iddd=indices(T2)[inds][1]
-        if !isLightcone(iddd) && iddd in t1inds #if theres a repeated indice  
-            push!(t2inds, inds => iddd) # which index to replace
-        else
-            # push!(t2ok,T2.indices[inds][1])# index doesnt need to be replaced
-        end
-    end
-    # we now have all the indices we need to replace and where they are on the tensor
-    sets = get_index_sets(T2) #Set{IndexSet}()
-    avail = Dict{IndexSet,OrderedSet{IndexSuperType}}() #pairs of index sets, with the unused indices
-    for set in sets
-        # set.name=="lightcone" && continue
-        a = OrderedSet{IndexSuperType}(intersect(get_unused_indices(T1, set), get_unused_indices(T2, set)))
-        push!(avail, set => a) #ones we can replace with
-    end
-    dummie_matchup = Dict{IndexSuperType,IndexSuperType}()
-    t2dums = dummies(T2)
-    replc=Dict{Pair{IndexSuperType,IndexPosition},Pair{IndexSuperType,IndexPosition}}()
-    for ind in t2inds # for each we need to replace (vec pos => index)
-        # if isLightcone(ind[2]) 
-        #     nind=ind[2]
-        # else
-        # @show ind "not lc"
-        if ind[2] in t2dums
-
-            if ind[2] in keys(dummie_matchup)
-                if isLightcone(ind[2])
-                    nind=ind[2]
-                else
-                    nind = pop!(dummie_matchup, ind[2])
-                end
-            else
-                nind=safe_pop!(avail[ind[2].index_set], ind[2].index_set)
-                push!(dummie_matchup, ind[2] => nind)
-            end
-        else
-            if isLightcone(ind[2])
-                nind=ind[2]
-            else
-                nind=safe_pop!(avail[ind[2].index_set], ind[2].index_set)
-            end
-        end
-        # end
-        replc[ind[2]=>indices(T2)[ind[1]][2]]=nind => indices(T2)[ind[1]][2]
-    end
-    set_indices_deep!(T2, replc)
-    return T1 * T2
+    taken = OrderedSet{IndexSuperType}()
+    collect_indices!(taken, T1)
+    return T1 * rename_dummies_excluded(T2, taken, ())      #free indices too: × contracts nothing
 end
+
+"""
+    rename_dummies_excluded!(T, taken, keep=free indices of T) -> T
+
+Rename, in place, the indices `T` uses, inside operands too, that are in `taken` and not in `keep`, to
+ones neither uses, each occurrence alike. By default only dummies are renamed, so the value is
+unchanged; pass `keep=()` to rename clashing free indices as well. `taken` may hold indices or index
+pairs. Lightcone indices, which repeat freely, and pattern indices are left alone.
+
+`T` is edited, and with it any tensor it shares with other expressions (`TensorExpression(A)` holds
+`A` itself), so pass a copy of anything you do not own: `rename_dummies_excluded!(copy(E), taken)`.
+"""
+function rename_dummies_excluded!(T::Tensorial, taken, keep=nothing)
+    any(q -> q isa Pair, taken) && (taken = [q isa Pair ? q[1] : q for q in taken])
+    keep === nothing && (keep = Set(p[1] for p in free_indices_ordered(T)))
+    used = OrderedSet{IndexSuperType}()
+    collect_indices!(used, T)
+    claimed = nothing                         #built at the first clash, which there usually is not
+    rep = Dict{IndexPair,IndexPair}()
+    for q in used
+        (isLightcone(q) || q isa DummyPatternIndex || !(q in taken) || q in keep) && continue
+        claimed === nothing && (claimed = IndexTypes[r for r in Iterators.flatten((taken, used))])
+        new = _fresh_index(q.index_set, claimed)
+        push!(claimed, new)
+        rep[q=>upper] = new => upper
+        rep[q=>lower] = new => lower
+    end
+    isempty(rep) || set_indices_deep!(T, rep)
+    return T
+end
+
+"""`rename_dummies_excluded!` on a copy, leaving `T` and everything it shares untouched."""
+rename_dummies_excluded(T::Tensorial, taken, keep=nothing) = rename_dummies_excluded!(copy(T), taken, keep)
 
 ##############################################################################################################################
 ##############################################################################################################################
@@ -1147,7 +1130,7 @@ dummy names and factor order get the same colours.
 The slot table is flattened into parallel arrays and searched by linear scan. A monomial carries a
 few dozen slots at most, and at that size a scan beats a hash map.
 """
-function _contraction_colours(T::TensorTerm)
+function _contraction_colours(T::TensorTerm, cls=_slot_classes(T))
     ts = terms(T)
     n = length(ts)
     ind = Vector{Vector{IndexPair}}(undef, n)
@@ -1190,15 +1173,17 @@ function _contraction_colours(T::TensorTerm)
         partner[k] = other
     end
 
+    #slots are told apart by symmetry class, not position, and summed, so that a colour does not depend
+    #on the order of slots a symmetry exchanges
     col = Vector{UInt}(undef, n)
     @inbounds for i in 1:n
         h = hash(name(ts[i]), hash(length(ind[i])))
         for s in eachindex(ind[i])
             k = off[i] + s
             if !live[k] || cnt[k] != 2
-                h = hash(uid[k], hash(psn[k], hash(s, h)))          # free: the name matters
+                h += hash(uid[k], hash(psn[k], hash(_slot_class(cls[i], s))))    # free: the name matters
             else
-                h = hash(psn[k], hash(s, h))                        # dummy: the name does not
+                h += hash(psn[k], hash(_slot_class(cls[i], s)))                  # dummy: the name does not
             end
         end
         col[i] = h
@@ -1215,7 +1200,7 @@ function _contraction_colours(T::TensorTerm)
                 k = off[i] + s
                 (live[k] && cnt[k] == 2) || continue
                 o = partner[k]
-                acc ⊻= hash(col[fac[o]], hash(s, hash(slt[o], hash(psn[k], UInt(0)))))
+                acc += hash(col[fac[o]], hash(_slot_class(cls[i], s), hash(_slot_class(cls[fac[o]], slt[o]), hash(psn[k], UInt(0)))))
             end
             newcol[i] = hash(acc, col[i])
         end
@@ -1424,13 +1409,16 @@ _factor_identity(t::TensorSuperType) =
 Emit the slot codes for one index vector.
 """
 function _sig_slots!(key::Vector{UInt64}, ti::Vector{IndexPair},
-    dummyno::Dict{UInt64,Int}, dums::Set{UInt64})
+    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64})
     @inbounds for k in eachindex(ti)
         idx, pos = ti[k]
         u = idx.uid
         if u in dums
-            n = get!(dummyno, u, length(dummyno) + 1)
-            push!(key, UInt64(n) | 0x8000_0000_0000_0000)   # tagged so it cannot alias a uid
+            #numbered on first appearance, and the set goes in with the number, since a trace over
+            #one set is not a trace over another; tagged so it cannot alias a uid
+            code = get!(() -> hash(idx.index_set.name, UInt64(length(dummyno) + 1)) | 0x8000_0000_0000_0000,
+                        dummyno, u)
+            push!(key, code)
         else
             push!(key, u)
         end
@@ -1439,17 +1427,48 @@ function _sig_slots!(key::Vector{UInt64}, ti::Vector{IndexPair},
     return key
 end
 
+function _slot_classes(t::TensorSuperType)
+    t isa OperatorSuperType && return nothing
+    tabs = tableaux(t)
+    isempty(tabs) && return nothing           #`nothing` overall when every slot is its own class
+    n = length(indices(t))
+    cls, kind = Int[], Int[]                  #plain loops and concrete types: this runs per factor
+    for tab in tabs
+        slots, rl = tab.index_assignment, tab.row_lengths
+        length(slots) < 2 && continue
+        k = length(rl) == 1 ? 1 : all(==(1), rl) ? -1 : 0
+        k == 0 && continue
+        isempty(cls) && (cls = collect(1:n); kind = zeros(Int, n))
+        free = true
+        for s in slots
+            (s <= n && kind[s] == 0) || (free = false; break)
+        end
+        free || continue
+        c = minimum(slots)
+        for s in slots
+            cls[s] = c
+            kind[s] = k
+        end
+    end
+    return isempty(cls) ? nothing : (cls, kind)
+end
+_slot_classes(T::TensorTerm) = Union{Nothing,Tuple{Vector{Int},Vector{Int}}}[_slot_classes(t) for t in terms(T)]
+
+"""The symmetry class of slot `s` of a factor, from its `_slot_classes`."""
+_slot_class(c, s) = c === nothing ? s : c[1][s]
+
 """
 Append one factor's contribution to a canonical signature.
 
-Free indices contribute their uid; dummies contribute a sequence number assigned on first
-appearance, so two terms differing only by a consistent dummy renaming produce identical keys.
-Operators additionally contribute their operand's structure, recursively.
+Free indices contribute their uid; dummies contribute their set and a sequence number assigned on
+first appearance, so two terms differing only by a consistent dummy renaming produce identical keys.
+`order` lists the slots in the order to emit them. Operators additionally contribute their operand's
+structure, recursively.
 """
 function _sig_factor!(key::Vector{UInt64}, t::TensorSuperType,
-    dummyno::Dict{UInt64,Int}, dums::Set{UInt64})
+    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64}, order=nothing)
     push!(key, _factor_identity(t))
-    _sig_slots!(key, indices(t), dummyno, dums)
+    _sig_slots!(key, order === nothing ? indices(t) : indices(t)[order], dummyno, dums)
     if t isa OperatorSuperType
         for (c, tt) in summands(operand(t))
             push!(key, hash(c))
@@ -1471,21 +1490,75 @@ ordering of commuting factors, with `sign * (term with key) == T`.
 function canonical_signature(T::TensorTerm)
     ts = terms(T)
     n = length(ts)
+    classes = _slot_classes(T)
     perm = collect(1:n)
     sgn = 1
     if n > 1 && _freely_reorderable(ts)
-        col = _contraction_colours(T)
+        col = _contraction_colours(T, classes)
         sort!(perm, by=i -> (col[i], i))
         perm == 1:n || (sgn = _graded_perm_sign(ts, perm))
     end
     dums = dummy_uids(T)
-    dummyno = Dict{UInt64,Int}()
+    dummyno = Dict{UInt64,UInt64}()
     key = UInt64[]
-    sizehint!(key, 3 * n)
+    sizehint!(key, n + 2 * sum(t -> length(indices(t)), ts; init=0))
+    if all(isnothing, classes)
+        @inbounds for p in perm
+            _sig_factor!(key, ts[p], dummyno, dums)
+        end
+        return (sgn, key)
+    end
+    rank = invperm(perm)
+    inds = Vector{IndexPair}[indices(t) for t in ts]      #concretely typed, for the partner lookups below
     @inbounds for p in perm
-        _sig_factor!(key, ts[p], dummyno, dums)
+        order = nothing
+        if classes[p] !== nothing
+            cls, kind = classes[p]
+            for c in eachindex(cls)
+                (cls[c] == c && kind[c] != 0) || continue    #each class once, from its first slot
+                second = findnext(==(c), cls, c + 1)
+                if findnext(==(c), cls, second + 1) === nothing
+                    #two slots, as in F_{μν}: one comparison, no sort
+                    _slot_key(inds, classes, rank, dums, p, second) <
+                        _slot_key(inds, classes, rank, dums, p, c) || continue
+                    order === nothing && (order = collect(eachindex(cls)))
+                    order[c], order[second] = second, c
+                    kind[c] == -1 && (sgn = -sgn)
+                    continue
+                end
+                members = [s for s in eachindex(cls) if cls[s] == c]
+                o = sortperm([_slot_key(inds, classes, rank, dums, p, s) for s in members])
+                issorted(o) && continue
+                order === nothing && (order = collect(eachindex(cls)))
+                if kind[c] == -1
+                    inv = 0
+                    for a in eachindex(o), b in (a+1):length(o)
+                        o[a] > o[b] && (inv += 1)
+                    end
+                    isodd(inv) && (sgn = -sgn)
+                end
+                order[members] = members[o]
+            end
+        end
+        _sig_factor!(key, ts[p], dummyno, dums, order)
     end
     return (sgn, key)
+end
+
+"""
+How `canonical_signature` orders slot `s` of factor `p` within its symmetry class: a free index by its
+name, a dummy by where its partner sits, which a renaming keeps.
+"""
+function _slot_key(inds::Vector{Vector{IndexPair}}, classes,
+                   rank::Vector{Int}, dums::Set{UInt64}, p::Int, s::Int)
+    u, ps = inds[p][s][1].uid, UInt64(inds[p][s][2].position)
+    if u in dums
+        for q in eachindex(inds), r in eachindex(inds[q])
+            (inds[q][r][1].uid == u && (q != p || r != s)) &&
+                return (UInt64(1), UInt64(rank[q]), UInt64(_slot_class(classes[q], r)), ps)
+        end
+    end
+    return (UInt64(0), u, UInt64(0), ps)
 end
 
 """
@@ -1769,49 +1842,80 @@ function Base.show(io::IO, T::TensorTerm)
     end
 end
 _unwrapnum(x) = SymbolicUtils.isconst(x) ? SymbolicUtils.unwrap_const(x) : x
-function coef_string(c, T::TensorExpression)
-    c = Symbolics.simplify(Symbolics.expand(c))
-    c = _unwrapnum(c)
-    isequal(c, 1) && !is_const(T) && return ""
-    isequal(c, -1) && !is_const(T) && return "-"
-    if c isa Number
 
-        isreal(c) && return string(real(c))
-        r, im_part = real(c), imag(c)
-        if iszero(r)
-            isequal(im_part, 1) && return "i"
-            isequal(im_part, -1) && return "-i"
-            s = string(im_part)
-            return occursin('+', s) || occursin('-', s) && !startswith(s, "-") ?
-                   "(" * s * ")i" :
-                   s * "i"
-        end
-        return "(" * string(c) * ")"
+"""
+A coefficient split into its numeric factor and its symbolic rest, the rest `nothing` when there is
+none: `2q*r` gives `(2, q*r)`, `q` gives `(1, q)`.
+"""
+function _num_sym(x)
+    x isa Number && return (x, nothing)
+    SymbolicUtils.ismul(x) || return (1, x)
+    args = _unwrapnum.(SymbolicUtils.arguments(x))
+    syms = filter(a -> !(a isa Number), args)
+    return (prod(filter(a -> a isa Number, args); init=1),
+            isempty(syms) ? nothing : length(syms) == 1 ? syms[1] : *(syms...))
+end
+
+"""The terms of `x` as a sum: its arguments if it is one, none if it is zero, else `x` alone."""
+_addends(x) = SymbolicUtils.isadd(x) ? _unwrapnum.(SymbolicUtils.arguments(x)) : isequal(x, 0) ? () : (x,)
+
+"""The terms of a sum, already rendered, joined with each one's sign as the operator between."""
+function _join_terms(parts)
+    out = ""
+    for (k, s) in enumerate(parts)
+        neg = startswith(s, "-")
+        out *= k == 1 ? s : (neg ? " - " * s[nextind(s, 1):end] : " + " * s)
     end
-    # symbolic: check for complex numeric factor
+    return out
+end
+
+#a rational whose denominator is 1 is an integer, and printed as one
+_real_string(x::Real) = x isa Rational && isone(denominator(x)) ? string(numerator(x)) : string(x)
+
+"""
+`n` times the symbolic `sym` for display, written by juxtaposition, `2q`, `-iq`, with a sum bracketed:
+`2(q + r)`, which unbracketed read as `2q + r`.
+"""
+function _scaled_string(n, sym, T)
+    sym === nothing && return coef_string(n, T; drop_unit=false)
+    p = isone(n) ? "" : isequal(n, -1) ? "-" : coef_string(n, T; drop_unit=false)
+    return p * (SymbolicUtils.isadd(sym) ? coef_string(sym, T; drop_unit=false) : string(sym))
+end
+
+function coef_string(c, T::TensorExpression; drop_unit::Bool=true)
+    #unwrapped, since a `Num` is a `Number` and would be printed whole, unbracketed, as one
+    c = _unwrapnum(Symbolics.unwrap(Symbolics.simplify(Symbolics.expand(c))))
+    #a unit coefficient on a tensor is not written, but inside a sum it is a term like any other
+    if drop_unit && !is_const(T)
+        isequal(c, 1) && return ""
+        isequal(c, -1) && return "-"
+    end
+    if c isa Number
+        isreal(c) && return _real_string(real(c))
+        re, ip = reim(c)
+        mag = isone(abs(ip)) ? "i" : _real_string(abs(ip)) * "i"
+        iszero(re) && return (ip < 0 ? "-" : "") * mag
+        return "(" * _real_string(re) * (ip < 0 ? " - " : " + ") * mag * ")"
+    end
     try
-        args = _unwrapnum.(SymbolicUtils.arguments(c))     # <- unwrap each argument
+        args = _unwrapnum.(SymbolicUtils.arguments(c))
         op = SymbolicUtils.operation(c)
-
-        if op === (+)
-            return "(" * join(coef_string.(args, Ref(T)), " + ") * ")"
+        op === (+) && return "(" * _join_terms([coef_string(a, T; drop_unit=false) for a in args]) * ")"
+        op === (*) && return _scaled_string(_num_sym(c)..., T)
+        if op === complex                     #a symbolic real and imaginary part: re + i·im
+            re, ip = args
+            n, sym = _num_sym(ip)
+            parts = String[coef_string(a, T; drop_unit=false) for a in _addends(re)]
+            push!(parts, _scaled_string(n * im, sym, T))
+            return length(parts) == 1 ? parts[1] : "(" * _join_terms(parts) * ")"
         end
-
-        if op === (*)
-            num_args = filter(a -> a isa Number, args)
-            sym_args = filter(a -> !(a isa Number), args)
-
-            if !isempty(num_args)
-                num = prod(num_args)
-                sym = isempty(sym_args) ? 1 :
-                      length(sym_args) == 1 ? sym_args[1] :
-                      op(sym_args...)
-
-                prefix = coef_string(num, T)
-                return prefix == "" ? string(sym) :
-                       prefix == "-" ? "-" * string(sym) :
-                       prefix * string(sym)
-            end
+        if op === (/)                         #bracketed whole, or `1 / qA` reads as 1/(qA)
+            n, d = args
+            ns = coef_string(n, T; drop_unit=false)
+            neg = startswith(ns, "-")
+            neg && (ns = ns[nextind(ns, 1):end])
+            ds = SymbolicUtils.iscall(d) ? "(" * string(d) * ")" : string(d)
+            return (neg ? "-" : "") * "(" * ns * " / " * ds * ")"
         end
     catch
     end
@@ -2167,9 +2271,24 @@ function _latex_number(c::Number, extra::AbstractString="")
     re, ip = real(c), imag(c)
     unit = isempty(extra) ? "i" : "i " * extra
     iszero(re) && return (ip < 0, _latex_times(abs(ip), unit))
-    body = "\\left(" * _tex(re) * (ip < 0 ? " - " : " + ") * _latex_times(abs(ip), "i") *
-           "\\right)"
+    body = "\\left(" * _join_terms(Tuple{Bool,String}[_latex_number(re), (ip < 0, _latex_times(abs(ip), "i"))]) * "\\right)"
     return (false, isempty(extra) ? body : body * " " * extra)
+end
+
+#signed LaTeX terms, (negative, magnitude), joined the same way
+_join_terms(terms::Vector{Tuple{Bool,String}}) = _join_terms([(neg ? "-" : "") * tex for (neg, tex) in terms])
+
+"""
+LaTeX for `n` times the symbolic `sym`, split from its sign. A sum is bracketed unless it lands alone
+in a numerator, as in `\\frac{q + r}{2}`: `2q + r` and `i q + r` would misread it.
+"""
+function _latex_scaled(n, sym, T)
+    sym === nothing && return _latex_number(n)
+    symtex = _tex(sym)
+    if SymbolicUtils.isadd(sym) && !(n isa Rational && denominator(n) != 1)
+        symtex = "\\left(" * symtex * "\\right)"
+    end
+    return _latex_number(n, symtex)
 end
 
 """
@@ -2181,7 +2300,7 @@ computed `2//(3i)` and printed `\\frac{2}{3i}`. Working from the value keeps the
 parts apart until the LaTeX is assembled. Shapes not recognised here fall back to the display string.
 """
 function _latex_coef(c, T::TensorExpression; drop_unit::Bool=true)
-    c = _unwrapnum(Symbolics.simplify(Symbolics.expand(c)))
+    c = _unwrapnum(Symbolics.unwrap(Symbolics.simplify(Symbolics.expand(c))))
     #a unit coefficient on a tensor is not written, but inside a sum it is a term like any other
     if drop_unit && !is_const(T)
         isequal(c, 1) && return (false, "")
@@ -2192,18 +2311,21 @@ function _latex_coef(c, T::TensorExpression; drop_unit::Bool=true)
         op = SymbolicUtils.operation(c)
         args = _unwrapnum.(SymbolicUtils.arguments(c))
         if op === (+)
-            out = ""
-            for (k, a) in enumerate(args)
-                neg, tex = _latex_coef(a, T; drop_unit=false)
-                out *= k == 1 ? (neg ? "-" : "") : (neg ? " - " : " + ")
-                out *= tex
-            end
-            return (false, "\\left(" * out * "\\right)")
+            return (false, "\\left(" * _join_terms(Tuple{Bool,String}[_latex_coef(a, T; drop_unit=false) for a in args]) * "\\right)")
         elseif op === (*)
-            nums = filter(a -> a isa Number, args)
-            syms = filter(a -> !(a isa Number), args)
-            symtex = isempty(syms) ? "" : _tex(length(syms) == 1 ? syms[1] : op(syms...))
-            return _latex_number(isempty(nums) ? 1 : prod(nums), symtex)
+            return _latex_scaled(_num_sym(c)..., T)
+        elseif op === complex                 #a symbolic real and imaginary part: re + i·im
+            re, ip = args
+            n, sym = _num_sym(ip)
+            parts = Tuple{Bool,String}[_latex_coef(a, T; drop_unit=false) for a in _addends(re)]
+            push!(parts, _latex_scaled(n * im, sym, T))
+            length(parts) == 1 && return parts[1]
+            return (false, "\\left(" * _join_terms(parts) * "\\right)")
+        elseif op === (/)                     #the sign in front, not inside the numerator
+            n, d = args
+            neg, ntex = SymbolicUtils.isadd(n) ? (false, _tex(n)) : _latex_coef(n, T; drop_unit=false)
+            dneg, dtex = SymbolicUtils.isadd(d) ? (false, _tex(d)) : _latex_coef(d, T; drop_unit=false)
+            return (neg ⊻ dneg, "\\frac{" * ntex * "}{" * dtex * "}")
         end
     catch
     end
@@ -2227,25 +2349,15 @@ function to_latex(T::TensorExpression)
     return Base.replace(out * " ", "\$" => "")
 end
 
+"""
+A name as LaTeX.
+"""
 function uni_to_TeX(charr::String)
-    out = ""
-    # dot=false
-    #   println(charr[1])
-    #   println(codepoint(charr[1]))
-    if charr[1] == '\u0307'
-        out *= "\\dot{"
-        out *= Base.replace(latexify(charr[3:end]), "#\"L" => "")
-        out *= "}"
-        return out
-    elseif codepoint(charr[1]) == 772
-        out *= "\\overline{"
-        out *= Base.replace(latexify(charr[3:end]), "#\"L" => "")
-        out *= "}"
-        return out
-    else
-        # println("not dotted")
-        return Base.replace(latexify(charr), "#\"L" => "")
-    end
+    isempty(charr) && return ""
+    mark, base = indexmark(charr)
+    mark === nothing && return Base.replace(latexify(charr), "#\"L" => "")
+    cmd = mark == COMBINING_MACRON ? "overline" : _TEX_MARK_TO_SUFFIX[mark]
+    return "\\" * cmd * "{" * uni_to_TeX(base) * "}"
 end
 
 """
@@ -2314,7 +2426,7 @@ function tens2str(T::TensorSuperType)
     if T isa Gamma5
         out *= first(name(T))
     else
-        out *= name(T)
+        out *= _display_name(name(T))
     end
     tinds = indices(T)
     if !isempty(tinds)
@@ -2327,7 +2439,7 @@ function tens2str(T::TensorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
-                uppers = uppers * ind.name
+                uppers = uppers * _display_name(ind.name)
                 uppersempt = 0
                 lowers = lowers * "∘"
             else
@@ -2336,7 +2448,7 @@ function tens2str(T::TensorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     lowers *= "?"
                 end
-                lowers = lowers * ind.name
+                lowers = lowers * _display_name(ind.name)
             end
         end
         if !uppersempt
@@ -2374,7 +2486,7 @@ function tens2str(T::TensorSuperType)
         fo = function_of(T)
         if !isempty(fo)
             names = sort!([c.name for c in fo], lt=_coord_lt)
-            out *= "(" * join(names, ",") * ")"
+            out *= "(" * join(_display_name.(names), ",") * ")"
         end
     end
     return out

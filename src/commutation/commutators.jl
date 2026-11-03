@@ -154,9 +154,9 @@ function Base.show(io::IO,com::Commutator)
     else com.grading==-1
         stringout*="{"
     end
-    stringout*=name(com.A)
+    stringout*=_display_name(name(com.A))
     stringout*=","
-    stringout*=name(com.B)
+    stringout*=_display_name(name(com.B))
     if com.grading==1
         stringout*="]"
     else com.grading==-1

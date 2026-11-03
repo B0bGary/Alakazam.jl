@@ -33,6 +33,7 @@ if true
         "test_exterior.jl",
         "test_latex.jl",
         "test_metric_compatible.jl",
+        "test_superspace_su2.jl",
         "test_compton.jl"
             ]
     _TESTDIR = mktempdir(cleanup=false)

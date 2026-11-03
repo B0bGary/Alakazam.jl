@@ -54,7 +54,7 @@ function drop_nilpotent(exp::TensorExpression, basis::Vector{T}) where {T<:Tenso
     end
     return out
 end
-drop_nilpotent(exp::Tensorial, basis) = drop_nilpotent(TensorExpression(exp), basis)
+drop_nilpotent(exp::Tensorial, basis::Vector{<:TensorSuperType}) = drop_nilpotent(TensorExpression(exp), basis)
 drop_nilpotent(exp, SS::Superspace) = drop_nilpotent(exp, SS.grassmann_basis)
 
 """
@@ -120,7 +120,7 @@ Perform superspace integration.
 function integrate(Tex::TensorExpression, covariant::Vector{D}, output::Bool=true) where D<:CovDerivSuperType
     # susymeasure=measure(Tex,covariant)
     texc=copy(Tex)
-    outds = DerivativeSuperType[]
+    outds = Pair{Int,DerivativeSuperType}[]
     total = sum(prod(grassmann_dimension(i) for i in indices(c)) for c in covariant)
     current = 0
     for c in eachindex(covariant)
@@ -129,7 +129,7 @@ function integrate(Tex::TensorExpression, covariant::Vector{D}, output::Bool=tru
         for d in 1:copies
             current += 1
             dnew=fresh_indices(covar, texc)
-            push!(outds, dnew)
+            push!(outds, c => dnew)
             if output
                 print("\rEvaluating superspace integral $current/$total.")
                 flush(stdout)
@@ -145,26 +145,25 @@ function integrate(Tex::TensorExpression, covariant::Vector{D}, output::Bool=tru
         end
     end
     output && println()
-    #now, epsilon measure factor
-    epsinds=Dict{Int,Vector{Pair{Index,IndexPosition}}}()
-    for ds in eachindex(outds)
-        deriv=outds[ds]
-        inds=indices(deriv)
-        conj = length(covariant)==1 ? 0 : ds>length(outds)/2 ? 1 : 0
-        for i in eachindex(inds)
-            runninds=get(epsinds, i+conj*length(inds), Vector{Pair{Index,IndexPosition}}())
-            push!(runninds, op_pos(inds[i]))
-            epsinds[i+conj*length(inds)]=runninds
-        end
+    return hard_merge(simplify(_superspace_measure(outds) * texc))
+end
+
+"""
+The measure completing a full superspace integral or projection. `outds` lists the derivatives applied,
+each with the covariant derivative it is a copy of.
+"""
+function _superspace_measure(outds)
+    groups = Dict{Tuple{Int,Int},Vector{IndexPair}}()     # (covariant, slot) => indices
+    for (c, d) in outds, (k, p) in enumerate(op_indices(d))
+        isLightcone(p) && continue
+        push!(get!(groups, (c, k), IndexPair[]), op_pos(p))
     end
-    neweps=1
-    # @show epsinds
-    for (k, v) in epsinds
-        isLightcone(v[1])&&continue
-        # @show k,v
-        neweps*=EpsilonTensor(v)//factorial(length(v))
+    measure = 1
+    for v in values(groups)
+        length(v) == dimension(v[1]) || continue
+        measure *= EpsilonTensor(v) // factorial(length(v))
     end
-    return hard_merge(simplify(neweps*texc))
+    return measure
 end
 
 
@@ -174,44 +173,21 @@ integrate(Tex::TensorExpression, covariant::CovDerivSuperType) = integrate(Tex, 
 Partially integrates over superspace to project to the desired component.
 """
 function project_to_component(Tex::TensorExpression, covariant::Vector{D}, theta::Int, theta_bar::Int) where D<:CovDerivSuperType
-    # susymeasure=measure(Tex,covariant)
-    texc=copy(Tex)
-    outds=DerivativeSuperType[]
-    total = theta+theta_bar
-    current = 0
+    texc=derive(copy(Tex))
+    outds = Pair{Int,DerivativeSuperType}[]
     texc=get_weighted_terms(texc, _grassmann_coord_name(covariant[1]), theta)
     length(covariant) > 1 && (texc=get_weighted_terms(texc, _grassmann_coord_name(covariant[2]), theta_bar))
     (theta==0 && theta_bar==0) && return texc
     for c in eachindex(covariant)
-        covar=covariant[c]
         copies = c==1 ? theta : theta_bar # how many times to project
         for d in 1:copies
-            current += 1
-            dnew=fresh_indices(covar, texc)
-            push!(outds, dnew)
+            dnew=fresh_indices(covariant[c], texc)
+            push!(outds, c => dnew)
             texc=derive(dnew(texc))
         end
     end
-    #now, epsilon measure factor
-    epsinds=Dict{Int,Vector{Pair{Index,IndexPosition}}}()
-    for ds in eachindex(outds)
-        deriv=outds[ds]
-        inds=indices(deriv)
-        conj = length(covariant)==1 ? 0 : ds>length(outds)/2 ? 1 : 0
-        for i in eachindex(inds)
-            runninds=get(epsinds, i+conj*length(inds), Vector{Pair{Index,IndexPosition}}())
-            push!(runninds, op_pos(inds[i]))
-            epsinds[i+conj*length(inds)]=runninds
-        end
+    for c in covariant
+        texc=drop_weight_above(texc, _grassmann_coord_name(c), 0)
     end
-    texc=drop_weight_above(texc, "θ", 0)
-    texc=drop_weight_above(texc, "Θ", 0)
-    neweps=1
-    # @show epsinds
-    for (k, v) in epsinds
-        isLightcone(v[1])&&continue
-        # @show k,v
-        neweps*=EpsilonTensor(v)//factorial(length(v))
-    end
-    return hard_merge(simplify(neweps*texc))
+    return hard_merge(simplify(_superspace_measure(outds) * texc))
 end

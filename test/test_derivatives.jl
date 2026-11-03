@@ -98,6 +98,21 @@
     @test apply_derivative(p * Dm(q) - p * Dm(q)) == zero()
 
     ###############################################
+    # × renames apart from everything the other factor uses, inside its operands too: a derivative over
+    # a sum shows only its first summand's indices, so a dummy in another summand was missed and only
+    # met its twin when the derivative was expanded
+    let fx = IndexSet("xd_flav", 2, upper, Metric), (id, jd) = Index(["id", "jd"], fx)
+        Cd, Ed = Tensor("C", [id => upper], x), Tensor("E", [id => lower], x)
+        inner = Tensor("F", x) + Cd * Ed
+        prod_ = TensorExpression(Tensor("A", [id => upper], x) * Tensor("B", [id => lower], x)) × Dm(inner)
+        @test (apply_derivative(prod_); true)
+        # and an operand's own dummies are renamed away from the operator's index, while its free ones
+        # are what the operator contracts with
+        Dj = Partial("∂", x, jd => lower)
+        @test free_indices(Dj(Tensor("G", [jd => upper], x))) == free_indices(TensorExpression(1))
+        @test (apply_derivative(TensorExpression(Dj(Tensor("C", [jd => upper], x) * Tensor("E", [jd => lower], x)))); true)
+    end
+
     # a metric raising a derivative's own index must refresh THAT derivative's cached indices. The
     # refresh used to land on the factor after it, so ∂^b kept the cache of ∂_a: the term then had no
     # dummies, was never relabelled, and two equal terms never merged

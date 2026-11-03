@@ -16,6 +16,9 @@ Get just the TensorTerm part
 @inline terms(T::TensorExpression) = terms(summands(T))
 @inline coefficients(T::Pair{SymorNum,TensorTerm}) = [T[1]]
 @inline coefficients(T::Vector{Pair{SymorNum,TensorTerm}}) = [t[1] for t in T]
+"""The coefficient of each summand; a product or a lone tensor carries the one coefficient 1."""
+@inline coefficients(T::TensorExpression) = coefficients(summands(T))
+@inline coefficients(T::Tensorial) = coefficients(TensorExpression(T))
 @inline coef(t::Pair{SymorNum,TensorTerm}) = t[1]
 @inline term(t::Pair{SymorNum,TensorTerm}) = t[2]
 @inline summands(T::TensorExpression) = T.summands
@@ -58,6 +61,20 @@ data(T::OperatorSuperType) = T.data
 name(T::TensorDataSuperType)= T.name
 """Return the name String of a tensor."""
 name(T::TensorSuperType)=name(data(T))
+
+"""
+A name as printed. For display the leading marks go behind the letter they decorate, innermost first.
+"""
+function _display_name(nm::AbstractString)
+    marks, base = "", String(nm)
+    while true
+        m, rest = indexmark(base)
+        (m === nothing || isempty(rest)) && break
+        marks, base = m * marks, rest
+    end
+    isempty(marks) && return base
+    return Base.Unicode.normalize(first(base) * marks * base[nextind(base, 1):end], :NFC)
+end
 
 """Rename a tensor. Data is immutable, so this returns a new tensor with the copied data but a new name.
 """

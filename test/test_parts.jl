@@ -123,5 +123,27 @@
     @test !isZeroTens(dtd(TensorExpression(∂pp(A)*B*B)))
     # quadratic terms are unaffected by the presence of cubic ones: different sectors cannot mix
     @test isZeroTens(dtd(∂pp(A)*B + A*∂pp(B) + ∂pp(A)*B*B + A*∂pp(B)*B + A*B*∂pp(B)))
+    # the representative does not depend on the order the input's terms come in
+    @test dtd(TensorExpression(A * B * ∂pp(A)) + ∂pp(A) * B * B) == dtd(∂pp(A) * B * B + TensorExpression(A * B * ∂pp(A)))
+
+    ###############################################
+    ### contracted indices, and factors no derivative acts on
+    ###############################################
+    let su = IndexSet("ibp_su2", upper, SLAlgebra(2)), (ip, jp, ap, bp) = Index(["ip", "jp", "ap", "bp"], su)
+        M(p1, p2) = Tensor("M", [p1, p2], x)
+        P(p) = Tensor("P", [ip => p], x); R(p) = Tensor("R", [ip => p], x)
+        # the two Leibniz terms of ∂(M_i^j M_j^i) may come out of simplify with the contracted indices
+        # placed differently; the field that collects the derivatives must not depend on that
+        @test isZeroTens(dtd(derive(∂pp(M(ip => lower, jp => upper) * M(jp => lower, ip => upper)))))
+        # a constant is no field, so K∂V is a total derivative
+        K = Tensor("K", Pair{IndexSuperType,IndexPosition}[])
+        @test isZeroTens(dtd(TensorExpression(K * ∂pp(A))))
+        @test isZeroTens(dtd(TensorExpression(K * A * ∂pp(A))))      # K A∂A = ½K∂(A²): still one
+        @test !isZeroTens(dtd(TensorExpression(K * A * ∂pp(∂pp(B)))))  # K A∂²B = K ∂²A B: not one
+        # and a δ beside two fields leaves the term quadratic, so equal terms reach the same normal form
+        δab = KroneckerDelta([ap => upper, bp => lower])
+        @test dtd(TensorExpression(δab * P(lower)) * ∂mm(∂mm(TensorExpression(R(upper))))) ==
+              dtd(-1 * TensorExpression(δab) * ∂mm(TensorExpression(P(lower))) * ∂mm(TensorExpression(R(upper))))
+    end
 
 end

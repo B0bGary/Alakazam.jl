@@ -158,3 +158,114 @@ end
     end
     clear_global!()
 end
+
+###############################################################################
+# The variational derivative on its own, outside the Euler-Lagrange equations
+###############################################################################
+
+@testset "Variational derivative by itself" begin
+    st = IndexSet("var_st", 4, upper)
+    μ, ν, ρ, σ, κ, λ = Index(["μ", "ν", "ρ", "σ", "κ", "λ"], st)
+    x = Coordinate("var_x", st)
+    vary = (L, f) -> derive(VariationalDerivative(L, f))
+    same = (a, b) -> isZeroTens(Alakazam.simplify(a - b))
+    vA = (i, p) -> Tensor("A", [i => p], x)
+    vT = (i, j) -> Tensor("T", [i => upper, j => upper], x)
+
+    @test same(vary(vA(μ, upper) * vA(μ, lower), vA(ρ, lower)), 2 * vA(ρ, upper))
+    @test same(vary(vA(μ, upper) * vA(μ, lower), vA(ρ, upper)), 2 * vA(ρ, lower))
+    # the field may reuse a dummy name of the Lagrangian; it used to raise OverusedIndices
+    @test same(vary(vA(μ, upper) * vA(μ, lower), vA(μ, lower)), 2 * vA(μ, upper))
+    # fields carrying no coordinates are varied too; the Leibniz rule used to annihilate them all
+    let va = (i, p) -> Tensor("A", [i => p])
+        @test same(vary(va(μ, upper) * va(μ, lower), va(ρ, lower)), 2 * va(ρ, upper))
+    end
+    @test isZeroTens(vary(TensorExpression(Tensor("B", x)), vA(ρ, lower)))
+    # a field index that is free in the Lagrangian would come out twice
+    @test_throws ArgumentError vary(vA(μ, upper) * Tensor("B", [ν => lower], x), vA(ν, lower))
+    # a Num coefficient used to stop simplify on a Bool test
+    @variables q
+    @test same(vary(q * vA(μ, upper) * vA(μ, lower) + Tensor("B", x), vA(ρ, lower)), 2q * vA(ρ, upper))
+
+    # the slots of a symmetric field are not independent: the variation has the field's symmetry
+    vS = (i, j, p) -> SymmetricTensor("S", [i => p, j => p], x)
+    vF = (i, j, p) -> AntisymmetricTensor("F", [i => p, j => p], x)
+    @test same(vary(vS(μ, ν, lower) * vT(μ, ν), vS(ρ, σ, lower)), 1//2 * vT(ρ, σ) + 1//2 * vT(σ, ρ))
+    @test same(vary(vF(μ, ν, lower) * vT(μ, ν), vF(ρ, σ, lower)), 1//2 * vT(ρ, σ) - 1//2 * vT(σ, ρ))
+    @test same(vary(vF(μ, ν, lower) * vF(μ, ν, upper), vF(ρ, σ, lower)), 2 * vF(ρ, σ, upper))
+    # and the same holds by a derivative of the field
+    vC = Tensor("C", [κ => upper], x)
+    @test same(vary(PD("∂", vS(μ, ν, lower), x, κ => lower) * vT(μ, ν) * vC, PD("∂", vS(ρ, σ, lower), x, λ => lower)),
+               1//2 * Tensor("C", [λ => upper], x) * (vT(ρ, σ) + vT(σ, ρ)))
+
+    # a derivative of the field is a variable of its own
+    vφ = Tensor("φ", x)
+    vL = vφ * PD("∂", vφ, x, μ => lower) * PD("∂", vφ, x, μ => upper)
+    @test same(vary(vL, vφ), PD("∂", vφ, x, μ => lower) * PD("∂", vφ, x, μ => upper))
+    @test same(vary(vL, PD("∂", vφ, x, ρ => lower)), 2 * vφ * PD("∂", vφ, x, ρ => upper))
+
+    # a large Lagrangian, summed once rather than term by term
+    big = sum(k * Tensor("P$k", x) * vA(μ, upper) * vA(μ, lower) for k in 1:300)
+    @test same(vary(big, vA(ρ, lower)), sum(2k * Tensor("P$k", x) * vA(ρ, upper) for k in 1:300))
+
+    # across levels the variation is the set's own metric: over an ε, ∂(ψ^α χ_α)/∂ψ_β = -χ^β, which
+    # Euler's identity checks whatever the raising convention; a symmetric metric there gave +χ^β
+    let sp = IndexSet("var_sp", 2, lower, EpsilonTensor), (α, β) = Index(["α", "β"], sp)
+        Lε = Tensor("ψ", [α => upper]) * Tensor("χ", [α => lower])
+        ψβ = Tensor("ψ", [β => lower])
+        @test same(Alakazam.contract_metrics(vary(Lε, ψβ) * ψβ), Lε)
+        @test same(vary(Lε, ψβ), -1 * Tensor("χ", [β => upper]))
+    end
+
+    # a chain of derivatives is matched all the way down to its field
+    vB = Tensor("B", x)
+    @test isZeroTens(vary(PD("∂", PD("∂", vB, x, μ => lower), x, ν => lower) * vT(μ, ν),
+                          PD("∂", PD("∂", vφ, x, ρ => lower), x, σ => lower)))
+
+    # the Leibniz rule expands a derivative of a product on a copy, never in the caller's Lagrangian
+    #(nested, since product_rule rewrites the operand of an outer derivative in place)
+    let Lp = TensorExpression(PD("∂", PD("∂", vφ * vφ, x, μ => lower), x, μ => upper))
+        before = sprint(show, Lp)
+        vary(Lp, vφ)
+        functional_derivative(Lp, vφ)
+        @test sprint(show, Lp) == before
+    end
+
+    # EL gives the field to a copy of the derivative it is handed, not to the caller's
+    DA = PD("∂", x, [κ => upper])
+    before = sprint(show, DA)
+    EL(vA(μ, upper) * vA(μ, lower), vA(ρ, lower), DA)
+    @test sprint(show, DA) == before
+end
+
+@testset "Functional derivative δS/δφ" begin
+    st = IndexSet("fd_st", 4, upper)
+    μ, ν, ρ, σ, τ = Index(["μ", "ν", "ρ", "σ", "τ"], st)
+    x = Coordinate("fd_x", st)
+    fd∂ = (i, p, T) -> PD("∂", T, x, i => p)
+    same = (a, b) -> isZeroTens(Alakazam.simplify(a - b))
+    □ = T -> fd∂(μ, lower, fd∂(μ, upper, T))
+    @syms m e
+    fφ = Tensor("φ", x)
+
+    # first order: the Klein-Gordon equation
+    @test same(functional_derivative(1//2 * fd∂(μ, lower, fφ) * fd∂(μ, upper, fφ) - 1//2 * m^2 * fφ * fφ, fφ),
+               -1 * □(fφ) - m^2 * fφ)
+    # second order: two integrations by parts, so no sign
+    @test same(functional_derivative(1//2 * □(fφ) * fd∂(ν, lower, fd∂(ν, upper, fφ)), fφ),
+               fd∂(ν, lower, fd∂(ν, upper, □(fφ))))
+    # φ□φ is -(∂φ)² up to a total derivative, and both orders contribute
+    @test same(functional_derivative(fφ * □(fφ), fφ), 2 * □(fφ))
+    @test same(functional_derivative(fφ * fφ * □(fφ), fφ),
+               4 * fφ * □(fφ) + 2 * fd∂(μ, lower, fφ) * fd∂(μ, upper, fφ))
+
+    # it agrees with EL wherever EL applies
+    fA = (i, p) -> Tensor("A", [i => p], x)
+    L1 = Tensor("T", [μ => upper, ν => upper], x) * Tensor("F", [μ => lower, ν => lower], x) +
+         fA(ν, upper) * fd∂(μ, upper, Tensor("T", [μ => lower, ν => lower], x))
+    fT = Tensor("T", [ρ => upper, σ => upper], x)
+    @test same(functional_derivative(L1, fT), EL(L1, fT, PD("∂", x, [τ => upper])))
+    L2 = -1//4 * (fd∂(μ, lower, fA(ν, lower)) - fd∂(ν, lower, fA(μ, lower))) *
+                 (fd∂(μ, upper, fA(ν, upper)) - fd∂(ν, upper, fA(μ, upper))) + e * fA(μ, lower) * Tensor("J", [μ => upper], x)
+    @test same(functional_derivative(L2, fA(ρ, upper)), EL(L2, fA(ρ, upper), PD("∂", x, [τ => upper])))
+end

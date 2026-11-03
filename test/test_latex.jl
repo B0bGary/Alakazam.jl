@@ -224,6 +224,83 @@
         @test startswith(tex(d1), "D{ }^{\\mu}{ }_{\\nu}")
         @test startswith(tex(d2), "D{ }_{\\nu}{ }^{\\mu}")
         @test tex(d1) != tex(d2)
+
+        # a unit inside a symbolic sum is a term, not a dropped coefficient: 1+q printed as ( + q)
+        @test string((1 + q) * T) == "(1 + q)T"
+        @test string((q - 1) * T) == "(-1 + q)T"
+        @test tex((1 + q) * T) == "\\left(1 + q\\right) T"
+        @test isequal(coefficients(3 * Tensor("A", m => lower) + (1 + q) * Tensor("B", m => lower)), [3, 1 + q])
+        @test coefficients(Tensor("A", m => lower) * Tensor("B", m => upper)) == [1]
+    end
+
+    @testset "coefficients, console and TeX, case by case" begin
+        @variables q r      # Num, which is itself a Number, unlike the bare symbols of @syms
+        @syms s
+        E = TensorExpression(Tensor("T"))
+        #coefficient => (console, TeX) on one tensor; `nothing` where the console form is not pinned
+        cases = Pair{Any,Tuple{Union{String,Nothing},String}}[
+            # real numbers
+            -1 => ("-", "- "), 4//2 => ("2", "2 "), -3//4 => ("-3//4", "-\\frac{3}{4} "),
+            -2.5 => ("-2.5", "-2.5 "),
+            # complex numbers: i throughout, a negative real part's sign outside its fraction
+            1 + im => ("(1 + i)", "\\left(1 + i\\right) "), -2 - 3im => ("(-2 - 3i)", "\\left(-2 - 3i\\right) "),
+            -im // 3 => ("-1//3i", "-\\frac{i}{3} "), 1.5 + 2.5im => ("(1.5 + 2.5i)", "\\left(1.5 + 2.5i\\right) "),
+            -1//2 - im => ("(-1//2 - i)", "\\left(-\\frac{1}{2} - i\\right) "),
+            1//2 - 2//3 * im => ("(1//2 - 2//3i)", "\\left(\\frac{1}{2} - \\frac{2i}{3}\\right) "),
+            # a number times a symbol
+            -(2//3) * q => ("-2//3q", "-\\frac{2q}{3} "), q^2 => (nothing, "q^{2} "),
+            # symbolic complex parts, which Symbolics holds as complex(re, im)
+            im * q => ("iq", "i q "), -im * q / 2 => ("-1//2iq", "-\\frac{i q}{2} "),
+            (1 + im) * q => ("(q + iq)", "\\left(q + i q\\right) "), q - im => ("(q - i)", "\\left(q - i\\right) "),
+            -1//2 + im * q => ("(-1//2 + iq)", "\\left(-\\frac{1}{2} + i q\\right) "),
+            2q - 3im * r => ("(2q - 3ir)", "\\left(2q - 3i r\\right) "),
+            im * (1 + q) => ("i(1 + q)", "i \\left(1 + q\\right) "),
+            im * (q + r) / 2 => ("1//2i(q + r)", "\\frac{i \\left(q + r\\right)}{2} "),
+            # a number times a sum is bracketed, but a sum alone over a denominator needs none
+            2 * (q + r) => ("2(q + r)", "2\\left(q + r\\right) "), (1//2) * (q + r) => ("1//2(q + r)", "\\frac{q + r}{2} "),
+            -(q + r) / 3 => ("-1//3(q + r)", "-\\frac{q + r}{3} "),
+            # quotients: bracketed whole on the console, or `1 / qT` reads as 1/(qT); the sign in front
+            1 / q => ("(1 / q)", "\\frac{1}{q} "), -q / r => ("-(q / r)", "-\\frac{q}{r} "),
+            1 / (2q) => ("(1 / (2q))", "\\frac{1}{2q} "), (1 + q) / r => ("((1 + q) / r)", "\\frac{1 + q}{r} "),
+            q / (1 + q) => ("(q / (1 + q))", "\\frac{q}{1 + q} "),
+            # sums, a unit or a fraction among their terms
+            -1 - q => ("(-1 - q)", "\\left(-1 - q\\right) "), q - 1//2 => ("(-1//2 + q)", "\\left(-\\frac{1}{2} + q\\right) "),
+            # bare symbols of @syms take the same paths
+            im * s => ("is", "i s "), (1 + im) * s => ("(1 + i)s", "\\left(1 + i\\right) s "), s - 1 => ("(-1 + s)", "\\left(-1 + s\\right) "),
+        ]
+        for (c, (con, tex)) in cases
+            con === nothing || @test string(c * E) == con * "T"
+            @test strip(to_latex(c * E)) == tex * "T"
+        end
+
+        # a later summand's sign becomes the operator before it
+        A, B = TensorExpression(Tensor("A", m => lower)), TensorExpression(Tensor("B", m => lower))
+        nospace(x) = replace(to_latex(x), " " => "")
+        @test string(A - (q / r) * B) == "A_{μ}-(q / r)B_{μ}"
+        @test nospace(A - (q / r) * B) == "A{}_{\\mu}-\\frac{q}{r}B{}_{\\mu}"
+        @test string(A - im * q * B) == "A_{μ}-iqB_{μ}"
+        @test nospace(A - im * q * B) == "A{}_{\\mu}-iqB{}_{\\mu}"
+        @test string(A + (1 - im) * B) == "A_{μ}+(1 - i)B_{μ}"
+        @test string(A - (1 + q) * B) == "A_{μ}+(-1 - q)B_{μ}"
+
+        # an expression with no tensor in it writes even a unit coefficient
+        one_ = TensorExpression(1)
+        @test string(-1 * one_) == "-1" && strip(to_latex(-1 * one_)) == "-1"
+        @test string((1//2) * one_) == "1//2" && strip(to_latex((1//2) * one_)) == "\\frac{1}{2}"
+        @test string(im * q * one_) == "iq" && strip(to_latex(im * q * one_)) == "i q"
+    end
+
+    @testset "every decoration, next to another" begin
+        # stored mark-first; printed with each mark behind its own letter, and as its TeX accent
+        hs = IndexSet("latex_hatset", 4, (0, 4))
+        ahat, btilde = Index(string(Alakazam.COMBINING_HAT) * "a", hs), Index(string(Alakazam.COMBINING_TILDE) * "b", hs)
+        abar = Index(string(Alakazam.COMBINING_MACRON) * "a", spb)
+        T2 = Tensor("T", abar => upper, ahat => upper, btilde => lower)
+        @test string(T2) == "T^{āâ∘}_{∘∘b̃}"
+        @test strip(to_latex(T2)) == "T { }^{\\overline{a}}{ }^{\\hat{a}}{ }_{\\tilde{b}}"
+        @test parse_latex(to_latex(T2)) == T2
+        # stacked marks nest, the first-written outermost
+        @test strip(to_latex(Tensor(string(Alakazam.COMBINING_HAT, Alakazam.COMBINING_MACRON, "A")))) == "\\hat{\\overline{A}}"
     end
 
 end

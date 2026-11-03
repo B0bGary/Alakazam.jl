@@ -280,4 +280,20 @@
         @test isempty(metric_function(cst)) && name(Metric(cμ => lower, cν => lower)) == "η"
     end
 
+    @testset "rename_dummies_excluded!: dummies away from a list" begin
+        rst = IndexSet("ra_st", 4, upper)
+        rμ, rν = Index(["rμ", "rν"], rst)
+        E = TensorExpression(Tensor("A", [rμ => upper]) * Tensor("B", [rμ => lower]) * Tensor("C", [rν => lower]))
+        uses(X, i) = any(p -> p[1] == i, Alakazam.indices(X))
+        F = rename_dummies_excluded!(copy(E), [rμ, rν])
+        #by default only dummies move, so the value and the free rν are kept
+        @test !uses(F, rμ) && Alakazam.free_indices_ordered(F) == Alakazam.free_indices_ordered(E)
+        @test isZeroTens(simplify(F - E))
+        @test !uses(rename_dummies_excluded!(copy(E), [rμ => upper]), rμ)          #index pairs are taken as their index
+        @test !uses(rename_dummies_excluded!(copy(E), [rν], ()), rν)                #keep=() moves free indices too
+        @test uses(E, rμ)                                               #a copy leaves the original alone
+        G = rename_dummies_excluded(E, [rμ])                            #as does the form without the bang
+        @test !uses(G, rμ) && uses(E, rμ) && isZeroTens(simplify(G - E))
+    end
+
 end

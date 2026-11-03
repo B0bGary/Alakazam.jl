@@ -157,10 +157,22 @@ end
 ###############################################################
 #multiple dispatch for operators.
 function (O::OperatorSuperType)(T::Tensorial)
-    texp = TensorExpression(T)
+    texp = _apart_from_operator(TensorExpression(T), op_indices(O))
     nO = copy(O)
     set_operand!(nO, texp)
     return nO
+end
+
+"""
+An operand with the indices it binds renamed away from its operator's own. Its free ones are kept: with
+those the operator contracts on purpose, as in ∂_μ A^μ.
+"""
+function _apart_from_operator(operand::TensorExpression, op_inds)
+    #the usual case, no operator index used in the operand at all, costs one scan and nothing more
+    used = IndexTypes[]
+    collect_indices!(used, operand)
+    any(p -> !isLightcone(p) && p[1] in used, op_inds) || return operand
+    return rename_dummies_excluded(operand, Set(p[1] for p in op_inds))
 end
 
 """If a single term, pull out the global factor."""
@@ -208,7 +220,7 @@ function to_latex(T::OperatorSuperType)
 end
 
 function show_op_base(io::IO, T::OperatorSuperType)
-    print(io, name(T))
+    print(io, _display_name(name(T)))
     if !isempty(op_indices(T))
         lowers = ""
         uppers = ""
@@ -219,7 +231,7 @@ function show_op_base(io::IO, T::OperatorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     uppers *= "?"
                 end
-                uppers = uppers * ind.name
+                uppers = uppers * _display_name(ind.name)
                 uppersempt = 0
                 lowers = lowers * "∘"
             else
@@ -228,7 +240,7 @@ function show_op_base(io::IO, T::OperatorSuperType)
                 if typeof(ind) == DummyPatternIndex
                     lowers *= "?"
                 end
-                lowers = lowers * ind.name
+                lowers = lowers * _display_name(ind.name)
             end
         end
         if !uppersempt
@@ -256,10 +268,10 @@ function show_op_base(io::IO, T::OperatorSuperType)
             end
         end
         if !uppersempts
-            out *= "^{" * uppers * "}"
+            print(io, "^{" * uppers * "}")
         end
         if !lowersempts
-            out *= "_{" * lowers * "}"
+            print(io, "_{" * lowers * "}")
         end
     end
 

@@ -4,7 +4,6 @@
 #replacements:
 #   ISO.is_isomorphic()        ->  is_isomorphic(ISO)
 #   ISO.isomorphisms_iter()    ->  isomorphisms_iter(ISO)   (yields Dict{Int,Int})
-#   nx.vf2pp_isomorphism(a,b)  ->  first_isomorphism(a, b)  (Dict or nothing)
 ###########################################################################
 
 import Graphs
@@ -196,20 +195,6 @@ function isomorphisms_iter(I::TensorGraphIso)
         vertex_relation=_vrel(I), edge_relation=_erel(I))
     return (Dict{Int,Int}(I.gsource.ids[a] => I.gtarget.ids[b] for (a, b) in m)
             for m in ch)
-end
-
-"""
-    first_isomorphism(gsource, gtarget) -> Dict{Int,Int} or nothing
-
-Replacement for nx.vf2pp_isomorphism(g2, g1).  
-NOTE: unlike vf2pp, this DOES match edge weights.
-"""
-function first_isomorphism(gsource::LabeledMultiGraph, gtarget::LabeledMultiGraph)
-    I = TensorGraphIso(gsource, gtarget, _skeleton(gsource), _skeleton(gtarget))
-    for m in isomorphisms_iter(I)
-        return m
-    end
-    return nothing
 end
 
 # ------------------------------------------------------------- 
@@ -503,7 +488,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
     end
     g1 = LabeledMultiGraph(_nt + _ni, _ne + _ni ÷ 2)
     node_counter = 0
-    dums = dummies(T1)   # don't name dummies in the graph
+    dums = dummies(T1)   # a dummy is named by its set only: its own name is arbitrary, but a trace over one set is not one over another
 
     for t1pl in 1:length(terms(T1))
         tens1 = T1.terms[t1pl]
@@ -520,7 +505,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
                         add_node!(g1, 2 * (node_counter + indexx) + 1,
                             name=name(op_indices(opp)[indexx][1]))
                     else
-                        add_node!(g1, 2 * (node_counter + indexx) + 1, name="")
+                        add_node!(g1, 2 * (node_counter + indexx) + 1, name="∘" * op_indices(opp)[indexx][1].index_set.name)
                     end
                     add_edge!(g1, -2^t1pl * 3^ch, 2 * (node_counter + indexx) + 1, weight=0)
                 end
@@ -545,7 +530,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
                                 add_node!(g1, 2 * (node_counter + indexx) + 1,
                                     name=name(indices(singl)[indexx][1]))
                             else
-                                add_node!(g1, 2 * (node_counter + indexx) + 1, name="")
+                                add_node!(g1, 2 * (node_counter + indexx) + 1, name="∘" * indices(singl)[indexx][1].index_set.name)
                             end
                             add_edge!(g1, 2 * t1pl, 2 * (node_counter + indexx) + 1, weight=0)
                         end
@@ -573,7 +558,7 @@ function construct_tensorterm_graph(T1::TensorTerm, debug=false)
                     add_node!(g1, 2 * (node_counter + indexx) + 1,
                         name=indices(tens1)[indexx][1].name)
                 else
-                    add_node!(g1, 2 * (node_counter + indexx) + 1, name="")
+                    add_node!(g1, 2 * (node_counter + indexx) + 1, name="∘" * indices(tens1)[indexx][1].index_set.name)
                 end
                 add_edge!(g1, 2 * t1pl, 2 * (node_counter + indexx) + 1, weight=0)
             end
@@ -774,77 +759,74 @@ function same_tensorterm_mod_syms_grade(T1::TensorTerm, T2::TensorTerm, debug=fa
 end
 
 
+"""
+    same_tensor_mod_dummies(T1, T2) -> sign
+
+The sign `s` with `T1 = s T2` up to renaming the dummies of `T2`, or 0 when there is none.
+
+Only dummies are renamed, which is always valid, along with which slot of a contracted pair is raised,
+which costs the metric's sign (-1 over an ε). Slots are never moved here: the symmetries the tensor
+actually has are left to `dumless_same_tensor_mod_syms`. The term graph only proposes which dummy of
+`T2` is which dummy of `T1`; it names the free index a slot holds, so a free index never trades places
+with a dummy.
+"""
 function same_tensor_mod_dummies(T1::TensorSuperType, T2::TensorSuperType)
     typeof(T1) != typeof(T2) && return 0
     name(T1) != name(T2) && return 0   # early exit
-    length(indices(T1)) != length(indices(T2)) && return 0
+    i1, i2 = indices(T1), indices(T2)
+    length(i1) != length(i2) && return 0
     labels(T1) != labels(T2) && return 0
-    dums11 = dummies_with_pos_index_pos_ul(T1)
-    contractions1 = [(x, y) for x in dums11 for y in dums11
-                                                if x[2][1] == y[2][1] && x != y]
-    dums22 = dummies_with_pos_index_pos_ul(T2)
-    contractions2 = [(x, y) for x in dums22 for y in dums22
-                                                if x[2][1] == y[2][1] && x != y]
-    # index graph: tableau adjacency weights + weight-2 contraction edges +
-    # weight -2 self-loop marking the upper index of each contraction
-    g1 = LabeledMultiGraph()
-    add_nodes_from!(g1, 1:length(indices(T1)))   # NB: nx range(1,n) dropped node n; fixed here
-    for tab in tableaux(T1)
-        adm = tab.adj_matrix
-        dims = size(adm)[1]
-        for i in 1:dims, j in (i+1):dims
-            add_edge!(g1, i, j, weight=adm[i, j])
+    #the slot pairs of each tensor's dummies, as (first slot, second slot)
+    slot_pairs = T -> (d = dummies_with_pos_index_pos_ul(T);
+                       [(x[1], y[1]) for x in d for y in d if x[2][1] == y[2][1] && x[1] < y[1]])
+    pairs1, pairs2 = slot_pairs(T1), slot_pairs(T2)
+    length(pairs1) == length(pairs2) || return 0
+    #with no tableau no slot may move, so slot p of T2 can only be slot p of T1: no search needed
+    if isempty(tableaux(T1)) && isempty(tableaux(T2))
+        sgn = 1
+        for (p, q) in pairs2
+            (p, q) in pairs1 && i1[p][1].index_set === i2[p][1].index_set || return 0
+            sgn *= _antisym_contraction_sign(i2[p], i2[q], i1[p][2], i1[q][2])
+            sgn == 0 && return 0
         end
-    end
-    g2 = copy(g1)
-
-    for pair in contractions1
-        add_edge!(g1, pair[1][1], pair[2][1], weight=2)
-        if pair[1][2][2] == upper
-            add_edge!(g1, pair[1][1], pair[1][1], weight=-2)
-        else
-            add_edge!(g1, pair[2][1], pair[2][1], weight=-2)
+        #the pairs agree, so a slot bound in one is bound in the other
+        for s in eachindex(i1)
+            i1[s] == i2[s] || any(pq -> s == pq[1] || s == pq[2], pairs2) || return 0
         end
+        return sgn
     end
-    for pair in contractions2
-        add_edge!(g2, pair[1][1], pair[2][1], weight=2)
-        if pair[1][2][2] == upper
-            add_edge!(g2, pair[1][1], pair[1][1], weight=-2)
-        else
-            add_edge!(g2, pair[2][1], pair[2][1], weight=-2)
+    #slot s of a lone tensor is node 2s+1 of its term graph, whose self-loop on each pair's raised slot
+    #keeps a raised slot raised: nothing see-saws here, so a renaming costs no sign
+    g1, g2 = construct_tensorterm_graph(TensorTerm(T1)), construct_tensorterm_graph(TensorTerm(T2))
+    for (k, m) in enumerate(isomorphisms_iter(find_tensor_graph_iso(g1, g2)))   # T2 node => T1 node
+        k > 64 && break
+        newinds = copy(i2)
+        renames = true
+        for (p, q) in pairs2
+            a, b = (m[2p+1] - 1) ÷ 2, (m[2q+1] - 1) ÷ 2
+            #a pair must land on a pair, or T3 below is not a renaming of T2
+            i1[a][1] == i1[b][1] || (renames = false; break)
+            newinds[p], newinds[q] = i1[a], i1[b]
         end
+        renames || continue
+        T3 = copy(T2)
+        set_indices!(T3, newinds)
+        s = dumless_same_tensor_mod_syms(T1, T3)
+        s == 0 || return s
     end
-    ISO = first_isomorphism(g2, g1)   # Dict g2-node => g1-node, or nothing
-    ISO === nothing && return 0
-    T3 = copy_owned(T2)
-    for (oldpos, newpos) in pairs(ISO)
-        indices(T3)[newpos] = indices(T2)[oldpos]
-    end
-    out = bubble_sort_index_with_grading!(copy_owned(T2), ISO)
-    grad = out[1]
-    grad *= to_dumless_same_tensor_mod_syms(T1, T3)
-    #exchanging the slots of a contracted pair is free over a symmetric metric but not over an ε
-    grad *= _antisym_contraction_sign(ISO, contractions2)
-    return grad
+    return 0
 end
 
 """
-The sign that exchanging the two slots of a self-contracted pair costs.
+The sign that moving a self-contracted pair `x`, `y` to the levels `px`, `py` costs: 1 when nothing
+moves, the metric's exchange sign when an up-down pair see-saws, and 0 otherwise, including over a
+metric with no such sign.
 """
-function _antisym_contraction_sign(ISO, contractions)
-    sgn = 1
-    seen = Set{Tuple{Int,Int}}()
-    for (x, y) in contractions
-        x[2][2] === upper || continue           #visit each pair once, from its raised slot
-        su, sl = x[1], y[1]
-        key = (min(su, sl), max(su, sl))
-        key in seen && continue
-        push!(seen, key)
-        mu, ml = get(ISO, su, su), get(ISO, sl, sl)
-        (su < sl) == (mu < ml) && continue      #slot order kept, so nothing to pay
-        mt = x[2][1].index_set.metric_type
-        mt === nothing && continue
-        mt <: AntisymMetricSuperType && (sgn = -sgn)
-    end
-    return sgn
+function _antisym_contraction_sign(x::Pair, y::Pair, px::IndexPosition, py::IndexPosition)
+    x[2] == px && y[2] == py && return 1
+    (x[2] != px && y[2] != py && x[2] != y[2]) || return 0
+    S = x[1].index_set
+    _can_raise_lower(S) || return 0
+    return S.metric_type <: AntisymMetricSuperType ? -1 : 1
 end
+

@@ -687,4 +687,20 @@
         end
     end
 
+    # an operand replaced by zero takes its derivative, and the term, with it. Left as ∂⟦0⟧ it read
+    # as a bare operator and kept the partner of a dummy as a stray free index
+    let st0 = IndexSet("rep0_st", 4, upper), (μ0, ν0, ρ0) = Index(["μ0", "ν0", "ρ0"], st0)
+        x0 = Coordinate("rep0_x", st0)
+        A0(i) = Tensor("A", [i => lower], x0); B0(i) = Tensor("B", [i => upper], x0); C0(i) = Tensor("C", [i => lower], x0)
+        d0(i, T) = PartialDerivative("∂", T, [x0], [i => lower])
+        @test isZeroTens(replace_pattern(TensorExpression(d0(μ0, A0(ν0) * B0(ν0))), "A_{?a}", TensorExpression(0)))
+        e = replace_pattern(TensorExpression(d0(μ0, A0(ν0)) * B0(ν0)), "A_{?a}", TensorExpression(0))
+        @test isZeroTens(e) && e + C0(μ0) == TensorExpression(C0(μ0))
+        @test isZeroTens(replace_pattern(TensorExpression(d0(μ0, d0(ρ0, A0(ν0))) * B0(ν0)), "A_{?a}", TensorExpression(0)))
+        @test isZeroTens(replace_pattern(TensorExpression(d0(μ0, A0(ν0)) * B0(ν0)), "A_{?a}", A0(ν0) - A0(ν0)))
+        # a bare operator, standing for one not yet applied, is still left as it is
+        bare = PartialDerivative("∂", [x0], [μ0 => lower])
+        @test replace_pattern(TensorExpression(B0(ν0) * bare), "A_{?a}", TensorExpression(0)) == TensorExpression(B0(ν0) * bare)
+    end
+
 end

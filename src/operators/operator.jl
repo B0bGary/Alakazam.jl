@@ -15,6 +15,7 @@ mutable struct OperatorData <: TensorDataSuperType #?
         top = Tensor(name, args...)#change eventually to not have to do full construction
         op_data = data(top)
         op_inds = indices(top)
+        operand = _apart_from_operator(operand, op_inds)
         valid_index_placement(top, operand)
         # println(top)
         # @show operand
