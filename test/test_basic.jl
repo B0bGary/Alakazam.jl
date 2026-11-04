@@ -41,6 +41,13 @@
     exp2=KroneckerDelta([a=>lower, b=>upper])KroneckerDelta([a=>upper, c=>lower])*Tensor("T", c=>upper)
     @test eliminate_kronecker(exp2)==Tensor("T", b=>upper)
 
+    #a metric does not lower a delta's index: δ_{bc} would be read as mixed, and g_{ab}δ^a_c T^b come out
+    #as T^c. Left to eliminate_kronecker, the delta renames the metric's index instead
+    gd = Metric([a => lower, b => lower]) * KroneckerDelta([a => upper, c => lower]) * Tensor("T", b => upper)
+    @test eliminate_kronecker(contract_metrics(gd)) == Tensor("T", c => lower)
+    @test isZeroTens(simplify(eliminate_kronecker(contract_metrics(Metric([a => lower, b => lower]) * KroneckerDelta([a => upper, c => lower]))) -
+                              Metric([b => lower, c => lower])))
+
     #default pos is upper, and su(2) indices so use epsilon as metric
     T1=Tensor("T", i=>lower, j=>lower)
     @test pop_metric(T1)==EpsilonTensor([i=>lower, k=>lower])*EpsilonTensor([j=>lower, l=>lower])*Tensor("T", [k=>upper, l=>upper])

@@ -1134,11 +1134,7 @@ function symmetrise_partials(TT::TensorTerm)
     any(t -> t isa PartialDerivative, ts) || return TT
     rs = [t isa PartialDerivative ? symmetrise_partials(t) : t for t in ts]
     all(k -> rs[k] === ts[k], eachindex(ts)) && return TT
-    new_term = 1
-    for r in rs
-        new_term *= r
-    end
-    return TensorExpression(new_term)
+    return TensorExpression(_factor_product(rs))
 end
 
 """

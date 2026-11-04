@@ -258,23 +258,18 @@ function wl_colours(g::LabeledMultiGraph)
     @inbounds for v in 1:n
         col[v] = hash(g.names[v], hash(g.loops[v]))
     end
-    prev = length(unique(col))
-    prev == n && return col            
-    buf = Vector{UInt}(undef, n)
-    for _ in 1:n
-        @inbounds for v in 1:n
-            acc = UInt(0)
-            for u in g.adj[v]
-                acc += hash(col[u], hash(g.edges[v < u ? (v, u) : (u, v)]))
-            end
-            buf[v] = hash(col[v], acc)
-        end
-        copyto!(col, buf)
-        c = length(unique(col))
-        (c == prev || c == n) && break  # stable, or discrete
-        prev = c
+    off = Vector{Int}(undef, n + 1)
+    off[1] = 0
+    @inbounds for v in 1:n
+        off[v+1] = off[v] + length(g.adj[v])
     end
-    return col
+    nbr = Vector{Int}(undef, off[n+1])
+    lab = Vector{UInt}(undef, off[n+1])
+    @inbounds for v in 1:n, (j, u) in enumerate(g.adj[v])
+        nbr[off[v]+j] = u
+        lab[off[v]+j] = hash(g.edges[v < u ? (v, u) : (u, v)])
+    end
+    return _refine_colours!(col, similar(col), similar(col), off, nbr, lab)
 end
 
 """

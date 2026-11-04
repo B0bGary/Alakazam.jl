@@ -33,13 +33,8 @@ function _metric_derivative_matrix(conv, default, setting, P_of)
         @test same(D(a, N, D(b, N, D(a, M, D(b, M, u)))), D(a, M, D(b, M, D(a, N, D(b, N, u))))) == P
         @test isZeroTens(apply_derivative(TensorExpression(D(c, N, TensorExpression(g(N, a, b)))))) == P
         @test same(D(a, N, g(M, a, b) * A(b, N)), g(M, a, b) * D(a, N, A(b, N))) == P
-        #a partial acting on a product, not a chain, keeps the metric its index hides, so this is
-        #not yet seen for ∂; popping a partial's own index would, at the cost of how results print
-        if dn == "∂" && P
-            @test_broken same(D(a, N, u * D(a, M, u)), D(a, M, u * D(a, N, u)))
-        else
-            @test same(D(a, N, u * D(a, M, u)), D(a, M, u * D(a, N, u))) == P
-        end
+        #a pair running into a product inside the operand: seen only where the metric passes the derivative
+        @test same(D(a, N, u * D(a, M, u)), D(a, M, u * D(a, N, u))) == P
         @test same(D(a, N, D(a, M, u)), D(b, N, D(b, M, u)))
         #a metric outside contracts into the operand only if it passes the derivative
         @test same(g(M, a, b) * D(c, N, A(b, N)), D(c, N, A(a, M))) == P
@@ -130,3 +125,35 @@ end
 
 Base.delete_method(which(metric_compatible, (Type{Derivative}, Type{Metric})))
 @test !metric_compatible(Derivative, Metric)
+
+@testset "metrics into derivative operands" begin
+    ost = IndexSet("op_st", 4, upper)
+    ofl = IndexSet("op_fl", 2, EpsilonTensor, upper)
+    oa, ob, oc, od, oe = Index(["oa", "ob", "oc", "od", "oe"], ost)
+    oi, oj = Index(["oi", "oj"], ofl)
+    ox = Coordinate("op_x", ost)
+    T(n, ps...) = Tensor(n, collect(ps), ox)
+    ∂c(X) = PartialDerivative("∂", X, [ox], [oc => lower])
+    g = Metric([oa => lower, ob => lower])
+    omets(e) = [t for t in terms(summands(TensorExpression(e))[1][2]) if t isa Alakazam.MetricSuperType]
+    expands_to(l, r) = isZeroTens(simplify(apply_derivative(TensorExpression(l)) - apply_derivative(TensorExpression(r))))
+
+    #a constant metric passes ∂ into a product, not only into a single tensor
+    @test contract_metrics(g * ∂c(T("X", oa => upper) * T("Y", oc => upper))) == TensorExpression(∂c(T("X", ob => lower) * T("Y", oc => upper)))
+    #ε's sign goes in with it, summand by summand when the summands take different ends
+    @test simplify(EpsilonTensor([oi => lower, oj => lower]) * ∂c(T("Θ", oi => upper) * T("Y", oc => upper))) ==
+          simplify(-∂c(T("Θ", oj => lower) * T("Y", oc => upper)))
+    εsum = EpsilonTensor([oi => lower, oj => lower]) * ∂c(T("Θ", oi => upper) * T("Φ", oj => upper) * T("Y", oc => upper) +
+                                                       T("Φ", oj => upper) * T("Θ", oi => upper) * T("Y", oc => upper))
+    @test isempty(omets(simplify(εsum))) && expands_to(simplify(εsum), -2 * ∂c(T("Θ", oj => lower) * T("Φ", oj => upper) * T("Y", oc => upper)))
+    #a summand whose own dummy has the name the metric brings in has it moved, onto one the term does not use
+    clash = g * ∂c(T("X", oa => upper) * T("X", od => lower) * T("Z", od => upper) + T("X", oa => upper) * T("W", ob => lower) * T("V", ob => upper))
+    @test isempty(omets(simplify(clash))) &&
+          expands_to(simplify(clash), ∂c(T("X", ob => lower) * T("X", od => lower) * T("Z", od => upper) + T("X", ob => lower) * T("W", oe => lower) * T("V", oe => upper)))
+    #any other operator is opaque: what it does need not commute with raising an index
+    @test !isempty(omets(contract_metrics(g * Alakazam.Operator("O", T("X", oa => upper)))))
+    #and a metric that ∂ does not pass stays outside, product or not
+    metric_function!(ost, ox)
+    @test !isempty(omets(contract_metrics(Metric([oa => lower, ob => lower]) * ∂c(T("X", oa => upper) * T("Y", oc => upper)))))
+    metric_function!(ost)
+end

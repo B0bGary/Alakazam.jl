@@ -248,6 +248,36 @@ function *(T::TensorTerm, T2::TensorTerm)
     end
 end
 
+"""
+    _factor_product(xs, init=1)
+
+Faster mutliplication for bigger expressions
+"""
+function _factor_product(xs, init=1)
+    isempty(xs) && return init
+    any(x -> x isa TensorExpression && length(summands(x)) != 1 ||
+             !(x isa Union{TensorSuperType,TensorTerm,TensorExpression}), xs) && return foldl(*, xs; init=init)
+    any(x -> x isa TensorExpression && isZeroTens(x), xs) && return zero()
+    c = init
+    fs = TensorSuperType[]
+    for x in xs
+        if x isa TensorSuperType
+            push!(fs, copy(x))
+        elseif x isa TensorTerm
+            append!(fs, terms(x))
+        else
+            cx, tx = summands(x)[1]
+            c = c * cx
+            append!(fs, terms(tx))
+        end
+    end
+    isZero(c) && return zero()
+    x = xs[1]
+    t = length(xs) > 1 ? TensorTerm(fs) : x isa TensorSuperType ? TensorTerm(fs[1]) :
+        x isa TensorTerm ? x : summands(x)[1][2]
+    return TensorExpression(_RAW, CoeffPair[CoeffPair(c, t)])
+end
+
 ########################
 #subtraction (defined via mult and add)
 ##

@@ -794,6 +794,66 @@ function rep_distance(canon::Vector, config::Vector)
 end
 
 @inline _signbit(s::Int) = s > 0 ? 0x01 : 0x02
+
+"""
+Factors whose levels the metric of their sets does not move: a metric, etc.
+Used only for signature checking, not for blocking metric raising/lowering
+"""
+@inline _keeps_levels(t::TensorSuperType) =
+    t isa MetricSuperType || t isa KroneckerSuperType
+
+"""
+Does a dummy index contraction vanish due to symmetry against the symmetry of the metric?
+One pass over the slots. Up to 64 of them, a mask of uid bits flags a slot that may repeat an earlier
+index, and only those look back for it, so a factor with no trace, nearly all of them, allocates nothing
+and compares nothing. Beyond 64 the mask fills, and a table of first slots takes its place.
+"""
+function _trace_vanishes(T::TensorSuperType, inds)
+    tabs = tableaux(T)
+    isempty(tabs) && return false
+    (T isa OperatorSuperType || _keeps_levels(T)) && return false
+    n = length(inds)
+    if n <= 64
+        mask = UInt64(0)
+        @inbounds for q in 1:n
+            idx = inds[q][1]
+            b = _bit(idx)
+            if mask & b != 0
+                for p in 1:(q-1)
+                    inds[p][1] === idx || continue
+                    _traced_pair_vanishes(tabs, inds, p, q) && return true
+                    break
+                end
+            end
+            mask |= b
+        end
+    else
+        firstat = Dict{UInt64,Int}()
+        sizehint!(firstat, n)
+        @inbounds for q in 1:n
+            p = get!(firstat, inds[q][1].uid, q)
+            p != q && _traced_pair_vanishes(tabs, inds, p, q) && return true
+        end
+    end
+    return false
+end
+
+#the trace over slots p < q, which hold one index, by the sign its symmetry and its metric give
+@inline function _traced_pair_vanishes(tabs, inds, p::Int, q::Int)
+    @inbounds idx, pos = inds[p]
+    @inbounds inds[q][2] === pos && return false
+    #a lightcone component repeated is not summed over
+    (isLightcone(idx) || idx isa DummyPatternIndex) && return false
+    mt = idx.index_set.metric_type
+    mt === nothing && return false
+    m = mt <: SymMetricSuperType ? 1 : mt <: AntisymMetricSuperType ? -1 : 0
+    for tab in tabs
+        #adj_matrix holds the sign of each slot exchange the tableau makes a symmetry, 0 for none
+        q <= size(tab.adj_matrix, 1) || continue
+        @inbounds tab.adj_matrix[p, q] * m == -1 && return true
+    end
+    return false
+end
 """
     find_canonical_rep(T::TensorSuperType) -> (sign, indices)
 
@@ -808,6 +868,7 @@ function find_canonical_rep(T::TensorSuperType)::Tuple{Int,Vector{IndexPair}}
     length(inds) <= 1 && return (1, inds)
     perm = sortperm(inds)
     lexo = inds[perm]
+    _trace_vanishes(T, inds) && return (0, lexo)
 
     isSymmetric(T) && return (1, lexo)
     isAntisymmetric(T) && return (permutation_sign(perm), lexo)
@@ -930,6 +991,7 @@ Swaps are based on permutations allowed by the Young Tableau
 """
 function sort_symmetric(T::TensorSuperType)
     (sign, new_inds) = find_canonical_rep(T)
+    sign == 0 && return zero()
     T_new = copy(T)
     set_indices!(T_new, new_inds)
     return sign * T_new
@@ -961,6 +1023,7 @@ function simplify(TEx::TensorExpression)
     new_exp = simp_ops_n_sym(exp)
     new_exp = contract_metrics(new_exp, Metric)
     new_exp = eliminate_kronecker(new_exp)
+    new_exp = collect_terms(new_exp)
     new_exp = rename_dummies!(new_exp)
     new_exp = sort(new_exp)
     return new_exp
@@ -979,30 +1042,27 @@ function simp_ops_n_sym(exp::TensorExpression)
     out = CoeffPair[]
     sizehint!(out, length(exp.summands))
     for summand in exp.summands
-        # println("start ",summand)
-        new_term = summand[1]
+        sorted = Any[]
+        vanishes = false
         for tens in summand[2].terms
-            temp = tens
             if typeof(tens) <: OperatorSuperType
-                # println("old oprd: ", tens.operand)
                 op = simp_ops_n_sym(operand(tens))
-                #  println("new oprd: ",op)
                 if op == zero() || op === nothing
-                    new_term *= zero()
-                else
-                    set_operand!(tens, op) #operator on nth term
-                    temp = tens
-                    new_term *= sort_symmetric(temp)
+                    vanishes = true
+                    break
                 end
-            else
-                # println(temp)
-                # println(new_term)
-                new_term *= sort_symmetric(temp)
+                tens = copy(tens)       #copy on write
+                set_operand!(tens, op) #operator on nth term
             end
+            st = sort_symmetric(tens)
+            if isZeroTens(st)
+                vanishes = true
+                break
+            end
+            push!(sorted, st)
         end
-        ##println(new_exp)
-        ##println(new_term)
-        append!(out, summands(TensorExpression(new_term)))
+        vanishes && continue
+        append!(out, summands(TensorExpression(_factor_product(sorted, summand[1]))))
     end
     isempty(out) && return zero()
     return TensorExpression(out)
@@ -1124,36 +1184,48 @@ function _ndistinct!(buf::Vector{UInt}, col::Vector{UInt})
 end
 
 """
+The slots of a monomial's factors, flattened: factor `i` holds slots `off[i]+1:off[i+1]`, and slot `k`
+carries index `uid[k]` on factor `fac[k]`.
+"""
+function _flat_slots(ind::Vector{Vector{IndexPair}})
+    n = length(ind)
+    off = Vector{Int}(undef, n + 1)
+    off[1] = 0
+    @inbounds for i in 1:n
+        off[i+1] = off[i] + length(ind[i])
+    end
+    uid = Vector{UInt64}(undef, off[n+1])
+    fac = Vector{Int}(undef, off[n+1])
+    @inbounds for i in 1:n, s in eachindex(ind[i])
+        uid[off[i]+s] = ind[i][s][1].uid
+        fac[off[i]+s] = i
+    end
+    return off, uid, fac
+end
+
+"""
 Colour each factor of a monomial by its contraction pattern, so that two terms differing only by
 dummy names and factor order get the same colours.
 
 The slot table is flattened into parallel arrays and searched by linear scan. A monomial carries a
 few dozen slots at most, and at that size a scan beats a hash map.
 """
-function _contraction_colours(T::TensorTerm, cls=_slot_classes(T))
+function _contraction_colours(T::TensorTerm, cls=_slot_classes(T), orient=nothing,
+                              ind=Vector{IndexPair}[indices(t) for t in terms(T)], flat=_flat_slots(ind))
     ts = terms(T)
     n = length(ts)
-    ind = Vector{Vector{IndexPair}}(undef, n)
-    off = Vector{Int}(undef, n + 1)
-    off[1] = 0
-    @inbounds for i in 1:n
-        ind[i] = indices(ts[i])
-        off[i+1] = off[i] + length(ind[i])
-    end
+    off, uid, fac = flat
     S = off[n+1]
 
-    uid = Vector{UInt64}(undef, S)
-    fac = Vector{Int}(undef, S)
-    slt = Vector{Int}(undef, S)
+    scl = Vector{Int}(undef, S)                 # symmetry class of the slot
     psn = Vector{Bool}(undef, S)
     live = Vector{Bool}(undef, S)               # lightcone indices take no part
     @inbounds for i in 1:n, s in eachindex(ind[i])
         k = off[i] + s
         idxo, poso = ind[i][s]
-        uid[k] = idxo.uid
-        fac[k] = i
-        slt[k] = s
-        psn[k] = poso.position
+        scl[k] = _slot_class(cls[i], s)
+        #a pair the signature reorients is coloured without its levels, which it may exchange
+        psn[k] = orient !== nothing && idxo.uid in orient ? false : poso.position
         live[k] = !isLightcone(idxo)
     end
 
@@ -1172,35 +1244,121 @@ function _contraction_colours(T::TensorTerm, cls=_slot_classes(T))
         cnt[k] = c
         partner[k] = other
     end
+    #a dummy slot; the factor at its other end, 0 for none; and the label of that edge, the classes of
+    #both slots, which refinement mixes with the colour it finds there
+    dum = Vector{Bool}(undef, S)
+    nbr = zeros(Int, S)
+    edge = Vector{UInt}(undef, S)
+    @inbounds for k in 1:S
+        dum[k] = live[k] && cnt[k] == 2
+        dum[k] || continue
+        nbr[k] = fac[partner[k]]
+        edge[k] = hash(scl[k], hash(scl[partner[k]], hash(psn[k], UInt(0))))
+    end
 
     #slots are told apart by symmetry class, not position, and summed, so that a colour does not depend
-    #on the order of slots a symmetry exchanges
+    #on the order of slots a symmetry exchanges. Each slot's part is mixed by an outer hash before it is summed
     col = Vector{UInt}(undef, n)
     @inbounds for i in 1:n
-        h = hash(name(ts[i]), hash(length(ind[i])))
+        h = hash(name(ts[i]), hash(length(ind[i])))::UInt     # pin type for performance
         for s in eachindex(ind[i])
             k = off[i] + s
-            if !live[k] || cnt[k] != 2
-                h += hash(uid[k], hash(psn[k], hash(_slot_class(cls[i], s))))    # free: the name matters
+            if !dum[k]
+                h += hash(hash(uid[k], hash(psn[k], hash(scl[k]))))     # free: the name matters
             else
-                h += hash(psn[k], hash(_slot_class(cls[i], s)))                  # dummy: the name does not
+                h += hash(hash(psn[k], hash(scl[k])))                   # dummy: the name does not
             end
         end
         col[i] = h
     end
 
-    # refinement
     newcol = Vector{UInt}(undef, n)
     buf = Vector{UInt}(undef, n)
+    _refine_colours!(col, newcol, buf, off, nbr, edge)
+    #tie breaking
+    joined = falses(n)
+    @inbounds for k in 1:S
+        nbr[k] != 0 && (joined[fac[k]] = true)
+    end
+    @inbounds while true
+        v, cv = 0, typemax(UInt)
+        for i in 1:n
+            joined[i] || continue
+            for j in 1:n
+                (j != i && joined[j] && col[j] == col[i]) || continue
+                (col[i] < cv || (col[i] == cv && i < v)) && (v = i; cv = col[i])
+                break
+            end
+        end
+        v == 0 && break
+        if (prs = _closed_pairs(cv, col, joined, off, nbr)) !== nothing
+            numbered = length(prs) > 1 && prs[1][2] != 0
+            for k in eachindex(prs)
+                p, q = prs[k]
+                numbered && (col[p] = col[q] = hash(cv, UInt(k)))
+                joined[p] = false
+                q != 0 && (joined[q] = false)
+            end
+            continue
+        end
+        col[v] = hash(col[v], 0x9e3779b97f4a7c15)
+        _refine_colours!(col, newcol, buf, off, nbr, edge)
+    end
+    return col
+end
+
+function _closed_pairs(cv, col, joined, off, nbr)
+    n = length(col)
+    partner = zeros(Int, n)
+    lone = paired = false
+    @inbounds for i in 1:n
+        (joined[i] && col[i] == cv) || continue
+        j = 0
+        for k in off[i]+1:off[i+1]
+            x = nbr[k]
+            (x == 0 || x == i) && continue
+            j == 0 ? (j = x) : (x == j || return nothing)
+        end
+        if j == 0
+            lone = true
+        else
+            (joined[j] && col[j] == cv) || return nothing
+            paired = true
+        end
+        partner[i] = j == 0 ? i : j
+        lone && paired && return nothing
+    end
+    prs = Tuple{Int,Int}[]
+    @inbounds for i in 1:n
+        j = partner[i]
+        j == 0 && continue
+        if j == i
+            push!(prs, (i, 0))
+        else
+            partner[j] == i || return nothing
+            i < j && push!(prs, (i, j))
+        end
+    end
+    return prs
+end
+
+"""
+Rounds of Weisfeiler-Leman refinement, shared by the canonical key's factor colours and the isomorphism
+graph's `wl_colours`: each vertex's colour absorbs those of its neighbours. The neighbours of vertex `i`
+are `nbr[off[i]+1:off[i+1]]`, 0 standing for none, each reached along an edge labelled `lab`. Stops when
+the partition is stable or discrete.
+"""
+function _refine_colours!(col, newcol, buf, off, nbr, lab)
+    n = length(col)
     ndistinct = _ndistinct!(buf, col)
     for _ in 1:n
+        ndistinct == n && break                 # every vertex apart already, nothing left to split
         @inbounds for i in 1:n
             acc = UInt(0)
-            for s in eachindex(ind[i])
-                k = off[i] + s
-                (live[k] && cnt[k] == 2) || continue
-                o = partner[k]
-                acc += hash(col[fac[o]], hash(_slot_class(cls[i], s), hash(_slot_class(cls[fac[o]], slt[o]), hash(psn[k], UInt(0)))))
+            for k in off[i]+1:off[i+1]
+                nbr[k] == 0 && continue
+               
+                acc += hash(hash(col[nbr[k]], lab[k]))
             end
             newcol[i] = hash(acc, col[i])
         end
@@ -1409,36 +1567,133 @@ _factor_identity(t::TensorSuperType) =
 Emit the slot codes for one index vector.
 """
 function _sig_slots!(key::Vector{UInt64}, ti::Vector{IndexPair},
-    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64})
-    @inbounds for k in eachindex(ti)
-        idx, pos = ti[k]
+    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64}, orient=nothing, flipped=nothing, fsgn=nothing, order=nothing)
+    @inbounds for j in eachindex(ti)
+        idx, pos = ti[order === nothing ? j : order[j]]
         u = idx.uid
+        level = UInt64(pos.position)
         if u in dums
+            reorients = orient !== nothing && u in orient
+            first_seen = reorients && !haskey(dummyno, u)
             #numbered on first appearance, and the set goes in with the number, since a trace over
             #one set is not a trace over another; tagged so it cannot alias a uid
-            code = get!(() -> hash(idx.index_set.name, UInt64(length(dummyno) + 1)) | 0x8000_0000_0000_0000,
-                        dummyno, u)
+            code = get(dummyno, u, UInt64(0))        #a code is never 0, carrying the tag
+            if code == 0
+                code = hash(idx.index_set.name, UInt64(length(dummyno) + 1)) | 0x8000_0000_0000_0000
+                dummyno[u] = code
+            end
             push!(key, code)
+            if reorients
+                #the pair is read raised end first: met lowered, both its levels are exchanged, at the
+                #metric's exchange sign
+                if first_seen && pos == lower
+                    push!(flipped, u)
+                    idx.index_set.metric_type <: AntisymMetricSuperType && (fsgn[] = -fsgn[])
+                end
+                u in flipped && (level = level == 0 ? UInt64(1) : UInt64(0))
+            end
         else
             push!(key, u)
         end
-        push!(key, UInt64(pos.position))
+        push!(key, level)
     end
     return key
 end
+
+"""
+The dummies of a term whose pair the canonical signature may read raised end first, exchanging the
+levels of both ends at the cost of the metric's exchange sign.
+"""
+function _orientable_dummies(ts::Vector{TensorSuperType}, dums::Set{UInt64})
+    isempty(dums) && return nothing
+    seen = sizehint!(UInt64[], 2 * length(dums))      #eligible occurrences; a term has few dummies
+    sets = sizehint!(IndexSet[], 2 * length(dums))
+    symonly = sizehint!(Bool[], 2 * length(dums))     #a derivative's own index needs a symmetric metric
+    for t in ts
+        _eligible_slots!(seen, sets, symonly, t, dums)     #one dispatch per factor, its type known inside
+    end
+    out = nothing
+    lastS, sym, anti = nothing, false, false
+    @inbounds for j in eachindex(seen)
+        u = seen[j]
+        count(==(u), seen) == 2 || continue
+        k = findnext(==(u), seen, j + 1)
+        k === nothing && continue                     #the pair is taken at its first end
+        #both ends share a set. Subtype tests on a stored type are slow and a term has few sets, so each
+        #run of one set is classified once
+        S = sets[j]
+        if S !== lastS
+            mt = S.metric_type
+            lastS, sym = S, mt !== nothing && mt <: SymMetricSuperType
+            anti = !sym && mt !== nothing && mt <: AntisymMetricSuperType
+        end
+        (sym || (anti && !symonly[j] && !symonly[k])) || continue
+        out === nothing && (out = UInt64[])
+        push!(out, u)
+    end
+    return out
+end
+
+#the occurrences on factor `t` that `_orientable_dummies` may reorient, before their metric is checked.
+#`encl` holds the derivatives whose operand `t` sits in: an occurrence there counts only if its set's
+#metric passes every one of them, so that it can be carried out to where the other end is
+function _eligible_slots!(seen::Vector{UInt64}, sets::Vector{IndexSet}, symonly::Vector{Bool},
+                          t::TensorSuperType, dums::Set{UInt64}, encl=())
+    _keeps_levels(t) && return seen
+    isop = t isa OperatorSuperType
+    isop && !(t isa PartialSuperType || t isa CovDerivSuperType) && return seen
+    inds = indices(t)
+    own = isop ? op_indices(t) : inds
+    @inbounds for s in eachindex(own)
+        idx = own[s][1]
+        #an operator's own slots lead its indices; anything else and it is left alone
+        isop && (s > length(inds) || inds[s] != own[s]) && break
+        u = idx.uid
+        u in dums || continue
+        (isLightcone(idx) || idx isa DummyPatternIndex) && continue
+        if !isempty(encl)       #the metric the set builds, as popping it would write
+            g = generate_metric(idx => upper, idx => upper)
+            (g !== nothing && all(D -> commutes_with_metric(D, g), encl)) || continue
+        end
+        push!(seen, u)
+        push!(sets, idx.index_set)
+        push!(symonly, isop)
+    end
+    #the operand's own occurrences, rather than the copies of them the derivative exposes
+    if isop
+        inner = (encl..., t)
+        for (_, tt) in summands(operand(t)), f in terms(tt)
+            _eligible_slots!(seen, sets, symonly, f, dums, inner)
+        end
+    end
+    return seen
+end
+
+#the classes of a tensor whose one tableau, a single row or column, holds every slot in order, as a
+#SymmetricTensor's does: shared between all such tensors of a rank, and only ever read
+const _WHOLE_CLASS_CACHE = Dict{Tuple{Int,Int},Tuple{Vector{Int},Vector{Int}}}()
 
 function _slot_classes(t::TensorSuperType)
     t isa OperatorSuperType && return nothing
     tabs = tableaux(t)
     isempty(tabs) && return nothing           #`nothing` overall when every slot is its own class
     n = length(indices(t))
-    cls, kind = Int[], Int[]                  #plain loops and concrete types: this runs per factor
+    if length(tabs) == 1 && n >= 2
+        tab1 = first(tabs)
+        sl1, rl1 = tab1.index_assignment, tab1.row_lengths
+        k1 = length(rl1) == 1 ? 1 : all(==(1), rl1) ? -1 : 0
+        if k1 != 0 && length(sl1) == n && all(i -> @inbounds(sl1[i] == i), 1:n)
+            return get!(() -> (ones(Int, n), fill(k1, n)), _WHOLE_CLASS_CACHE, (n, k1))
+        end
+    end
+    #plain loops and concrete types: this runs per factor. Built at the first tableau that makes a class
+    cls = kind = nothing
     for tab in tabs
         slots, rl = tab.index_assignment, tab.row_lengths
         length(slots) < 2 && continue
         k = length(rl) == 1 ? 1 : all(==(1), rl) ? -1 : 0
         k == 0 && continue
-        isempty(cls) && (cls = collect(1:n); kind = zeros(Int, n))
+        cls === nothing && (cls = collect(1:n); kind = zeros(Int, n))
         free = true
         for s in slots
             (s <= n && kind[s] == 0) || (free = false; break)
@@ -1450,7 +1705,7 @@ function _slot_classes(t::TensorSuperType)
             kind[s] = k
         end
     end
-    return isempty(cls) ? nothing : (cls, kind)
+    return cls === nothing ? nothing : (cls, kind)
 end
 _slot_classes(T::TensorTerm) = Union{Nothing,Tuple{Vector{Int},Vector{Int}}}[_slot_classes(t) for t in terms(T)]
 
@@ -1466,14 +1721,14 @@ first appearance, so two terms differing only by a consistent dummy renaming pro
 structure, recursively.
 """
 function _sig_factor!(key::Vector{UInt64}, t::TensorSuperType,
-    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64}, order=nothing)
+    dummyno::Dict{UInt64,UInt64}, dums::Set{UInt64}, order=nothing, orient=nothing, flipped=nothing, fsgn=nothing)
     push!(key, _factor_identity(t))
-    _sig_slots!(key, order === nothing ? indices(t) : indices(t)[order], dummyno, dums)
+    _sig_slots!(key, indices(t), dummyno, dums, orient, flipped, fsgn, order)
     if t isa OperatorSuperType
         for (c, tt) in summands(operand(t))
             push!(key, hash(c))
             for u in terms(tt)
-                _sig_factor!(key, u, dummyno, dums)
+                _sig_factor!(key, u, dummyno, dums, nothing, orient, flipped, fsgn)
             end
             push!(key, 0xFFFF_FFFF_FFFF_FFFF)               # summand separator
         end
@@ -1491,25 +1746,34 @@ function canonical_signature(T::TensorTerm)
     ts = terms(T)
     n = length(ts)
     classes = _slot_classes(T)
+    dums = dummy_uids(T)
+    inds = Vector{IndexPair}[indices(t) for t in ts]      #once, concretely typed, for every pass below
+    orient = _orientable_dummies(ts, dums)
+    flipped, fsgn = orient === nothing ? (nothing, nothing) : (UInt64[], Ref(1))
     perm = collect(1:n)
     sgn = 1
+    flat = nothing
     if n > 1 && _freely_reorderable(ts)
-        col = _contraction_colours(T, classes)
+        flat = _flat_slots(inds)
+        col = _contraction_colours(T, classes, orient, inds, flat)
         sort!(perm, by=i -> (col[i], i))
         perm == 1:n || (sgn = _graded_perm_sign(ts, perm))
     end
-    dums = dummy_uids(T)
     dummyno = Dict{UInt64,UInt64}()
     key = UInt64[]
     sizehint!(key, n + 2 * sum(t -> length(indices(t)), ts; init=0))
     if all(isnothing, classes)
         @inbounds for p in perm
-            _sig_factor!(key, ts[p], dummyno, dums)
+            _sig_factor!(key, ts[p], dummyno, dums, nothing, orient, flipped, fsgn)
         end
-        return (sgn, key)
+        return (fsgn === nothing ? sgn : sgn * fsgn[], key)
     end
     rank = invperm(perm)
-    inds = Vector{IndexPair}[indices(t) for t in ts]      #concretely typed, for the partner lookups below
+    #every slot's uid and factor, flat, for the partner lookups of the sorts below
+    off, fu, ff = flat === nothing ? _flat_slots(inds) : flat
+    mem = Int[]                       #a class's slots, their keys, and the order sorting them
+    kb = NTuple{5,UInt64}[]
+    ob = Int[]
     @inbounds for p in perm
         order = nothing
         if classes[p] !== nothing
@@ -1519,46 +1783,66 @@ function canonical_signature(T::TensorTerm)
                 second = findnext(==(c), cls, c + 1)
                 if findnext(==(c), cls, second + 1) === nothing
                     #two slots, as in F_{μν}: one comparison, no sort
-                    _slot_key(inds, classes, rank, dums, p, second) <
-                        _slot_key(inds, classes, rank, dums, p, c) || continue
+                    _slot_key(inds, fu, ff, off, classes, rank, dums, p, second, orient, dummyno) <
+                        _slot_key(inds, fu, ff, off, classes, rank, dums, p, c, orient, dummyno) || continue
                     order === nothing && (order = collect(eachindex(cls)))
                     order[c], order[second] = second, c
                     kind[c] == -1 && (sgn = -sgn)
                     continue
                 end
-                members = [s for s in eachindex(cls) if cls[s] == c]
-                o = sortperm([_slot_key(inds, classes, rank, dums, p, s) for s in members])
-                issorted(o) && continue
-                order === nothing && (order = collect(eachindex(cls)))
-                if kind[c] == -1
-                    inv = 0
-                    for a in eachindex(o), b in (a+1):length(o)
-                        o[a] > o[b] && (inv += 1)
-                    end
-                    isodd(inv) && (sgn = -sgn)
+                empty!(mem); empty!(kb); empty!(ob)
+                for s in eachindex(cls)
+                    cls[s] == c || continue
+                    push!(mem, s)
+                    push!(kb, _slot_key(inds, fu, ff, off, classes, rank, dums, p, s, orient, dummyno))
+                    push!(ob, length(mem))
                 end
-                order[members] = members[o]
+                #a stable insertion sort, as sortperm is stable, whose shifts are the inversions it undoes
+                inv = 0
+                for a in 2:length(ob)
+                    x = ob[a]
+                    b = a - 1
+                    while b >= 1 && kb[ob[b]] > kb[x]
+                        ob[b+1] = ob[b]
+                        b -= 1
+                        inv += 1
+                    end
+                    ob[b+1] = x
+                end
+                inv == 0 && continue
+                order === nothing && (order = collect(eachindex(cls)))
+                kind[c] == -1 && isodd(inv) && (sgn = -sgn)
+                for a in eachindex(mem)
+                    order[mem[a]] = mem[ob[a]]
+                end
             end
         end
-        _sig_factor!(key, ts[p], dummyno, dums, order)
+        _sig_factor!(key, ts[p], dummyno, dums, order, orient, flipped, fsgn)
     end
-    return (sgn, key)
+    return (fsgn === nothing ? sgn : sgn * fsgn[], key)
 end
 
 """
 How `canonical_signature` orders slot `s` of factor `p` within its symmetry class: a free index by its
-name, a dummy by where its partner sits, which a renaming keeps.
+name, a dummy by where its partner sits, which a renaming keeps. Two dummies running to one class of an
+earlier factor are ordered by the codes `dummyno` gave them there, so both ends read them in one order;
+their levels cannot, as a pair that may be reoriented is ordered without them.
 """
-function _slot_key(inds::Vector{Vector{IndexPair}}, classes,
-                   rank::Vector{Int}, dums::Set{UInt64}, p::Int, s::Int)
-    u, ps = inds[p][s][1].uid, UInt64(inds[p][s][2].position)
+function _slot_key(inds::Vector{Vector{IndexPair}}, fu::Vector{UInt64}, ff::Vector{Int}, off::Vector{Int},
+                   classes, rank::Vector{Int}, dums::Set{UInt64}, p::Int, s::Int, orient=nothing, dummyno=nothing)
+    k = off[p] + s
+    @inbounds u = fu[k]
+    #a pair that may be reoriented is ordered without its levels
+    ps = orient !== nothing && u in orient ? UInt64(0) : UInt64(inds[p][s][2].position)
     if u in dums
-        for q in eachindex(inds), r in eachindex(inds[q])
-            (inds[q][r][1].uid == u && (q != p || r != s)) &&
-                return (UInt64(1), UInt64(rank[q]), UInt64(_slot_class(classes[q], r)), ps)
+        code = dummyno === nothing ? UInt64(0) : get(dummyno, u, UInt64(0))   #0 until its pair is met
+        @inbounds for j in eachindex(fu)
+            (fu[j] == u && j != k) || continue
+            q = ff[j]
+            return (UInt64(1), UInt64(rank[q]), UInt64(_slot_class(classes[q], j - off[q])), code, ps)
         end
     end
-    return (UInt64(0), u, UInt64(0), ps)
+    return (UInt64(0), u, UInt64(0), UInt64(0), ps)
 end
 
 """
@@ -1577,9 +1861,20 @@ function collect_terms(TEx::TensorExpression)
     keys = Vector{Vector{UInt64}}()
     signs = Int[]
     buckets = Dict{UInt64,Vector{Int}}()
+    fps = UInt[sum(t -> hash(_factor_identity(t)), terms(tt); init=UInt(0)) for (_, tt) in s]
+    seen = Dict{UInt,Int}()
+    for f in fps
+        seen[f] = get(seen, f, 0) + 1
+    end
 
-    for (coef, tt) in s
+    for (i, (coef, tt)) in enumerate(s)
         isZero(coef) && continue
+        if seen[fps[i]] == 1
+            push!(out, CoeffPair(coef, tt))
+            push!(keys, UInt64[])
+            push!(signs, 1)
+            continue
+        end
         sgn, key = canonical_signature(tt)
         h = hash(key)
         bk = get!(() -> Int[], buckets, h)
@@ -1952,16 +2247,34 @@ function Base.sort(TEx::TensorExpression)::TensorExpression
     sizehint!(out, length(TEx.summands))
     for summand in TEx.summands
         coeff = summand[1]
-        new_terms = copy(summand[2])
-        fac = 1
-        for term in terms(new_terms)
-            fac *= sort_symmetric!(term)[1]#indices to canonical order, edit in place and extract factors.
-        end
+        (fac, new_terms) = _sort_factor_indices(summand[2])
+        fac == 0 && continue
         (fac2, expout) = bubble_sort_with_grading!(new_terms)
         append!(out, summands((coeff * fac) * expout))
     end
     isempty(out) && return zero()
     return TensorExpression(out)
+end
+
+"""
+The term with each factor's indices in canonical order, and the sign that cost
+"""
+function _sort_factor_indices(tt::TensorTerm)
+    ts = terms(tt)
+    out = Vector{TensorSuperType}(undef, length(ts))
+    fac = 1
+    @inbounds for k in eachindex(ts)
+        t = ts[k]
+        (s, inds) = find_canonical_rep(t)
+        s == 0 && return (0, tt)            #the factor vanishes: nothing to build
+        if t isa OperatorSuperType || s != 1 || inds != indices(t)
+            t = copy(t)                     #then as sort_symmetric!, on the copy
+            set_indices!(t, inds)
+        end
+        fac *= s
+        out[k] = t
+    end
+    return (fac, TensorTerm(out))
 end
 
 
@@ -1976,11 +2289,8 @@ end
 
 
 function Base.sort(term::TensorTerm)::TensorExpression
-    new_terms = copy(term)
-    fac = 1
-    for term in terms(new_terms)
-        fac *= sort_symmetric!(term)[1]#indices to canonical order, edit in place and extract factors.
-    end
+    (fac, new_terms) = _sort_factor_indices(term)
+    fac == 0 && return zero()
     (fac2, expout) = bubble_sort_with_grading!(new_terms)
     return fac * expout
 end
@@ -1992,8 +2302,9 @@ Dummy indices of a term as a set of uids, for O(1) membership during sorting.
 `bubble_sort_with_grading!` consults this once per comparison, so a `Vector` here costs a linear scan every time
 """
 function dummy_uids(T::Tensorial)
-    s = Set{UInt64}()
-    for d in dummies(T)
+    ds = dummies(T)
+    s = sizehint!(Set{UInt64}(), length(ds))      #sized once, not rehashed as it fills
+    for d in ds
         push!(s, d.uid)
     end
     return s

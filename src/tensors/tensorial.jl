@@ -317,22 +317,23 @@ mutable struct TensorTerm <: Tensorial
     #     return new(outs, inds)
     # end
     function TensorTerm(terms::Vector{T} where {T<:TensorSuperType})
+        outs = Vector{TensorSuperType}(undef, length(terms))
+        tis = Vector{Vector{IndexPair}}(undef, length(terms))
         nt = 0;
         ni = 0
         for t in terms
             isempty(name(t)) && continue
             nt += 1
-            ni += length(indices(t))
+            @inbounds outs[nt] = t
+            @inbounds tis[nt] = indices(t)
+            @inbounds ni += length(tis[nt])
         end
-        outs = Vector{TensorSuperType}(undef, nt)
+        resize!(outs, nt)
         inds = Vector{IndexPair}(undef, ni)
-        j = 1;
         k = 1
-        for t in terms
-            isempty(name(t)) && continue
-            @inbounds outs[j] = t;
-            j += 1
-            k=_copy_inds!(inds, k, t)
+        @inbounds for j in 1:nt
+            copyto!(inds, k, tis[j], 1, length(tis[j]))
+            k += length(tis[j])
         end
         return new(outs, inds)
     end
@@ -414,7 +415,8 @@ TensorExpression(E::TensorExpression, A::TensorTerm) = _insert_merged(copy(E.sum
 # TensorExpression(E1::TensorExpression, E2::TensorExpression) = TensorExpression(CoeffPair[E1.summands; E2.summands])
 #simplify assuming each individual expression is already merged
 function TensorExpression(E1::TensorExpression, E2::TensorExpression)
-    v = copy(E1.summands)
+    v = sizehint!(CoeffPair[], length(E1.summands) + length(E2.summands))   #one allocation, room for E2
+    append!(v, E1.summands)
     n1 = length(v)
     @inbounds for (c, t) in E2.summands
         isZero(c) && continue

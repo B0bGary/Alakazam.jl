@@ -178,10 +178,12 @@ function pop_metric(TEx::TensorExpression)
     out = CoeffPair[]
     sizehint!(out, length(summands(TEx)))
     for summand in summands(TEx)
-        append!(out, summands(TensorExpression(summand[1] * pop_metric(summand[2]))))
+        p = pop_metric(summand[2])
+        _popped_zero(p) && continue
+        append!(out, summands(TensorExpression(summand[1] * p)))
     end
     isempty(out) && return zero()
-    return update_indices!(TensorExpression(out))
+    return TensorExpression(out)            #refresh
 end
 
 """"Pop" metrics off all tensors, putting indices in default position and returning the popped metric as a prefactor. This is used to put tensors in a canonical form for simplification and comparison.
@@ -190,11 +192,14 @@ function pop_metric(tt::TensorTerm)
     # Which indices are available depends only on what the term already uses plus what the metrics popped so far have taken.
     claimed = IndexTypes[]
     collect_indices!(claimed, tt)
-    new_term = 1
-    for term in terms(tt)
-        new_term *= _pop_metric(term, claimed)
+    ts = terms(tt)
+    popped = Vector{Any}(undef, length(ts))
+    for k in eachindex(ts)
+        p = _pop_metric(ts[k], claimed)
+        _popped_zero(p) && return zero()       #vanishing factor
+        popped[k] = p
     end
-    return update_indices!(new_term)
+    return update_indices!(_factor_product(popped))
 end
 
 """
@@ -292,6 +297,8 @@ function _pop_metric(T::TensorSuperType, claimed::Vector{IndexTypes}, target=not
     # skip types
     (T isa AntisymMetricSuperType || T isa SymMetricSuperType ||
      (T isa OperatorSuperType && target === nothing) || T isa KroneckerSuperType) && return T
+    #remove vanishing terms
+    target === nothing && _trace_vanishes(T, indices(T)) && return zero()
     target === nothing && (target = S -> S.default_position)
     # need popping?
     inds = T isa OperatorSuperType ? op_indices(T) : indices(T)
@@ -330,6 +337,9 @@ end
 """A metric of the kind popping produces, as opposed to any other factor it leaves behind."""
 _is_popped_metric(g) = g isa SymMetricSuperType || g isa AntisymMetricSuperType
 
+"""Whether popping found the factor to vanish. It returns the factor, a product, or this zero."""
+_popped_zero(p) = p isa TensorExpression && isZeroTens(p)
+
 """
 Pop the metrics off a derivative and its operand. Each is popped next to its tensor, inside the
 derivative, and carried out past it only where `commutes_with_metric` allows.
@@ -348,6 +358,7 @@ function _pop_metric(O::DerivativeSuperType, claimed::Vector{IndexTypes})
         body = any(t -> !_is_popped_metric(t), terms(tt))
         for f in terms(tt)
             p = _pop_metric(f, claimed)
+            _popped_zero(p) && return zero()    
             if p === f
                 if body && _is_popped_metric(f) && commutes_with_metric(O, f)
                     push!(outside, f)
@@ -371,6 +382,7 @@ function _pop_metric(O::DerivativeSuperType, claimed::Vector{IndexTypes})
             O
         end
     end
+    _popped_zero(D) && return D
     D isa PartialDerivative || (D = _pop_metric(D, claimed, S -> op_pos(S.default_position)))
     return isempty(outside) ? D : TensorTerm(outside) * D
 end
@@ -383,19 +395,28 @@ function _pop_metric_per_summand(O::DerivativeSuperType, claimed::Vector{IndexTy
     n = length(claimed)
     taken = IndexTypes[]
     new_operand = zero()
+    dropped = false
     for (c, tt) in summands(operand(O))
         #a dummy is private to its summand, so every summand may reuse the same fresh names
         trial = copy(claimed)
-        new_term = 1
-        for f in terms(tt)
-            new_term *= _pop_metric(f, trial)
+        ts = terms(tt)
+        popped = Vector{Any}(undef, length(ts))
+        vanished = false
+        for k in eachindex(ts)
+            popped[k] = _pop_metric(ts[k], trial)
+            _popped_zero(popped[k]) && (vanished = true; break)
         end
-        new_operand += c * new_term
+        if vanished
+            dropped = true
+            continue
+        end
+        new_operand += c * _factor_product(popped)
         for i in @view trial[(n + 1):end]
             i in taken || push!(taken, i)
         end
     end
-    isempty(taken) && return O
+    dropped && isZeroTens(new_operand) && return zero()
+    isempty(taken) && !dropped && return O
     append!(claimed, taken)
     Oc = copy(O)
     set_operand!(Oc, new_operand)
@@ -685,6 +706,11 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
     sizehint!(out, length(s))
     @inbounds for k in eachindex(s)
         coef, tterm = s[k]
+        #a term with nothing to contract is kept as it is, rather than rebuilt around a sign and factor of 1
+        if !any(t -> t isa typ, terms(tterm))
+            push!(out, s[k])
+            continue
+        end
         (sign, factor, extra_deltas, newterm) = _contract_metrics_term(tterm, typ)
         contribution = coef * sign * factor * (extra_deltas * newterm)
         isZeroTens(contribution) && continue
@@ -696,12 +722,12 @@ function contract_metrics(T::TensorExpression, typ::Type=Metric)
 end
 
 """
-Apply `metric`'s contraction to `tens`, descending through whatever operators it wraps.
-Returns whether the metric was consumed, and the sign the replacement cost.
+Apply `metric`'s contraction to `tens`, descending through the derivatives it passes. Returns whether
+the metric was consumed, and the sign the replacement cost.
 """
-function _contract_into_operand!(tens, metric, rie)
+function _contract_into_operand!(tens, metric, rie, scope)
     t = isTensor(tens)
-    t === nothing && return (false, 1)      #a sum, which this contraction does not descend into
+    t === nothing && return _contract_into_sum!(tens, metric, rie, scope)
     sign = 1
     if t isa OperatorSuperType
         opinds = op_indices(t)
@@ -710,9 +736,9 @@ function _contract_into_operand!(tens, metric, rie)
             sign *= sgn
             flag && return (true, sign)
         end
-        #into the operand only past a derivative the metric passes: g^{ab}∂_c(A_b) is ∂_c(A^a) only if ∂_c g = 0
-        t isa DerivativeSuperType && !commutes_with_metric(t, metric) && return (false, sign)
-        (flag, sgn) = _contract_into_operand!(operand(t), metric, rie)
+        #into the operand only past a derivative the metric passes: g^{ab}∂_c(A_b) is ∂_c(A^a) only if ∂_c g = 0. 
+        (t isa DerivativeSuperType && commutes_with_metric(t, metric)) || return (false, sign)
+        (flag, sgn) = _contract_into_operand!(operand(t), metric, rie, scope)
         return (flag, sign * sgn)
     end
     tins = indices(t)
@@ -724,13 +750,46 @@ function _contract_into_operand!(tens, metric, rie)
     return (false, sign)
 end
 
+"""
+Move a metric into an operator and onto its summand
+"""
+function _contract_into_sum!(ex, metric, rie, scope)
+    ex isa Union{TensorExpression,TensorTerm} || return (false, 1)
+    i1, i2 = indices(metric)[1][1], indices(metric)[2][1]
+    ex isa TensorTerm && return _contract_into_summand!(ex, metric, rie, i1, i2, scope)
+    s = summands(ex)
+    for k in eachindex(s)
+        c, tt = s[k]
+        (flag, sgn) = _contract_into_summand!(tt, metric, rie, i1, i2, scope)
+        flag || return (false, 1)
+        sgn == 1 || (s[k] = CoeffPair(sgn * c, tt))
+    end
+    return (true, 1)
+end
+
+function _contract_into_summand!(tt::TensorTerm, metric, rie, i1, i2, scope)
+    @inbounds for f in terms(tt)
+        k = findfirst(p -> p[1] == i1 || p[1] == i2, indices(f))
+        k === nothing && continue
+        (f isa MetricSuperType || f isa KroneckerSuperType) && return (false, 1)
+        incoming = indices(f)[k][1] == i1 ? i2 : i1
+        if count(p -> p[1] == incoming, indices(tt)) >= 2
+            rename_dummies_excluded!(tt, collect_indices!(IndexTypes[], scope))
+            update_indices!(tt)
+            count(p -> p[1] == incoming, indices(tt)) >= 2 && return (false, 1)
+            return _contract_into_summand!(tt, metric, rie, i1, i2, scope)
+        end
+        f isa OperatorSuperType && return _contract_into_operand!(f, metric, rie, scope)
+        return contraction_replacement!(indices(f), k, metric, rie)
+    end
+    return (false, 1)
+end
+
 function _contract_metrics_term(T::TensorTerm, typ::Type)
     ts = terms(T)
     any(t -> t isa typ, ts) || return (1, 1, 1, T)
 
-    T = copy_owned(T)
-    ts = terms(T)
-
+    #copy on write
     nm = 0
     for t in ts
         ;
@@ -841,24 +900,24 @@ function _contract_metrics_term(T::TensorTerm, typ::Type)
         #the tensor the metric went into, whose cached indices then need refreshing: an operator's
         #op_indices are edited in place, but its full index list is a separate cache
         contracted = nothing
-        for tens in non_metrics
+        for jt in eachindex(non_metrics)
+            tens = non_metrics[jt]
             flag && break
-            metric isa EpsilonTensorSuperType && tens isa KroneckerSuperType && continue
-            #Do not let a metric raise or lower an epsilon's indices. Kronecker is exempt
-            !(metric isa KroneckerSuperType) && tens isa EpsilonTensorSuperType && continue
-
+            #Do not let a metric raise or lower an epsilon's or a delta's indices, only a delta renames them.
+            metric isa MetricSuperType && (tens isa KroneckerSuperType || tens isa EpsilonTensorSuperType) && continue
+            slot = findfirst(p -> p[1] == index1 || p[1] == index2, indices(tens))
+            slot === nothing && continue
+            tens = copy_owned(tens)
             if tens isa OperatorSuperType
-                (flag, sgn) = _contract_into_operand!(tens, metric, rie)
-                sign *= sgn
+                (flag, sgn) = _contract_into_operand!(tens, metric, rie, T)
             else
-                tins = indices(tens)
-                for indpairnum in eachindex(tins)
-                    flag && break
-                    (flag, sgn) = contraction_replacement!(tins, indpairnum, metric, rie)
-                    sign *= sgn
-                end
+                (flag, sgn) = contraction_replacement!(indices(tens), slot, metric, rie)
             end
-            flag && (contracted = tens)
+            if flag
+                non_metrics[jt] = tens
+                sign *= sgn
+                contracted = tens
+            end
         end
         flag || push!(uncontr_mets, metric)
         contracted === nothing || update_indices!(contracted)

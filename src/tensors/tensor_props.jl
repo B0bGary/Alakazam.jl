@@ -552,22 +552,14 @@ end
 
 @inline _bit(idx) = UInt64(1) << (idx.uid & 63)
 
+#whether a dummy of either side appears in the other. Only an index the two share can be one, so the
+#dummy test, a scan of its own side, runs on those alone rather than on every slot of a long term
 function _ccd_exact(T1::Tensorial, T2::Tensorial)
     i1 = indices(T1);
     i2 = indices(T2)
-    @inbounds for a in eachindex(i1)
-        _is_dummy_at(i1, a) || continue
-        idx = i1[a][1]
-        for b in eachindex(i2)
-            i2[b][1] === idx && return true
-        end
-    end
-    @inbounds for b in eachindex(i2)
-        _is_dummy_at(i2, b) || continue
-        idx = i2[b][1]
-        for a in eachindex(i1)
-            i1[a][1] === idx && return true
-        end
+    @inbounds for a in eachindex(i1), b in eachindex(i2)
+        i1[a][1] === i2[b][1] || continue
+        (_is_dummy_at(i1, a) || _is_dummy_at(i2, b)) && return true
     end
     return false
 end

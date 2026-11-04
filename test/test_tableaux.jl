@@ -150,4 +150,28 @@
     r3 = Tensor("m", [a => lower, b => lower, c => lower, d => lower], [riemann_tabelau])
     #make sure large sum doesnt crash
     young_projection(R1)+young_projection(r2)+young_projection(r1)+young_projection(r3)
+
+    #a trace over two slots a symmetry exchanges is zero when that symmetry and the metric's differ:
+    #antisymmetric slots over a symmetric metric, symmetric slots over an antisymmetric one
+    eps_set = IndexSet("trace_eps", 2, EpsilonTensor, upper)
+    ti, tj, tk = Index(["ti", "tj", "tk"], eps_set)
+    @test simplify(AntisymmetricTensor("F", [a => upper, a => lower])) == 0
+    @test simplify(AntisymmetricTensor("F", [a => lower, a => upper, b => lower]) + Tensor("V", [b => lower])) == Tensor("V", [b => lower])
+    @test simplify(SymmetricTensor("S", [ti => upper, ti => lower])) == 0
+    @test simplify(SymmetricTensor("S", [ti => lower, ti => upper, tj => upper])) == 0
+    #symmetry and metric alike: the trace survives
+    @test !isZeroTens(simplify(SymmetricTensor("S", [a => upper, a => lower])))
+    @test !isZeroTens(simplify(AntisymmetricTensor("F", [ti => upper, ti => lower])))
+    #a mixed tableau: R's first two slots are antisymmetric, its first and third related by no symmetry
+    @test simplify(Tensor("R", [a => upper, a => lower, b => lower, c => lower], [riemann_tabelau])) == 0
+    @test !isZeroTens(simplify(Tensor("R", [a => upper, b => lower, a => lower, c => lower], [riemann_tabelau])))
+    @test !isZeroTens(simplify(Tensor("R", [ti => upper, ti => lower, tj => lower, tk => lower], [riemann_tabelau])))
+    #a δ is not the trace of a symmetric tensor, over either metric
+    @test !isZeroTens(simplify(KroneckerDelta(ti => upper, ti => lower)))
+    #inside a derivative's operand too, where popping would otherwise carry the trace out as η_{ab}
+    trF = AntisymmetricTensor("F", [a => upper, a => lower])
+    @test simplify(PartialDerivative("∂", trF * Tensor("A", [c => upper], x), [x], [c => lower])) == 0
+    @test simplify(PartialDerivative("∂", trF * Tensor("A", [c => upper], x) + Tensor("B", [c => upper], x), [x], [c => lower]) -
+                   PartialDerivative("∂", Tensor("B", [c => upper], x), [x], [c => lower])) == 0
+    @test simplify(PartialDerivative("∂", PartialDerivative("∂", trF, [x], [d => lower]) * Tensor("A", [c => upper, d => upper], x), [x], [c => lower])) == 0
 end
