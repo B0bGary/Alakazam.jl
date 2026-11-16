@@ -6,10 +6,11 @@
 
 Symbolic tensor algebra for field theory, in Julia.
 
-Alakazam is designed to perform symbolic algebraic manipulations of tensors and tensor equations, with field theories and quantum mechanics in mind. It offers notable speed improvements over analogous operations in other packages like Cadabra and xAct.
-In particular, Alakazam features the ability to raise and lower tensor indices with a metric, simplify expressions using symmetries of tensors, and perform covariant differentiation.
+Alakazam is designed to perform symbolic algebraic manipulations of tensors and tensor equations, with field theories, quantum mechanics, and supersymmetry in mind. It offers notable speed improvements over analogous operations in other packages like Cadabra and xAct.
+In particular, Alakazam features the ability to raise and lower tensor indices with a metric, simplify expressions using symmetries of tensors including with dummy indices, and perform covariant differentiation. It recognises gamma-matrix identities and Lie brackets also, and features native LaTeX input/ouput.
 For those working on supersymmetric theories, Alakazam supports grading natively, and can handle covariant derivatives with multiple indices, perform superspace integration, and more. 
 
+📄 Paper + Documentation: [arXiv:2608.20452](https://arxiv.org/abs/2608.20452)
 
 ## Getting started
 
