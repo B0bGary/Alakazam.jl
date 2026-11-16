@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Alakazam.jl, please cite the paper below."
+title: "Alakazam.jl"
+authors:
+  - family-names: Woods
+    given-names: Jesse
+    affiliation: "University of Bern"
+repository-code: "https://gitlab.com/B0bGary/alakazam.jl"
+license: GPL-3.0
+keywords: [julia, tensor algebra, computer algebra, quantum field theory, supersymmetry, superspace]
+preferred-citation:
+  type: article
+  title: "Alakazam: Symbolic Tensor Algebra for Field Theory in Julia"
+  authors:
+    - family-names: Woods
+      given-names: Jesse
+  year: 2026
+  identifiers:
+    - type: other
+      value: "arXiv:2608.20452"
+  url: "https://arxiv.org/abs/2608.20452"
